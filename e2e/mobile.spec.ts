@@ -88,4 +88,39 @@ test.describe('mobile', () => {
     await page.getByRole('button', { name: 'Close review' }).click()
     await waitOverlay(page, null)
   })
+
+  test('a tap on a world object opens its overlay without clicking through it', async ({ page }) => {
+    await openApp(page)
+    const vp = page.viewportSize()!
+    // Tap the desk terminal itself (not the Tap button): the record overlay must open with no prompt ticked.
+    await aimAt(page, [-7.6, 1.6, -3], [-9.4, 0.95, -3])
+    await waitHover(page, 'desk:terminal')
+    await page.touchscreen.tap(vp.width / 2, vp.height / 2)
+    await waitOverlay(page, 'record')
+    await expect(page.getByTestId('record-overlay')).toBeVisible()
+    // Give a stray synthesized click time to land.
+    await page.waitForTimeout(800)
+    expect(await page.locator('[data-testid^="prompt-"][aria-pressed="true"]').count()).toBe(0)
+    await page.keyboard.press('Escape')
+    await waitOverlay(page, null)
+
+    // Same for the year-wrap trophy: the wrap must start on card 1, not skip ahead.
+    await aimAt(page, [-7.8, 1.6, 3.5], [-9.75, 1.11, 3.5])
+    await waitHover(page, 'wrap:trophy')
+    await page.touchscreen.tap(vp.width / 2, vp.height / 2)
+    await waitOverlay(page, 'wrap')
+    await page.waitForTimeout(800)
+    await expect(page.getByTestId('wrap-counter')).toHaveText(/^\s*1\s*\//)
+    await page.keyboard.press('Escape')
+    await waitOverlay(page, null)
+
+    // A tap on the overlay right after it opened is still a normal click (only the opening tap is consumed).
+    await aimAt(page, [-7.6, 1.6, -3], [-9.4, 0.95, -3])
+    await waitHover(page, 'desk:terminal')
+    await page.touchscreen.tap(vp.width / 2, vp.height / 2)
+    await waitOverlay(page, 'record')
+    const prompt = page.locator('[data-testid^="prompt-"]').first()
+    await prompt.tap()
+    await expect(prompt).toHaveAttribute('aria-pressed', 'true')
+  })
 })

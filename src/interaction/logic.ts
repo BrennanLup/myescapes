@@ -101,6 +101,30 @@ export function isTapSurface(target: EventTarget | null, canvas: Element | null)
   return el.closest('[data-look-surface]') !== null
 }
 
+// ---------------------------------------------------------------- ghost-click guard
+
+/** How long after an interacting press its trailing click is swallowed. */
+export const CLICK_SWALLOW_MS = 450
+/** A ghost click lands where the finger lifted; farther than this it is a real, new click. */
+export const CLICK_SWALLOW_RADIUS = 40
+
+export interface ClickSwallow {
+  until: number
+  /** Client position of the press, or null (pointer lock: the cursor position is meaningless). */
+  at: [number, number] | null
+}
+
+export function armClickSwallow(now: number, at: [number, number] | null): ClickSwallow {
+  return { until: now + CLICK_SWALLOW_MS, at }
+}
+
+/** True when a click at (x, y) is the trailing click of the press that armed `swallow`. */
+export function shouldSwallowClick(swallow: ClickSwallow | null, now: number, x: number, y: number): boolean {
+  if (!swallow || now > swallow.until) return false
+  if (!swallow.at) return true
+  return Math.hypot(x - swallow.at[0], y - swallow.at[1]) <= CLICK_SWALLOW_RADIUS
+}
+
 // ---------------------------------------------------------------- prompt text
 
 function lowerFirst(s: string): string {
@@ -147,4 +171,25 @@ export function hullScale(
 /** Outline thickness in metres for a target at `distance` (roughly constant on screen). */
 export function outlineThickness(distance: number): number {
   return Math.min(0.03, Math.max(0.006, distance * 0.0055))
+}
+
+/** Stand-in half extent for a flat axis: the rim test never clips along it. */
+export const RIM_OPEN_AXIS = 1e6
+
+/**
+ * Local half extents of the hole a flat hull must leave open, so it draws only a
+ * rim around the source and never paints over it (or over a transparent decal
+ * such as the chalk writing). Flat axes get `RIM_OPEN_AXIS`.
+ */
+export function rimHalfExtents(
+  halfExtent: readonly [number, number, number],
+  worldScale: readonly [number, number, number],
+  flatEpsilon = 0.004,
+): [number, number, number] {
+  return [0, 1, 2].map((i) => (halfExtent[i] * Math.abs(worldScale[i]) < flatEpsilon ? RIM_OPEN_AXIS : halfExtent[i])) as [number, number, number]
+}
+
+/** True when a hull point (local, already scaled) lies inside the source's footprint and must not be drawn. */
+export function insideRimHole(p: readonly [number, number, number], center: readonly [number, number, number], hole: readonly [number, number, number]): boolean {
+  return [0, 1, 2].every((i) => Math.abs(p[i] - center[i]) < hole[i])
 }
