@@ -1,0 +1,488 @@
+{
+  "source": "seed",
+  "crew": [
+    { "id": "crew_brennan", "name": "Brennan" },
+    { "id": "crew_maya", "name": "Maya" },
+    { "id": "crew_jules", "name": "Jules" },
+    { "id": "crew_priya", "name": "Priya" },
+    { "id": "crew_theo", "name": "Theo" }
+  ],
+  "rooms": [
+    {
+      "id": "room_lighthouse",
+      "name": "The Last Lighthouse Keeper",
+      "company": "Fog City Escapes",
+      "city": "San Francisco",
+      "genre": "mystery",
+      "address": "418 Bayview Wharf, San Francisco, CA",
+      "website": "https://fogcity-escapes.example.com/lighthouse",
+      "photos": [
+        { "url": "/seed/photos/room_lighthouse-1.svg", "caption": "Lighthouse!" },
+        { "url": "/seed/photos/room_lighthouse-2.svg", "caption": "Out with 4 min to spare" }
+      ]
+    },
+    {
+      "id": "room_vault",
+      "name": "Golden Gate Vault Job",
+      "company": "Lockbox Social",
+      "city": "San Francisco",
+      "genre": "heist",
+      "address": "77 Ledger Lane, San Francisco, CA",
+      "website": "https://lockbox-social.example.com/vault",
+      "photos": [{ "url": "/seed/photos/room_vault-1.svg", "caption": "So close to the gold" }]
+    },
+    {
+      "id": "room_rocket",
+      "name": "Countdown to Europa",
+      "company": "Fog City Escapes",
+      "city": "San Francisco",
+      "genre": "sci-fi",
+      "address": "2210 Orbit Ave, San Francisco, CA",
+      "website": "https://fogcity-escapes.example.com/europa",
+      "photos": [
+        { "url": "/seed/photos/room_rocket-1.svg", "caption": "3... 2... 1..." },
+        { "url": "/seed/photos/room_rocket-2.svg", "caption": "Mission crew" }
+      ]
+    },
+    {
+      "id": "room_haunted",
+      "name": "Hollow Hill Manor",
+      "company": "Fog City Escapes",
+      "city": "San Francisco",
+      "genre": "horror",
+      "address": "13 Cobweb Court, San Francisco, CA",
+      "website": "https://fogcity-escapes.example.com/hollow-hill",
+      "photos": [{ "url": "/seed/photos/room_haunted-1.svg", "caption": "Halloween night!" }]
+    },
+    {
+      "id": "room_saloon",
+      "name": "Gold Rush Saloon, 1849",
+      "company": "Tiny Door Games",
+      "city": "San Francisco",
+      "genre": "historical",
+      "address": "1849 Prospector St, San Francisco, CA",
+      "website": "https://tinydoor.example.com/saloon",
+      "photos": [
+        { "url": "/seed/photos/room_saloon-1.svg", "caption": "Yeehaw" },
+        { "url": "/seed/photos/room_saloon-2.svg", "caption": "Sheriff Theo" }
+      ]
+    },
+    {
+      "id": "room_circus",
+      "name": "The Great Pickle Circus",
+      "company": "Lockbox Social",
+      "city": "San Francisco",
+      "genre": "comedy",
+      "address": "5 Big Top Plaza, San Francisco, CA",
+      "website": "https://lockbox-social.example.com/pickle-circus",
+      "photos": [{ "url": "/seed/photos/room_circus-1.svg", "caption": "Honk honk" }]
+    },
+    {
+      "id": "room_castle",
+      "name": "Dragon's Keep",
+      "company": "Maple & Key",
+      "city": "Toronto",
+      "genre": "fantasy",
+      "address": "301 Spadina Ave, Toronto, ON",
+      "website": "https://maple-and-key.example.com/dragons-keep",
+      "photos": [
+        { "url": "/seed/photos/room_castle-1.svg", "caption": "Dragon's Keep" },
+        { "url": "/seed/photos/room_castle-2.svg", "caption": "Crowned!" }
+      ]
+    },
+    {
+      "id": "room_temple",
+      "name": "Temple of the Jade Monkey",
+      "company": "Maple & Key",
+      "city": "Toronto",
+      "genre": "adventure",
+      "address": "88 Ossington Ave, Toronto, ON",
+      "website": "https://maple-and-key.example.com/jade-monkey",
+      "photos": [{ "url": "/seed/photos/room_temple-1.svg", "caption": "Found the monkey" }]
+    },
+    {
+      "id": "room_train",
+      "name": "Midnight on the Northern Express",
+      "company": "The Puzzle Foundry",
+      "city": "Toronto",
+      "genre": "thriller",
+      "address": "12 Distillery Lane, Toronto, ON",
+      "website": "https://puzzle-foundry.example.com/northern-express",
+      "photos": [
+        { "url": "/seed/photos/room_train-1.svg", "caption": "All aboard" },
+        { "url": "/seed/photos/room_train-2.svg", "caption": "Next time!" }
+      ]
+    },
+    {
+      "id": "room_lab",
+      "name": "Subject Zero",
+      "company": "The Puzzle Foundry",
+      "city": "Toronto",
+      "genre": "sci-fi",
+      "address": "640 King St W, Toronto, ON",
+      "website": "https://puzzle-foundry.example.com/subject-zero",
+      "photos": [{ "url": "/seed/photos/room_lab-1.svg", "caption": "Lab coats on" }]
+    },
+    {
+      "id": "room_attic",
+      "name": "Grandma's Attic",
+      "company": "Maple & Key",
+      "city": "Toronto",
+      "genre": "other",
+      "address": "19 Roncesvalles Ave, Toronto, ON",
+      "website": "https://maple-and-key.example.com/grandmas-attic",
+      "photos": [{ "url": "/seed/photos/room_attic-1.svg", "caption": "Cozy chaos" }]
+    },
+    {
+      "id": "room_noir",
+      "name": "The Velvet Room",
+      "company": "Lockbox Social",
+      "city": "Toronto",
+      "genre": "mystery",
+      "address": "220 Queen St E, Toronto, ON",
+      "website": "https://lockbox-social.example.com/velvet-room",
+      "photos": [
+        { "url": "/seed/photos/room_noir-1.svg", "caption": "Who did it?" },
+        { "url": "/seed/photos/room_noir-2.svg", "caption": "Case closed" }
+      ]
+    }
+  ],
+  "reviews": [
+    {
+      "id": "rev_lighthouse",
+      "roomId": "room_lighthouse",
+      "date": "2023-04-15",
+      "crew": ["Brennan", "Maya", "Jules", "Priya"],
+      "ratings": {
+        "overall": { "score": 86, "comment": "Our first room as a full crew and it hooked us." },
+        "puzzles": { "score": 82, "comment": "Great flow, one clunky dial." },
+        "setting": { "score": 90, "comment": "The spiral staircase set piece is wild." },
+        "storyline": { "score": 84, "comment": "Sweet ghost-story ending, not scary." },
+        "difficulty": { "score": 62, "comment": "Medium. Good for beginners." }
+      },
+      "puzzles": [
+        { "id": "pz_lh_1", "reviewId": "rev_lighthouse", "description": "Flash the lamp in Morse code to signal the ship", "type": "audio-visual", "memorable": true },
+        { "id": "pz_lh_2", "reviewId": "rev_lighthouse", "description": "Tide chart numbers open the keeper's footlocker", "type": "lock-and-key", "memorable": false },
+        { "id": "pz_lh_3", "reviewId": "rev_lighthouse", "description": "Rebuild the lens from brass rings in size order", "type": "physical", "memorable": false }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": 56,
+      "visibleTimer": true,
+      "multiRoom": true,
+      "flashlights": true,
+      "liveActors": false,
+      "toolsUsed": ["flashlights", "padlocks", "maps"],
+      "voiceTranscript": "Okay so we just did The Last Lighthouse Keeper at Fog City Escapes, the one down by the wharf. We got out with like four minutes left. The best bit was flashing the big lamp in Morse code, Maya basically did that one solo. The lens puzzle took forever. I'd give it maybe an 86 overall.",
+      "photos": []
+    },
+    {
+      "id": "rev_vault",
+      "roomId": "room_vault",
+      "date": "2023-09-09",
+      "crew": ["Brennan", "Theo", "Priya"],
+      "ratings": {
+        "overall": { "score": 78, "comment": "Slick, but the last stage was brutal." },
+        "puzzles": { "score": 80, "comment": "Loved the laser hallway." },
+        "setting": { "score": 85, "comment": "Proper bank vault door that swings open." },
+        "storyline": { "score": 60, "comment": "Thin. You rob a bank, that's it." },
+        "difficulty": { "score": 88, "comment": "Hard. We needed four hints." }
+      },
+      "puzzles": [
+        { "id": "pz_vt_1", "reviewId": "rev_vault", "description": "Crawl through the laser hallway without breaking a beam", "type": "physical", "memorable": true },
+        { "id": "pz_vt_2", "reviewId": "rev_vault", "description": "Work out the manager's PIN from his calendar habits", "type": "logic", "memorable": false },
+        { "id": "pz_vt_3", "reviewId": "rev_vault", "description": "Balance the gold bars on the scale to the exact weight", "type": "math", "memorable": false },
+        { "id": "pz_vt_4", "reviewId": "rev_vault", "description": "Listen for clicks on the safe dial with a stethoscope", "type": "audio-visual", "memorable": true }
+      ],
+      "escaped": false,
+      "escapeTimeMinutes": 60,
+      "visibleTimer": true,
+      "multiRoom": true,
+      "flashlights": false,
+      "liveActors": false,
+      "toolsUsed": ["keypads", "pressure plates", "audio clues"],
+      "voiceTranscript": "",
+      "photos": []
+    },
+    {
+      "id": "rev_rocket",
+      "roomId": "room_rocket",
+      "date": "2024-02-17",
+      "crew": ["Maya", "Jules", "Theo", "Priya"],
+      "ratings": {
+        "overall": { "score": 94, "comment": "Best tech we've seen. Pure joy." },
+        "puzzles": { "score": 92, "comment": "Every console does something." },
+        "setting": { "score": 96, "comment": "The launch sequence shakes the floor." },
+        "storyline": { "score": 88, "comment": "Fun twist with the ship AI." },
+        "difficulty": { "score": 70, "comment": "Challenging but fair." }
+      },
+      "puzzles": [
+        { "id": "pz_rk_1", "reviewId": "rev_rocket", "description": "Plot the course by connecting star charts on the window", "type": "logic", "memorable": true },
+        { "id": "pz_rk_2", "reviewId": "rev_rocket", "description": "Calculate fuel load from three gauges", "type": "math", "memorable": false },
+        { "id": "pz_rk_3", "reviewId": "rev_rocket", "description": "Swipe the right crew badge on each RFID reader", "type": "lock-and-key", "memorable": false },
+        { "id": "pz_rk_4", "reviewId": "rev_rocket", "description": "Find the missing fuse hidden inside a space-food packet", "type": "search", "memorable": false },
+        { "id": "pz_rk_5", "reviewId": "rev_rocket", "description": "Four people pull launch levers in sync on the countdown", "type": "physical", "memorable": true }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": 49,
+      "visibleTimer": true,
+      "multiRoom": true,
+      "flashlights": false,
+      "liveActors": false,
+      "toolsUsed": ["RFID", "keypads", "magnets"],
+      "voiceTranscript": "Countdown to Europa, Fog City Escapes again. Honestly maybe our favourite ever. Forty-nine minutes. The ending where all four of us pull the launch levers at the same time and the whole floor rumbles, chills. Setting is a ninety-six for me.",
+      "photos": []
+    },
+    {
+      "id": "rev_haunted",
+      "roomId": "room_haunted",
+      "date": "2024-10-26",
+      "crew": ["Brennan", "Maya", "Jules", "Theo", "Priya"],
+      "ratings": {
+        "overall": { "score": 72, "comment": "More giggles than scares. Big group felt crowded." },
+        "puzzles": { "score": 68, "comment": "A few red herrings too many." },
+        "setting": { "score": 88, "comment": "Creaky stairs, moving portraits, love it." },
+        "storyline": { "score": 74, "comment": "The friendly ghost reveal was cute." },
+        "difficulty": { "score": 80, "comment": "Hard to search in the dark." }
+      },
+      "puzzles": [
+        { "id": "pz_hh_1", "reviewId": "rev_haunted", "description": "Find all five portraits whose eyes follow you", "type": "search", "memorable": true },
+        { "id": "pz_hh_2", "reviewId": "rev_haunted", "description": "Play the haunted music box tune back on the piano", "type": "audio-visual", "memorable": true },
+        { "id": "pz_hh_3", "reviewId": "rev_haunted", "description": "Skeleton key opens the cellar door", "type": "lock-and-key", "memorable": false }
+      ],
+      "escaped": false,
+      "escapeTimeMinutes": 60,
+      "visibleTimer": false,
+      "multiRoom": true,
+      "flashlights": true,
+      "liveActors": true,
+      "toolsUsed": ["flashlights", "UV light", "padlocks"],
+      "voiceTranscript": "Hollow Hill Manor for Halloween. We didn't make it, we were literally on the last lock. The butler actor kept popping out and Theo screamed every single time. Piano puzzle was so good. Flashlights only, so searching was rough.",
+      "photos": []
+    },
+    {
+      "id": "rev_saloon",
+      "roomId": "room_saloon",
+      "date": "2025-06-07",
+      "crew": ["Brennan", "Theo", "Jules"],
+      "ratings": {
+        "overall": { "score": 81, "comment": "Charming small room with a hilarious sheriff." },
+        "puzzles": { "score": 76, "comment": "Mostly locks, but well themed." },
+        "setting": { "score": 79, "comment": "Swinging doors and a real piano." },
+        "storyline": { "score": 83, "comment": "Clear story about a stolen claim deed." },
+        "difficulty": { "score": 45, "comment": "Pretty easy for us." }
+      },
+      "puzzles": [
+        { "id": "pz_sl_1", "reviewId": "rev_saloon", "description": "Win a rigged poker hand to get the sheriff's key", "type": "logic", "memorable": true },
+        { "id": "pz_sl_2", "reviewId": "rev_saloon", "description": "Weigh gold nuggets to find the fake", "type": "math", "memorable": false }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": 38,
+      "visibleTimer": true,
+      "multiRoom": false,
+      "flashlights": false,
+      "liveActors": true,
+      "toolsUsed": ["padlocks", "writing boards"],
+      "voiceTranscript": "",
+      "photos": []
+    },
+    {
+      "id": "rev_circus",
+      "roomId": "room_circus",
+      "date": "2026-03-21",
+      "crew": ["Maya", "Priya", "Jules", "Theo"],
+      "ratings": {
+        "overall": { "score": 89, "comment": "We laughed the whole hour." },
+        "puzzles": { "score": 84, "comment": "Silly but genuinely clever." },
+        "setting": { "score": 87, "comment": "Bright, loud, so many pickles." },
+        "storyline": { "score": 90, "comment": "Rescue the pickle from the cannon. Iconic." },
+        "difficulty": { "score": 55, "comment": "Medium-easy." }
+      },
+      "puzzles": [
+        { "id": "pz_pc_1", "reviewId": "rev_circus", "description": "Honk the clown horns in the order of the poster", "type": "audio-visual", "memorable": true },
+        { "id": "pz_pc_2", "reviewId": "rev_circus", "description": "Juggling pins with magnets stack on the pedestal", "type": "physical", "memorable": false },
+        { "id": "pz_pc_3", "reviewId": "rev_circus", "description": "Search the ball pit for numbered rubber ducks", "type": "search", "memorable": true }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": 44,
+      "visibleTimer": false,
+      "multiRoom": false,
+      "flashlights": false,
+      "liveActors": true,
+      "toolsUsed": ["magnets", "audio clues"],
+      "voiceTranscript": "The Great Pickle Circus at Lockbox Social. Forty-four minutes. Ball pit full of rubber ducks, need I say more. Ringmaster actor was hilarious. Overall like an 89, storyline a 90 because rescuing a pickle from a cannon is peak cinema.",
+      "photos": []
+    },
+    {
+      "id": "rev_castle",
+      "roomId": "room_castle",
+      "date": "2023-12-02",
+      "crew": ["Brennan", "Maya", "Priya"],
+      "ratings": {
+        "overall": { "score": 91, "comment": "Magical. Felt like a storybook." },
+        "puzzles": { "score": 90, "comment": "Rune wheel is a standout." },
+        "setting": { "score": 93, "comment": "The animatronic dragon head!" },
+        "storyline": { "score": 86, "comment": "Earn the dragon's trust, not slay it." },
+        "difficulty": { "score": 74, "comment": "Good challenge." }
+      },
+      "puzzles": [
+        { "id": "pz_dk_1", "reviewId": "rev_castle", "description": "Turn the rune wheel to spell the dragon's true name", "type": "lock-and-key", "memorable": true },
+        { "id": "pz_dk_2", "reviewId": "rev_castle", "description": "Mix potion colours to match the spellbook", "type": "logic", "memorable": false },
+        { "id": "pz_dk_3", "reviewId": "rev_castle", "description": "Reflect a beam with mirrors onto the crystal egg", "type": "physical", "memorable": true },
+        { "id": "pz_dk_4", "reviewId": "rev_castle", "description": "Hum the lullaby to make the dragon sleep", "type": "audio-visual", "memorable": false }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": 53,
+      "visibleTimer": true,
+      "multiRoom": true,
+      "flashlights": false,
+      "liveActors": false,
+      "toolsUsed": ["mirrors", "cipher wheel", "magnets"],
+      "voiceTranscript": "Dragon's Keep at Maple and Key on Spadina. We escaped in fifty-three. The mirror beam onto the crystal egg was gorgeous, and the dragon head actually moves and breathes smoke. Overall ninety-one.",
+      "photos": []
+    },
+    {
+      "id": "rev_temple",
+      "roomId": "room_temple",
+      "date": "2024-07-13",
+      "crew": ["Jules", "Theo", "Maya", "Brennan"],
+      "ratings": {
+        "overall": { "score": 83, "comment": "Indiana Jones energy." },
+        "puzzles": { "score": 85, "comment": "Great physical puzzles." },
+        "setting": { "score": 82, "comment": "Vines everywhere, and a rolling boulder." },
+        "storyline": { "score": 70, "comment": "Standard treasure hunt." },
+        "difficulty": { "score": 66, "comment": "Medium." }
+      },
+      "puzzles": [
+        { "id": "pz_tm_1", "reviewId": "rev_temple", "description": "Step on the right pressure-plate tiles across the floor", "type": "physical", "memorable": true },
+        { "id": "pz_tm_2", "reviewId": "rev_temple", "description": "Find the hidden glyphs with torches", "type": "search", "memorable": false },
+        { "id": "pz_tm_3", "reviewId": "rev_temple", "description": "Add up the monkey statues' offerings", "type": "math", "memorable": false }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": 51,
+      "visibleTimer": false,
+      "multiRoom": true,
+      "flashlights": true,
+      "liveActors": false,
+      "toolsUsed": ["pressure plates", "flashlights", "maps"],
+      "voiceTranscript": "",
+      "photos": []
+    },
+    {
+      "id": "rev_train",
+      "roomId": "room_train",
+      "date": "2025-01-18",
+      "crew": ["Brennan", "Maya", "Jules", "Priya", "Theo"],
+      "ratings": {
+        "overall": { "score": 77, "comment": "Tense and stylish, but tough." },
+        "puzzles": { "score": 79, "comment": "Clue logic was tight." },
+        "setting": { "score": 91, "comment": "The carriage actually rocks." },
+        "storyline": { "score": 85, "comment": "Great suspect reveals." },
+        "difficulty": { "score": 92, "comment": "Hardest we've done." }
+      },
+      "puzzles": [
+        { "id": "pz_tr_1", "reviewId": "rev_train", "description": "Cross-check passenger alibis against the timetable", "type": "logic", "memorable": true },
+        { "id": "pz_tr_2", "reviewId": "rev_train", "description": "Decode the telegram with the cipher wheel", "type": "lock-and-key", "memorable": false },
+        { "id": "pz_tr_3", "reviewId": "rev_train", "description": "Search luggage for the stolen pocket watch", "type": "search", "memorable": false },
+        { "id": "pz_tr_4", "reviewId": "rev_train", "description": "Work out the stop from speed and travel time", "type": "math", "memorable": false }
+      ],
+      "escaped": false,
+      "escapeTimeMinutes": 75,
+      "visibleTimer": true,
+      "multiRoom": true,
+      "flashlights": false,
+      "liveActors": true,
+      "toolsUsed": ["cipher wheel", "writing boards", "padlocks"],
+      "voiceTranscript": "Midnight on the Northern Express. Seventy-five minute room and we still failed, oof. The conductor actor stays in character the whole time, which was amazing. Alibi puzzle with the timetable was so satisfying when it clicked. Difficulty is like a ninety-two.",
+      "photos": []
+    },
+    {
+      "id": "rev_lab",
+      "roomId": "room_lab",
+      "date": "2025-08-30",
+      "crew": ["Maya", "Priya"],
+      "ratings": {
+        "overall": { "score": 87, "comment": "Perfect two-person room." },
+        "puzzles": { "score": 91, "comment": "UV and colour puzzles galore." },
+        "setting": { "score": 80, "comment": "Clean lab look with glowing tubes." },
+        "storyline": { "score": 78, "comment": "Find the cure, save the hamster." },
+        "difficulty": { "score": 68, "comment": "Medium-hard for two." }
+      },
+      "puzzles": [
+        { "id": "pz_lb_1", "reviewId": "rev_lab", "description": "Reveal formulas on the whiteboard with UV light", "type": "search", "memorable": false },
+        { "id": "pz_lb_2", "reviewId": "rev_lab", "description": "Balance the chemical equation to set the dials", "type": "math", "memorable": true },
+        { "id": "pz_lb_3", "reviewId": "rev_lab", "description": "Sort test tubes by glow colour", "type": "logic", "memorable": false }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": 46,
+      "visibleTimer": true,
+      "multiRoom": false,
+      "flashlights": true,
+      "liveActors": false,
+      "toolsUsed": ["UV light", "keypads", "writing boards"],
+      "voiceTranscript": "",
+      "photos": []
+    },
+    {
+      "id": "rev_attic",
+      "roomId": "room_attic",
+      "date": "2026-01-04",
+      "crew": ["Brennan", "Jules", "Maya"],
+      "ratings": {
+        "overall": { "score": 74, "comment": "Cozy and nostalgic, a bit short." },
+        "puzzles": { "score": 70, "comment": "Gentle and sweet." },
+        "setting": { "score": 84, "comment": "Every drawer has something in it." },
+        "storyline": { "score": 76, "comment": "Find grandma's secret recipe." },
+        "difficulty": { "score": 30, "comment": "Easy. Good warm-up." }
+      },
+      "puzzles": [
+        { "id": "pz_at_1", "reviewId": "rev_attic", "description": "Match the old photos to the scrapbook gaps", "type": "search", "memorable": true },
+        { "id": "pz_at_2", "reviewId": "rev_attic", "description": "Play the record at the right speed to hear the code", "type": "audio-visual", "memorable": false }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": null,
+      "visibleTimer": false,
+      "multiRoom": false,
+      "flashlights": false,
+      "liveActors": false,
+      "toolsUsed": ["audio clues"],
+      "voiceTranscript": "Grandma's Attic, Maple and Key in Roncesvalles. No timer on the wall so honestly no idea how long it took, it felt quick. The record player puzzle was cute. Super easy, like a thirty on difficulty.",
+      "photos": []
+    },
+    {
+      "id": "rev_noir",
+      "roomId": "room_noir",
+      "date": "2026-08-15",
+      "crew": ["Brennan", "Maya", "Jules", "Priya", "Theo"],
+      "ratings": {
+        "overall": { "score": 92, "comment": "Moody jazz-club mystery, beautifully done." },
+        "puzzles": { "score": 89, "comment": "The deduction board is genius." },
+        "setting": { "score": 94, "comment": "Velvet curtains, live singer, smoky light." },
+        "storyline": { "score": 93, "comment": "Whodunit with a real twist." },
+        "difficulty": { "score": 76, "comment": "Satisfyingly tricky." }
+      },
+      "puzzles": [
+        { "id": "pz_nr_1", "reviewId": "rev_noir", "description": "Pin suspects and motives on the deduction board", "type": "logic", "memorable": true },
+        { "id": "pz_nr_2", "reviewId": "rev_noir", "description": "Count the singer's encores to open the dressing-room lock", "type": "audio-visual", "memorable": false },
+        { "id": "pz_nr_3", "reviewId": "rev_noir", "description": "Lipstick-stained matchbook hides the safe combination", "type": "lock-and-key", "memorable": false },
+        { "id": "pz_nr_4", "reviewId": "rev_noir", "description": "Search coat pockets in the cloakroom by flashlight", "type": "search", "memorable": false }
+      ],
+      "escaped": true,
+      "escapeTimeMinutes": 58,
+      "visibleTimer": true,
+      "multiRoom": true,
+      "flashlights": true,
+      "liveActors": true,
+      "toolsUsed": ["flashlights", "padlocks", "keypads", "writing boards"],
+      "voiceTranscript": "",
+      "photos": []
+    }
+  ],
+  "wishlist": [
+    { "id": "wish_submarine", "name": "Deep Blue Station", "city": "Toronto", "link": "https://puzzle-foundry.example.com/deep-blue", "addedBy": "Jules", "priority": 1, "done": false },
+    { "id": "wish_museum", "name": "Night at the Natural History Vault", "city": "San Francisco", "link": "https://lockbox-social.example.com/museum", "addedBy": "Maya", "priority": 2, "done": false },
+    { "id": "wish_wizard", "name": "The Wizard's Bakery", "city": "Toronto", "link": "https://maple-and-key.example.com/bakery", "addedBy": "Priya", "priority": 3, "done": false },
+    { "id": "wish_pirate", "name": "Sky Pirates of the Bay", "city": "San Francisco", "link": "https://fogcity-escapes.example.com/sky-pirates", "addedBy": "Theo", "priority": 4, "done": false },
+    { "id": "wish_tomb", "name": "Tomb of the Cat Pharaoh", "city": "Montreal", "link": "https://example.com/cat-pharaoh", "addedBy": "Brennan", "priority": 5, "done": false },
+    { "id": "wish_circus", "name": "The Great Pickle Circus", "city": "San Francisco", "link": "https://lockbox-social.example.com/pickle-circus", "addedBy": "Maya", "priority": 6, "done": true }
+  ]
+}
