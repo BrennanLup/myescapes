@@ -1,9 +1,5 @@
-// PLACEHOLDER (orchestrator). Owned by workstream 17: Audio.
-export function AudioSystem() {
-  return null
-}
-
-/** Small mute/volume button for the HUD. */
-export function VolumeToggle() {
-  return null
-}
+// Workstream 17: Audio. Synthesized ambient + sound cues (Web Audio, no files).
+export { AudioSystem } from './AudioSystem'
+export { VolumeToggle } from './VolumeToggle'
+export { cueForEvent, type CueName } from './cues'
+export { stepIntervalMs, FootstepScheduler } from './footsteps'
