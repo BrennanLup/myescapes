@@ -1,8 +1,9 @@
-// Serves the Vite build (dist/) with caching, plus SPA fallback and JSON 404s for /api.
+// Serves the Vite build (dist/) with caching and precompressed (br/gzip) variants, plus SPA fallback and JSON 404s for /api.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import fastifyStatic from '@fastify/static'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
+import { precompressDist } from './precompress'
 
 export const CACHE_IMMUTABLE = 'public, max-age=31536000, immutable'
 export const CACHE_NONE = 'no-cache'
@@ -10,7 +11,8 @@ export const CACHE_SHORT = 'public, max-age=3600'
 
 /** Cache-Control for a file under dist/, by its path relative to dist. */
 export function cacheControlFor(relPath: string): string {
-  const p = relPath.split(path.sep).join('/').replace(/^\/+/, '')
+  // A precompressed sibling (app.js.br, index.html.gz) is cached like the file it stands for.
+  const p = relPath.split(path.sep).join('/').replace(/^\/+/, '').replace(/\.(br|gz)$/, '')
   if (p.startsWith('assets/')) return CACHE_IMMUTABLE
   if (p.endsWith('.html')) return CACHE_NONE
   return CACHE_SHORT
@@ -62,9 +64,16 @@ export async function registerStatic(app: FastifyInstance, distDir: string): Pro
     return false
   }
 
+  // Make sure every text asset has .br/.gz siblings (the build already wrote them; this covers
+  // a dist built some other way). Cheap when they are fresh: it only compares mtimes.
+  precompressDist(distDir)
+
   await app.register(fastifyStatic, {
     root: distDir,
     index: false,
+    // Serve app.js.br / app.js.gz when Accept-Encoding allows, with Content-Encoding, the original
+    // Content-Type and Vary: accept-encoding. Falls back to the plain file otherwise.
+    preCompressed: true,
     cacheControl: false,
     redirect: false,
     setHeaders: (reply, filePath) => {

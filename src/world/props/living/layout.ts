@@ -25,7 +25,10 @@ export const POUF = { center: [3.45, 0, 3.25] as Vec3, r: 0.28, h: 0.24 }
 
 export const SIDE_TABLE = { center: [6.0, 0, 3.05] as Vec3, r: 0.26, h: 0.54 }
 
-/** Floor lamp base. The shade centre is exactly LAMPS.floorLamp. */
+/**
+ * Floor lamp base, just behind the couch's north arm (a reading light). The shade centre is exactly
+ * LAMPS.floorLamp. It stays off the z = 0 centre line so a walk east from the room centre is not blocked.
+ */
 export const FLOOR_LAMP = { base: [LAMPS.floorLamp[0], 0, LAMPS.floorLamp[2]] as Vec3, shade: LAMPS.floorLamp }
 
 export const SHELF = {

@@ -128,7 +128,7 @@ export type AnchorName = keyof typeof ANCHORS
  */
 export const LAMPS = {
   /** Floor lamp in the living area: bulb position. */
-  floorLamp: [6.2, 1.75, -0.2] as Vec3,
+  floorLamp: [6.75, 1.75, 0.7] as Vec3,
   /** Desk lamp bulb (desk anchor at x=-9.45, z=-3). */
   deskLamp: [-9.35, 1.25, -3.85] as Vec3,
   /** Two warm ceiling pendants. */

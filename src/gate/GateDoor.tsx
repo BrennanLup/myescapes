@@ -5,16 +5,13 @@ import * as THREE from 'three'
 import { Anchor } from '@/world/Anchor'
 import { getMaterial } from '@/world/materials'
 import { interactable } from '@/contracts/interaction'
-import { boxFromCenter, useColliders } from '@/contracts/colliders'
-import { anchorToWorld } from '@/contracts/scene'
+import { useColliders } from '@/contracts/colliders'
 import { LIGHT, PALETTE } from '@/contracts/style'
 import { useStore } from '@/state/store'
 import { useGateSession } from './session'
+import { DOOR_T, DOOR_W, HINGE_Z, OPEN_ANGLE, gateColliders } from './colliders'
 
-const DOOR_W = 1.1
 const DOOR_H = 2.2
-const DOOR_T = 0.08
-const OPEN_ANGLE = -0.95
 /** Centre height of the sign above the door. */
 const SIGN_Y = 3.02
 export const GATE_DOOR_ID = 'gate:door'
@@ -143,7 +140,7 @@ export function GateDoor() {
     mats.brass.emissiveIntensity = hovered ? 0.35 : 0
   }, [hovered, mats])
 
-  const boxes = useMemo(() => [boxFromCenter('gate:door', anchorToWorld('gateDoor', [0, 1.25, 0.5]), [1.6, 2.5, 1.0])], [])
+  const boxes = useMemo(() => gateColliders(solved), [solved])
   useColliders(boxes)
 
   useFrame((_, dt) => {
@@ -190,7 +187,7 @@ export function GateDoor() {
         </mesh>
 
         {/* Door leaf, hinged on the left edge (local -X). */}
-        <group ref={doorRef} position={[-DOOR_W / 2, 0, 0.06]}>
+        <group ref={doorRef} position={[-DOOR_W / 2, 0, HINGE_Z]}>
           <group position={[DOOR_W / 2, 0, 0]}>
             <mesh position={[0, DOOR_H / 2, 0]} material={mats.door} castShadow receiveShadow>
               <boxGeometry args={[DOOR_W - 0.02, DOOR_H - 0.02, DOOR_T]} />
