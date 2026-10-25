@@ -154,6 +154,16 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
 
         {/* Body */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+          {initial.notes.length > 0 && (
+            <div data-testid="confirm-draft-note" role="note" className="mb-4 rounded-2xl border-2 border-teal/40 bg-teal/10 p-3 text-sm text-ink sm:p-4">
+              {initial.notes.map((n) => (
+                <p key={n}>
+                  <span aria-hidden className="mr-1.5">ℹ</span>
+                  {n}
+                </p>
+              ))}
+            </div>
+          )}
           {flags.length > 0 && (
             <div data-testid="confirm-flag-summary" className="mb-5 rounded-2xl border-2 border-warn bg-warn/15 p-3 sm:p-4">
               <p className="font-display text-lg font-semibold">
@@ -410,7 +420,17 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
             {saveError ? (
               <p role="alert" data-testid="confirm-error" className="font-bold text-bad">Couldn't save: {saveError}</p>
             ) : saveReason ? (
-              <p data-testid="confirm-save-reason" className="text-ink-soft">{saveReason}</p>
+              <p data-testid="confirm-save-reason" className="text-ink-soft">
+                {saveReason}{' '}
+                <button
+                  type="button"
+                  data-testid="confirm-next-missing"
+                  onClick={() => jumpTo(errorKeys[0])}
+                  className="min-h-10 rounded-full px-2 font-bold text-accent underline underline-offset-2 hover:bg-accent/10"
+                >
+                  Show me
+                </button>
+              </p>
             ) : (
               <p className="text-good font-bold">All set. Ready to pin it!</p>
             )}

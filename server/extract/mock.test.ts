@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { PUZZLE_TYPES, ReviewDraftSchema } from '../../src/contracts/types'
 import { SAMPLE_TRANSCRIPT } from './fixtures'
-import { findDate, findEscaped, findEscapeTime, findFeatures, findRatings, mockExtract } from './mock'
+import { findAddress, findDate, findEscaped, findEscapeTime, findFeatures, findPuzzles, findRatings, mockExtract } from './mock'
 
 const NOW = new Date('2026-10-25T12:00:00Z')
 
@@ -162,5 +162,19 @@ describe('mockExtract: sparse transcript', () => {
       expect(d.flags).toContain(path)
     expect(d.review.puzzles).toEqual([])
     expect(d.review.crew).toEqual([])
+  })
+})
+
+describe('mockExtract: address and puzzle headings', () => {
+  it('finds a spoken or street-shaped address', () => {
+    expect(findAddress('The address is 1420 Valencia Street, and the crew was me.')).toBe('1420 Valencia Street')
+    expect(findAddress('We played at 22 Baker Street last week.')).toBe('22 Baker Street')
+    expect(findAddress('No location mentioned at all.')).toBeNull()
+  })
+
+  it('skips a bare "Puzzles." heading', () => {
+    const ps = findPuzzles('Puzzles. The first puzzle was a padlock with a four digit code.', new Set())
+    expect(ps).toHaveLength(1)
+    expect(ps[0].type).toBe('lock-and-key')
   })
 })

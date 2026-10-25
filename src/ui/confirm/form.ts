@@ -80,10 +80,24 @@ const uniq = (xs: string[]) => {
   return out
 }
 
-/** Turn an extractor draft into editable form state plus the initial flag set. */
-export function draftToForm(draft: ReviewDraft, today: string = todayISO()): { form: FormState; flags: string[] } {
+/**
+ * Flags that describe the whole draft rather than one field. They are shown as a
+ * note at the top of the form instead of a "check this" chip.
+ */
+export const DRAFT_NOTES: Record<string, string> = {
+  'extraction.fallback': "Claude couldn't be reached, so the offline extractor filled this in. Give every field a quick look.",
+}
+
+/** Turn an extractor draft into editable form state, the initial field flags and any draft-level notes. */
+export function draftToForm(
+  draft: ReviewDraft,
+  today: string = todayISO(),
+): { form: FormState; flags: string[]; notes: string[] } {
   const d = draft.review
-  const flags = [...new Set(draft.flags ?? [])]
+  const all = [...new Set(draft.flags ?? [])]
+  const notes = all.filter((f) => f in DRAFT_NOTES).map((f) => DRAFT_NOTES[f])
+  // Field flags are dotted paths into room/review; anything else is not a field.
+  const flags = all.filter((f) => !(f in DRAFT_NOTES) && /^(room|review)\./.test(f))
   let date = d.date ?? ''
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     date = today
@@ -119,7 +133,7 @@ export function draftToForm(draft: ReviewDraft, today: string = todayISO()): { f
     },
     mode: draft.mode,
   }
-  return { form, flags }
+  return { form, flags, notes }
 }
 
 export type FormErrors = Record<string, string>

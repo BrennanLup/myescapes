@@ -452,6 +452,8 @@ export function findPuzzles(
     const plain = proper.reduce((acc, n) => acc.split(n).join(' '), s)
     if (!PUZZLE_TRIGGER.test(plain)) continue
     if (ratingSentences.has(s)) continue
+    // A bare heading like "Puzzles." or "Puzzles, then." is not a puzzle.
+    if (plain.replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).length < 4) continue
     // Sentences that only talk about puzzles in general ("the puzzles were great") are not a puzzle.
     if (/^\s*(?:the\s+)?puzzles\s+(?:were|are)\b/i.test(s)) continue
     // "We used a UV light, magnets and ..." lists tools, not a puzzle.
@@ -459,6 +461,20 @@ export function findPuzzles(
     out.push({ description: s.replace(/^(?:and|also|then|so)\s+/i, '').replace(/^./, (c) => c.toUpperCase()), type: classifyPuzzle(s), memorable: MEMORABLE.test(s) })
   }
   return out
+}
+
+// ---------------------------------------------------------------------------
+// Address
+// ---------------------------------------------------------------------------
+
+const STREET = /\b(\d{1,5}\s+(?:[A-Z][\w'-]*\s+){1,4}(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Way|Place|Pl|Square|Sq|Wharf|Court|Ct|Terrace|Parkway|Pkwy)\b\.?)/
+
+/** "the address is 1420 Valencia Street" or any "<number> <Name> Street" phrase. */
+export function findAddress(text: string): string | null {
+  const said = /\baddress (?:is|was)\s+([^.;!?]+?)(?:,\s+and\b|\s+and\s+the\b|[.;!?]|$)/i.exec(text)
+  if (said) return said[1].trim().replace(/,$/, '')
+  const m = STREET.exec(text)
+  return m ? m[1].replace(/\.$/, '').trim() : null
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +525,7 @@ export function mockExtract(transcript: string, opts: { now?: Date } = {}): Revi
   const name = findRoomName(text)
   const city = findCity(text)
   const company = findCompany(text, [name, city])
-  draft.room = { ...draft.room, name, city, company, genre: findGenre(text) }
+  draft.room = { ...draft.room, name, city, company, genre: findGenre(text), address: findAddress(text) }
 
   const ratings = findRatings(text)
   const ratingSentences = new Set(

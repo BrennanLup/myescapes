@@ -5,7 +5,9 @@
 ## Files
 - `ConfirmOverlay.tsx`: the overlay UI. Two columns at 1024px and wider, one scrollable column below that.
 - `form.ts`: the pure logic. `draftToForm`, `validateForm`, `draftToEntry(form, existingRooms)`, `findExistingRoom`, `labelFor`, `shiftPuzzleFlags`.
-- `toast.ts`: a DOM toast that says "Pinned to the board!". It lives outside React because the overlay unmounts as soon as the save goes through.
+- `toast.ts`: shows "Pinned to the board!" through the shell's toast slot (`useShell().showToast`), which the HUD renders outside the overlay, so it outlives the overlay that unmounts as soon as the save goes through.
+- Draft-level flags (currently `extraction.fallback`) are not fields: `draftToForm` turns them into `notes`, shown as a small info note at the top (`confirm-draft-note`). Only `room.*` / `review.*` paths become "Check this" chips.
+- The footer's "Still needed: ..." line has a "Show me" button (`confirm-next-missing`) that scrolls to and focuses the first missing required field (handy for fields the mock extractor leaves empty).
 - `sampleDraft.ts`: a sample draft with some nulls and flags, used by the tests.
 
 ## Behaviour

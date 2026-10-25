@@ -24,6 +24,16 @@ describe('draftToForm', () => {
     expect(form.room.city).toBe('')
     expect(form.review.multiRoom).toBeNull()
   })
+
+  it('turns the extraction.fallback flag into a draft-level note, not a field flag', () => {
+    const d = sampleDraft()
+    d.flags = [...d.flags, 'extraction.fallback']
+    const { flags, notes } = draftToForm(d, '2026-10-25')
+    expect(flags).not.toContain('extraction.fallback')
+    expect(notes).toHaveLength(1)
+    expect(notes[0]).toMatch(/offline extractor/)
+    expect(draftToForm(sampleDraft(), '2026-10-25').notes).toEqual([])
+  })
 })
 
 describe('validateForm', () => {
