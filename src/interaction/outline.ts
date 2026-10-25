@@ -2,20 +2,24 @@
  * Inverted-hull outline: for each visible mesh under the hovered root we draw a
  * copy of its geometry, grown by a few millimetres about its bounding-box centre,
  * with an unlit teal material. Closed meshes use back faces (only the rim shows
- * around the silhouette); flat meshes (planes, photos) use a coplanar hull pushed
- * back with polygon offset so it reads as a border. No post-processing pass.
+ * around the silhouette); flat meshes (planes, photos, decals) use a coplanar hull
+ * whose fragments inside the source's footprint are discarded, so it only ever
+ * draws a border and never paints over the source (e.g. the chalk writing on the
+ * wish-list board) whatever the view angle or depth precision. No post pass.
  */
 import * as THREE from 'three'
 import { LIGHT } from '@/contracts/style'
-import { hullScale, outlineThickness } from './logic'
+import { hullScale, outlineThickness, rimHalfExtents } from './logic'
 
 const MAX_HULL_MESHES = 32
 
 const vertexShader = /* glsl */ `
 uniform vec3 uCenter;
 uniform vec3 uScale;
+varying vec3 vLocal;
 void main() {
   vec3 p = uCenter + (position - uCenter) * uScale;
+  vLocal = p;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
 `
@@ -23,7 +27,13 @@ void main() {
 const fragmentShader = /* glsl */ `
 uniform vec3 uColor;
 uniform float uGlow;
+uniform vec3 uCenter;
+uniform vec3 uHole;
+uniform float uRim;
+varying vec3 vLocal;
 void main() {
+  // Flat hulls are a rim only: never draw over the source's own footprint.
+  if (uRim > 0.5 && all(lessThan(abs(vLocal - uCenter), uHole))) discard;
   gl_FragColor = vec4(uColor * uGlow, 1.0);
   #include <colorspace_fragment>
 }
@@ -41,6 +51,8 @@ function makeHullMaterial(flat: boolean): THREE.ShaderMaterial {
       uScale: { value: new THREE.Vector3(1, 1, 1) },
       uColor: { value: TEAL.clone() },
       uGlow: { value: 1 },
+      uHole: { value: new THREE.Vector3() },
+      uRim: { value: flat ? 1 : 0 },
     },
     side: flat ? THREE.DoubleSide : THREE.BackSide,
     polygonOffset: flat,
@@ -60,6 +72,16 @@ function isOutlinable(o: THREE.Object3D): o is THREE.Mesh {
   if (Array.isArray(m.material) ? false : mat?.isTroikaTextMaterial || mat?.visible === false) return false
   if ('sync' in m && 'font' in m && 'text' in m) return false
   return true
+}
+
+/**
+ * Soft decals (transparent, no depth write: drop shadows, tape, the chalk writing)
+ * are left out of the outline when the target has solid meshes; their hulls only
+ * add stray rectangles around the real silhouette.
+ */
+export function isDecal(m: THREE.Mesh): boolean {
+  const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.Material | undefined
+  return !!mat && mat.transparent && !mat.depthWrite
 }
 
 interface Hull {
@@ -93,13 +115,15 @@ export class OutlineHulls {
     this.clear()
     this.root = root
     if (!root) return
-    const sources: THREE.Mesh[] = []
+    const found: THREE.Mesh[] = []
     const walk = (o: THREE.Object3D) => {
-      if (sources.length >= MAX_HULL_MESHES || !o.visible) return
-      if (isOutlinable(o)) sources.push(o)
+      if (found.length >= MAX_HULL_MESHES || !o.visible) return
+      if (isOutlinable(o)) found.push(o)
       for (const c of o.children) walk(c)
     }
     walk(root)
+    const solid = found.filter((m) => !isDecal(m))
+    const sources = solid.length > 0 ? solid : found
     for (const source of sources) {
       const geometry = source.geometry
       if (!geometry.boundingBox) geometry.computeBoundingBox()
@@ -118,6 +142,7 @@ export class OutlineHulls {
       mesh.raycast = () => {}
       mesh.renderOrder = source.renderOrder
       mesh.material.uniforms.uCenter.value.copy(center)
+      if (flat) mesh.material.uniforms.uHole.value.fromArray(rimHalfExtents(half, [_scale.x, _scale.y, _scale.z]))
       this.group.add(mesh)
       this.hulls.push({ mesh, source, center, half })
     }

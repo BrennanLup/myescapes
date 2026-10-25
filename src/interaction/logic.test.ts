@@ -5,6 +5,12 @@ import {
   desktopPrompt,
   findInteractable,
   hullScale,
+  armClickSwallow,
+  insideRimHole,
+  rimHalfExtents,
+  RIM_OPEN_AXIS,
+  shouldSwallowClick,
+  CLICK_SWALLOW_MS,
   isTap,
   isTapSurface,
   moveTap,
@@ -126,5 +132,33 @@ describe('outline sizing', () => {
   it('thickness is clamped', () => {
     expect(outlineThickness(0)).toBeCloseTo(0.006)
     expect(outlineThickness(100)).toBeCloseTo(0.03)
+  })
+})
+
+describe('flat hull rim', () => {
+  it('opens the flat axis and keeps the footprint on the others', () => {
+    expect(rimHalfExtents([0.5, 0.25, 0], [2, 2, 2])).toEqual([0.5, 0.25, RIM_OPEN_AXIS])
+    expect(rimHalfExtents([0.5, 0.25, 0.1], [1, 1, 1])).toEqual([0.5, 0.25, 0.1])
+  })
+  it('discards the interior (the chalk writing / photo face) and keeps the rim', () => {
+    const hole = rimHalfExtents([1.4, 0.85, 0], [1, 1, 1])
+    expect(insideRimHole([0, 0, 0.001], [0, 0, 0], hole)).toBe(true)
+    expect(insideRimHole([1.39, -0.84, 0], [0, 0, 0], hole)).toBe(true)
+    expect(insideRimHole([1.41, 0, 0], [0, 0, 0], hole)).toBe(false)
+    expect(insideRimHole([0, -0.86, 0], [0, 0, 0], hole)).toBe(false)
+  })
+})
+
+describe('ghost-click guard', () => {
+  it('swallows a click near the tap inside the window only', () => {
+    const s = armClickSwallow(1000, [100, 200])
+    expect(shouldSwallowClick(s, 1100, 104, 197)).toBe(true)
+    expect(shouldSwallowClick(s, 1100, 300, 200)).toBe(false)
+    expect(shouldSwallowClick(s, 1000 + CLICK_SWALLOW_MS + 1, 100, 200)).toBe(false)
+    expect(shouldSwallowClick(null, 1000, 100, 200)).toBe(false)
+  })
+  it('a position-less swallow (pointer lock) eats any click in the window', () => {
+    const s = armClickSwallow(0, null)
+    expect(shouldSwallowClick(s, 10, 900, 10)).toBe(true)
   })
 })

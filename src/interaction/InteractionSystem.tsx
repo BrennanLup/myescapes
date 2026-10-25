@@ -7,18 +7,10 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DEFAULT_INTERACT_DISTANCE } from '@/contracts/interaction'
 import { selectControlsEnabled, useStore } from '@/state/store'
-import { interactHovered, interactWith, setHoveredSpec, useInteraction } from './controller'
+import { setHoveredSpec } from './controller'
+import { attachInteractionInput } from './input'
 import { OutlineHulls } from './outline'
-import {
-  findInteractable,
-  isTap,
-  isTapSurface,
-  moveTap,
-  resolveTarget,
-  startTap,
-  type ResolvedTarget,
-  type TapStart,
-} from './logic'
+import { findInteractable, resolveTarget, type ResolvedTarget } from './logic'
 
 const TICK = 1 / 30
 const RECOLLECT = 0.5
@@ -151,61 +143,14 @@ export function InteractionSystem() {
   })
 
   // Input: mouse click while pointer-locked, E key, touch tap on the canvas / look surfaces.
-  useEffect(() => {
-    const canvas = gl.domElement
-    const enabled = () => selectControlsEnabled(useStore.getState())
-    const lockedNow = () => typeof document !== 'undefined' && !!document.pointerLockElement
-    let tap: (TapStart & { id: number; ok: boolean }) | null = null
-
-    const onLockChange = () => useInteraction.setState({ locked: lockedNow() })
-    const onPointerDown = (e: PointerEvent) => {
-      if (e.pointerType === 'mouse') {
-        // Only a click that happens while already locked interacts (the locking click doesn't).
-        if (e.button === 0 && lockedNow() && enabled()) interactHovered()
-        return
-      }
-      if (!e.isPrimary) return
-      tap = { ...startTap(e.clientX, e.clientY, e.timeStamp), id: e.pointerId, ok: isTapSurface(e.target, canvas) }
-    }
-    const onPointerMove = (e: PointerEvent) => {
-      if (tap && e.pointerId === tap.id) tap = { ...tap, ...moveTap(tap, e.clientX, e.clientY) }
-    }
-    const onPointerUp = (e: PointerEvent) => {
-      if (!tap || e.pointerId !== tap.id) return
-      const t = tap
-      tap = null
-      if (!t.ok || !enabled() || !isTap(t, e.clientX, e.clientY, e.timeStamp)) return
-      const rect = canvas.getBoundingClientRect()
-      _ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
-      const hit = castRef.current(_ndc)
-      if (hit) interactWith(hit.spec)
-    }
-    const onPointerCancel = (e: PointerEvent) => {
-      if (tap && e.pointerId === tap.id) tap = null
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== 'KeyE' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
-      const el = e.target as HTMLElement | null
-      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return
-      if (enabled()) interactHovered()
-    }
-
-    onLockChange()
-    document.addEventListener('pointerlockchange', onLockChange)
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', onPointerUp)
-    window.addEventListener('pointercancel', onPointerCancel)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerlockchange', onLockChange)
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', onPointerUp)
-      window.removeEventListener('pointercancel', onPointerCancel)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [gl])
+  useEffect(
+    () =>
+      attachInteractionInput(gl.domElement, (x, y) => {
+        _ndc.set(x, y)
+        return castRef.current(_ndc)?.spec ?? null
+      }),
+    [gl],
+  )
 
   return null
 }
