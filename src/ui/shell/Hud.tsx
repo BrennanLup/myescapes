@@ -8,6 +8,8 @@ import { useServerStatus, useShell } from './shellStore'
 import { IconClose, IconGear, IconHelp, IconLock, IconMic, IconSort, IconStar, IconTrophy } from './icons'
 
 export const HINT_AUTO_HIDE_MS = 8000
+/** Height of the narrow-screen HUD stack (title line + button row + gap). */
+const HUD_STACK_PX = 100
 
 const SAFE = {
   top: 'max(12px, env(safe-area-inset-top))',
@@ -71,44 +73,69 @@ export function Hud() {
 function HudBar() {
   const wide = useMediaQuery('(min-width: 768px)')
   const rooms = useStore((s) => s.rooms.length)
+  const title = (
+    <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-panel/90 px-3.5 py-1.5 shadow-[0_6px_18px_rgba(40,20,20,.28)] ring-1 ring-panel-edge backdrop-blur">
+      <IconLock width={18} height={18} className="text-accent" />
+      <span className="font-display text-base font-semibold leading-none">My Escapes</span>
+      <span className="rounded-full bg-[rgba(47,143,138,.14)] px-2 py-0.5 text-xs font-bold text-teal">
+        {rooms} {rooms === 1 ? 'room' : 'rooms'}
+      </span>
+    </div>
+  )
+  const buttons = (
+    <>
+      {!wide ? <SortMenu /> : null}
+      <RoundButton label="Wish list" onClick={() => bus.emit('wishlist:open')} testId="wishlist-button">
+        <IconStar />
+      </RoundButton>
+      <RoundButton label="Year in Escape Rooms" onClick={() => bus.emit('wrap:open')} testId="wrap-button">
+        <IconTrophy />
+      </RoundButton>
+      <RoundButton label="Log a new room" onClick={() => bus.emit('record:open')} testId="record-button" accent>
+        <IconMic />
+      </RoundButton>
+      <RoundButton label="Settings" onClick={() => bus.emit('settings:open')} testId="settings-button">
+        <IconGear />
+      </RoundButton>
+      <div className="pointer-events-auto empty:hidden">
+        <VolumeToggle />
+      </div>
+      <RoundButton label="Controls help" onClick={() => useShell.getState().openHint()} testId="help-button">
+        <IconHelp />
+      </RoundButton>
+    </>
+  )
+
+  if (!wide) {
+    // Narrow screens: title + badge on one line, then a single row of buttons along
+    // the top edge, so nothing sits over the sides of the view.
+    return (
+      <div data-testid="hud" className="pointer-events-none fixed inset-0 z-30 font-body text-ink">
+        <div className="absolute flex flex-col gap-2" style={{ top: SAFE.top, left: SAFE.left, right: SAFE.right }}>
+          <div className="flex flex-wrap items-center gap-2">
+            {title}
+            <ModeBadge />
+          </div>
+          <div data-testid="hud-row" className="flex items-center justify-between gap-1">
+            {buttons}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div data-testid="hud" className="pointer-events-none fixed inset-0 z-30 font-body text-ink">
       {/* top-left */}
       <div className="absolute flex flex-col items-start gap-2" style={{ top: SAFE.top, left: SAFE.left }}>
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-panel/90 px-3.5 py-1.5 shadow-[0_6px_18px_rgba(40,20,20,.28)] ring-1 ring-panel-edge backdrop-blur">
-          <IconLock width={18} height={18} className="text-accent" />
-          <span className="font-display text-base font-semibold leading-none">My Escapes</span>
-          <span className="rounded-full bg-[rgba(47,143,138,.14)] px-2 py-0.5 text-xs font-bold text-teal">
-            {rooms} {rooms === 1 ? 'room' : 'rooms'}
-          </span>
-        </div>
+        {title}
         <ModeBadge />
       </div>
 
       {/* top-right */}
       <div className="absolute flex flex-col items-end gap-2" style={{ top: SAFE.top, right: SAFE.right }}>
-        <div className={`flex gap-2 ${wide ? 'flex-row items-center' : 'flex-col items-end'}`}>
-          {!wide ? <SortMenu /> : null}
-          <RoundButton label="Wish list" onClick={() => bus.emit('wishlist:open')} testId="wishlist-button">
-            <IconStar />
-          </RoundButton>
-          <RoundButton label="Year in Escape Rooms" onClick={() => bus.emit('wrap:open')} testId="wrap-button">
-            <IconTrophy />
-          </RoundButton>
-          <RoundButton label="Log a new room" onClick={() => bus.emit('record:open')} testId="record-button" accent>
-            <IconMic />
-          </RoundButton>
-          <RoundButton label="Settings" onClick={() => bus.emit('settings:open')} testId="settings-button">
-            <IconGear />
-          </RoundButton>
-          <div className="pointer-events-auto empty:hidden">
-            <VolumeToggle />
-          </div>
-          <RoundButton label="Controls help" onClick={() => useShell.getState().openHint()} testId="help-button">
-            <IconHelp />
-          </RoundButton>
-        </div>
-        {wide ? <SortChips /> : null}
+        <div className="flex flex-row items-center gap-2">{buttons}</div>
+        <SortChips />
       </div>
     </div>
   )
@@ -211,7 +238,7 @@ function SortMenu() {
         <div
           role="group"
           aria-label="Sort the board"
-          className="pointer-events-auto absolute top-0 right-14 flex w-40 flex-col gap-0.5 rounded-cozy bg-panel p-2 shadow-cozy ring-1 ring-panel-edge"
+          className="pointer-events-auto absolute top-full left-0 z-10 mt-2 flex w-40 flex-col gap-0.5 rounded-cozy bg-panel p-2 shadow-cozy ring-1 ring-panel-edge"
         >
           <span className="px-2 pb-1 text-xs font-bold tracking-wide text-ink-soft uppercase">Sort board by</span>
           {SORT_KEYS.map((k) => (
@@ -290,7 +317,8 @@ function ControlsHint() {
   return (
     <div
       className="pointer-events-none fixed inset-x-0 z-30 flex justify-center px-4"
-      style={{ bottom: isTouch ? 'calc(max(16px, env(safe-area-inset-bottom)) + 150px)' : SAFE.bottom }}
+      // Touch: under the HUD at the top, clear of the joystick and the tap button.
+      style={isTouch ? { top: `calc(${SAFE.top} + ${HUD_STACK_PX}px)` } : { bottom: SAFE.bottom }}
     >
       <div
         data-testid="controls-hint"
@@ -326,6 +354,7 @@ const TOAST_MS = 4500
 
 function Toast() {
   const toast = useShell((s) => s.toast)
+  const wide = useMediaQuery('(min-width: 768px)')
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => useShell.getState().clearToast(toast.id), TOAST_MS)
@@ -333,7 +362,7 @@ function Toast() {
   }, [toast])
   if (!toast) return null
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-[60] flex justify-center px-4" style={{ top: 'calc(max(12px, env(safe-area-inset-top)) + 56px)' }}>
+    <div className="pointer-events-none fixed inset-x-0 z-[60] flex justify-center px-4" style={{ top: `calc(${SAFE.top} + ${wide ? 56 : HUD_STACK_PX}px)` }}>
       <div data-testid="shell-toast" role="status" className="rounded-full bg-ink/90 px-4 py-2 text-sm font-semibold text-paper shadow-cozy">
         {toast.text}
       </div>
