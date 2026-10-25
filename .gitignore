@@ -8,3 +8,4 @@ playwright-report/
 .data/
 coverage/
 .DS_Store
+.claude/worktrees/
