@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+@import 'tailwindcss';
+
+/* Design tokens (mirror of src/contracts/style.ts UI + PALETTE). Use as bg-panel, text-ink, etc. */
+@theme {
+  --color-panel: #fff7ec;
+  --color-panel-edge: #e8c9a4;
+  --color-ink: #3b2a26;
+  --color-ink-soft: #7a6258;
+  --color-accent: #e07b39;
+  --color-accent-ink: #ffffff;
+  --color-teal: #2f8f8a;
+  --color-led: #2de2d0;
+  --color-good: #4f9d5a;
+  --color-bad: #c4513f;
+  --color-warn: #e0a93a;
+  --color-cork: #c69a63;
+  --color-paper: #fbf5ea;
+  --color-chalk: #2f4a42;
+  --color-plum: #6d3b5c;
+  --color-night: #2a1f2d;
+  --color-backdrop: rgba(40, 24, 30, 0.55);
+  --font-display: 'Fredoka', 'Nunito', system-ui, sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+  --font-hand: 'Caveat', 'Comic Sans MS', cursive;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --radius-cozy: 18px;
+  --shadow-cozy: 0 18px 50px rgba(60, 30, 20, 0.35);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overscroll-behavior: none;
+}
+body {
+  font-family: var(--font-body);
+  color: var(--color-ink);
+  background: var(--color-night);
+  -webkit-font-smoothing: antialiased;
+}
