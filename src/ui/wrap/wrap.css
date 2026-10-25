@@ -1,0 +1,89 @@
+/* Year in Escape Rooms: card animations (confetti, sparkles, pop-ins). */
+
+@keyframes wrap-fall {
+  0% { transform: translate3d(0, -12vh, 0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translate3d(var(--wrap-drift, 20px), 105vh, 0) rotate(var(--wrap-spin, 540deg)); opacity: 0; }
+}
+
+@keyframes wrap-twinkle {
+  0%, 100% { transform: scale(0.3) rotate(0deg); opacity: 0.2; }
+  50% { transform: scale(1) rotate(45deg); opacity: 1; }
+}
+
+@keyframes wrap-rise {
+  0% { transform: translateY(18px) scale(0.98); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes wrap-pop {
+  0% { transform: scale(0.4) rotate(-6deg); opacity: 0; }
+  60% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes wrap-wobble {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(3deg); }
+}
+
+@keyframes wrap-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes wrap-blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6%, -4%) scale(1.12); }
+}
+
+.wrap-confetti {
+  position: absolute;
+  top: 0;
+  border-radius: 2px;
+  animation: wrap-fall var(--wrap-dur, 6s) linear infinite;
+  animation-delay: var(--wrap-delay, 0s);
+  will-change: transform;
+}
+
+.wrap-sparkle {
+  position: absolute;
+  clip-path: polygon(50% 0%, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0% 50%, 39% 39%);
+  animation: wrap-twinkle var(--wrap-dur, 2.4s) ease-in-out infinite;
+  animation-delay: var(--wrap-delay, 0s);
+}
+
+.wrap-rise {
+  animation: wrap-rise 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.wrap-pop {
+  animation: wrap-pop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+
+.wrap-wobble {
+  animation: wrap-wobble 4s ease-in-out infinite;
+}
+
+.wrap-fill {
+  transform-origin: left center;
+  animation: wrap-fill 0.45s ease-out both;
+}
+
+.wrap-blob {
+  animation: wrap-blob 9s ease-in-out infinite;
+}
+
+.wrap-big {
+  font-size: clamp(4.5rem, 24vw, 8.5rem);
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wrap-confetti, .wrap-sparkle, .wrap-wobble, .wrap-blob { animation: none; }
+  .wrap-confetti { display: none; }
+  .wrap-rise, .wrap-pop, .wrap-fill { animation-duration: 1ms; }
+}
