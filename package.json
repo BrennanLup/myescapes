@@ -5,7 +5,7 @@
   "type": "module",
   "description": "A cozy first-person 3D room holding every escape room the crew has done.",
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "scripts": {
     "start": "node scripts/start.mjs",

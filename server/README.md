@@ -12,7 +12,7 @@ NO_OPEN=1 npm start    # don't open a browser (also skipped when CI is set)
 npm run serve          # just the server (expects dist/ to exist)
 ```
 
-`scripts/start.mjs` uses only Node built-ins, so a Mac with only Node 20+ installed is enough:
+`scripts/start.mjs` uses only Node built-ins, so a Mac with only Node (20.19+ or 22.12+, the range Vite 8 supports) installed is enough:
 
 1. Checks Node >= 20 (`.nvmrc` pins 22).
 2. Runs `npm install` when `node_modules` is missing, or when `package-lock.json` is newer than `node_modules/.package-lock.json` **and** asks for different package versions (a git checkout bumps mtimes, so mtime alone would reinstall every time).
@@ -56,4 +56,4 @@ All optional; see `.env.example`.
 
 ## Railway
 
-`railway.json` uses the Railpack builder, builds with `npm ci && npm run build`, starts with `npm run serve`, health-checks `/health` and restarts on failure (up to 5 retries). Railway injects `PORT`; set the API/Sheet variables in the service's Variables tab. `tsx` and `vite` are regular dependencies, so `npm ci` installs everything the build and the server need. Not deployed from here.
+`railway.json` uses the Railpack builder, installs dependencies itself and builds with `npm run build` (re-running `npm ci` in the build step can fail on the builder's cache mount), starts with `npm run serve`, health-checks `/health` and restarts on failure (up to 5 retries). Railway injects `PORT`; set the API/Sheet variables in the service's Variables tab. `tsx` and `vite` are regular dependencies, so the install step provides everything the build and the server need. Not deployed from here.

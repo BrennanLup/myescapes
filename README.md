@@ -8,7 +8,7 @@ It works with no configuration at all: it ships with 12 sample rooms and stores 
 
 ## Run it
 
-You only need [Node.js 20+](https://nodejs.org/).
+You only need [Node.js](https://nodejs.org/) 22.12+ (or 20.19+), the range Vite 8 supports. Check with `node -v`.
 
 ```sh
 git clone https://github.com/BrennanLup/myescapes && cd myescapes && npm start
@@ -114,6 +114,6 @@ Each folder has its own README with details. Design choices are listed in [`DECI
 The repo includes `railway.json`. It has not been deployed from here.
 
 1. Create a Railway project from this GitHub repo.
-2. Railway builds with `npm ci && npm run build` and starts with `npm run serve`, health-checking `/health`. It sets `PORT` itself.
+2. Railway installs dependencies, runs `npm run build` and starts with `npm run serve`, health-checking `/health`. It sets `PORT` itself.
 3. Add any variables you want in the service's **Variables** tab (`ANTHROPIC_API_KEY`, `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` as raw JSON).
 4. Seed mode writes to the container's disk, which Railway resets on every deploy. Use the Google Sheet for data that should last, or mount a volume and point `DATA_DIR` at it.

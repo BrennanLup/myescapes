@@ -12,11 +12,20 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const MIN_NODE_MAJOR = 20
+/** Vite 8 needs Node ^20.19 or >=22.12. */
+const NODE_REQUIREMENT = '20.19+ or 22.12+'
 const isWin = process.platform === 'win32'
 
 export function nodeMajor(version = process.versions.node) {
   return Number(String(version).replace(/^v/, '').split('.')[0])
+}
+
+/** True when this Node can run the build (Vite 8: ^20.19.0 || >=22.12.0). */
+export function nodeSupported(version = process.versions.node) {
+  const [major, minor] = String(version).replace(/^v/, '').split('.').map(Number)
+  if (major === 20) return minor >= 19
+  if (major === 22) return minor >= 12
+  return major > 22
 }
 
 function mtime(p) {
@@ -150,9 +159,9 @@ async function main() {
   const argv = process.argv.slice(2)
   const noBuild = argv.includes('--no-build')
 
-  if (!(nodeMajor() >= MIN_NODE_MAJOR)) {
+  if (!nodeSupported()) {
     fail(
-      `My Escapes needs Node ${MIN_NODE_MAJOR} or newer, but this is Node ${process.versions.node}.\n` +
+      `My Escapes needs Node ${NODE_REQUIREMENT}, but this is Node ${process.versions.node}.\n` +
         `  Install the current LTS from https://nodejs.org (or run \`nvm use\`; .nvmrc says 22).`,
     )
   }

@@ -21,6 +21,14 @@ function lock(pkgs: Record<string, { version: string; optional?: boolean }>) {
 }
 
 describe('scripts/start.mjs helpers', () => {
+  it('nodeSupported matches the Vite 8 engine range', () => {
+    expect(start.nodeSupported('20.18.1')).toBe(false)
+    expect(start.nodeSupported('20.19.0')).toBe(true)
+    expect(start.nodeSupported('21.7.0')).toBe(false)
+    expect(start.nodeSupported('22.11.0')).toBe(false)
+    expect(start.nodeSupported('v22.12.0')).toBe(true)
+    expect(start.nodeSupported('24.1.0')).toBe(true)
+  })
   it('nodeMajor', () => {
     expect(start.nodeMajor('22.3.0')).toBe(22)
     expect(start.nodeMajor('v18.19.1')).toBe(18)
