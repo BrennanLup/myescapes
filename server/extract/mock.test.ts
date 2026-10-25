@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { PUZZLE_TYPES, ReviewDraftSchema } from '../../src/contracts/types'
 import { SAMPLE_TRANSCRIPT } from './fixtures'
-import { findAddress, findDate, findEscaped, findEscapeTime, findFeatures, findPuzzles, findRatings, mockExtract } from './mock'
+import { findAddress, findCrew, findDate, findEscaped, findEscapeTime, findFeatures, findPuzzles, findRatings, mockExtract } from './mock'
 
 const NOW = new Date('2026-10-25T12:00:00Z')
 
@@ -52,10 +52,10 @@ describe('mockExtract: brief sample (The Lost Observatory)', () => {
   })
 
   it('flags every unknown', () => {
-    expect(d.review.date).toBeNull() // "last Saturday" stays null
+    expect(d.review.date).toBe('2026-10-24') // "last Saturday" before Sunday 2026-10-25
+    expect(d.flags).not.toContain('review.date')
     expect(d.flags).toEqual(
       expect.arrayContaining([
-        'review.date',
         'room.address',
         'room.website',
         'review.ratings.storyline.score',
@@ -121,7 +121,7 @@ describe('mockExtract: negations and scales', () => {
     expect(findDate('We went on March 3rd', NOW)).toBe('2026-03-03')
     expect(findDate('on 2025-12-30', NOW)).toBe('2025-12-30')
     expect(findDate('on December 20', NOW)).toBe('2025-12-20')
-    expect(findDate('last Saturday', NOW)).toBeNull()
+    expect(findDate('last Saturday', NOW)).toBe('2026-10-24')
     expect(findDate('we went yesterday', new Date(2026, 9, 25))).toBe('2026-10-24')
   })
 
@@ -176,5 +176,96 @@ describe('mockExtract: address and puzzle headings', () => {
     const ps = findPuzzles('Puzzles. The first puzzle was a padlock with a four digit code.', new Set())
     expect(ps).toHaveLength(1)
     expect(ps[0].type).toBe('lock-and-key')
+  })
+})
+
+const CASUAL =
+  'Me, Sam and Priya played Midnight Express at Lockbox Social in Toronto last Saturday. It was a train heist. Overall 8 out of 10, the puzzles were clever, maybe 85, the set was gorgeous 9/10 and the story was fun but thin, 70. Pretty hard. We escaped with 6 minutes left. There was a visible timer, no actors, no flashlights. We used a UV light and a lot of padlocks. My favourite puzzle was the luggage combination lock.'
+
+describe('mockExtract: casual typed transcript (QA #9)', () => {
+  const d = mockExtract(CASUAL, { now: NOW })
+
+  it('is valid and finds the room', () => {
+    expect(ReviewDraftSchema.parse(d)).toBeTruthy()
+    expect(d.room).toMatchObject({ name: 'Midnight Express', company: 'Lockbox Social', city: 'Toronto', genre: 'heist' })
+  })
+
+  it('reads the crew from "Me, Sam and Priya played"', () => {
+    expect(d.review.crew).toEqual(['Sam', 'Priya'])
+  })
+
+  it('resolves "last Saturday" against now', () => {
+    expect(d.review.date).toBe('2026-10-24')
+    expect(d.flags).not.toContain('review.date')
+  })
+
+  it('gives each rating its own clause as the comment', () => {
+    expect(d.review.ratings).toEqual({
+      overall: { score: 80, comment: 'Overall 8 out of 10' },
+      puzzles: { score: 85, comment: 'the puzzles were clever, maybe 85' },
+      setting: { score: 90, comment: 'the set was gorgeous 9/10' },
+      storyline: { score: 70, comment: 'the story was fun but thin, 70' },
+      difficulty: { score: null, comment: 'Pretty hard' },
+    })
+    expect(d.flags).toContain('review.ratings.difficulty.score')
+  })
+
+  it('reads outcome, features, tools and the favourite puzzle', () => {
+    expect(d.review.escaped).toBe(true)
+    expect(d.review.escapeTimeMinutes).toBe(54)
+    expect(d.review).toMatchObject({ visibleTimer: true, liveActors: false, flashlights: false, multiRoom: null })
+    expect(d.review.toolsUsed).toEqual(['UV light', 'padlocks'])
+    expect(d.review.puzzles).toEqual([
+      { description: 'My favourite puzzle was the luggage combination lock.', type: 'lock-and-key', memorable: true },
+    ])
+  })
+})
+
+describe('findCrew variants', () => {
+  it.each([
+    ['Me, Sam and Priya played the bank room.', ['Sam', 'Priya']],
+    ['Me, Sam and Priya did the bank room.', ['Sam', 'Priya']],
+    ['Me and Sam did it on a whim.', ['Sam']],
+    ['I went with Sam and Priya.', ['Sam', 'Priya']],
+    ['Sam, Priya and I tried it.', ['Sam', 'Priya']],
+    ['We went with Ana, Ben and Cleo after work.', ['Ana', 'Ben', 'Cleo']],
+    ['The crew was Ana, Ben, Cleo.', ['Ana', 'Ben', 'Cleo']],
+  ])('%s', (text, crew) => {
+    expect(findCrew(text)).toEqual(crew)
+  })
+
+  it('ignores pronouns, common words and lowercase words', () => {
+    expect(findCrew('Me, myself and the team had fun.')).toEqual([])
+    expect(findCrew('We went with them and it was fine.')).toEqual([])
+    expect(findCrew('We escaped with Everyone cheering.')).toEqual([])
+    expect(findCrew('I played with friends from work.')).toEqual([])
+  })
+})
+
+describe('findDate: relative dates against now (Sunday 2026-10-25)', () => {
+  it.each([
+    ['we went today', '2026-10-25'],
+    ['we went yesterday', '2026-10-24'],
+    ['last Saturday', '2026-10-24'],
+    ['we went on Friday', '2026-10-23'],
+    ['this past Monday', '2026-10-19'],
+    ['last Sunday', '2026-10-18'],
+    ['3 days ago', '2026-10-22'],
+    ['two days ago', '2026-10-23'],
+    ['a week ago', '2026-10-18'],
+  ])('%s -> %s', (text, date) => {
+    expect(findDate(text, NOW)).toBe(date)
+  })
+
+  it('leaves vague dates null and flags them', () => {
+    for (const text of ['We played Bank Job last week.', 'We played Bank Job last weekend.', 'We played Bank Job a few days ago.']) {
+      const d = mockExtract(text, { now: NOW })
+      expect(d.review.date).toBeNull()
+      expect(d.flags).toContain('review.date')
+    }
+  })
+
+  it('prefers an explicit date over a relative word', () => {
+    expect(findDate('Writing this today about March 3rd', NOW)).toBe('2026-03-03')
   })
 })

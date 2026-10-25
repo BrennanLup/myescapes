@@ -196,7 +196,7 @@ const RATING_WORDS: Record<RatingKey, RegExp> = {
   puzzles: /\bpuzzles?\b/gi,
   setting: /\b(?:setting|set design|sets?|decor|theming|atmosphere|immersion|scenery|production)\b/gi,
   storyline: /\b(?:story(?:line)?|plot|narrative|lore)\b/gi,
-  difficulty: /\b(?:difficulty|difficult|hardness|challenge level)\b/gi,
+  difficulty: /\b(?:difficulty|difficult|hard|harder|tough|challenging|easy|easier|hardness|challenge level)\b/gi,
 }
 
 /** Words that, right after a bare number, mean it is not a score. */
@@ -268,7 +268,64 @@ function categoryAt(sentence: string, index: number): RatingKey | null {
   return before?.key ?? after?.key ?? null
 }
 
-export function findRatings(text: string): ReviewDraft['review']['ratings'] {
+interface Segment {
+  start: number
+  end: number
+}
+
+/** Split a sentence into clause segments at commas, semicolons, "and" and "but". */
+function segments(sentence: string): Segment[] {
+  const out: Segment[] = []
+  let last = 0
+  for (const m of sentence.matchAll(/\s*[,;]\s*|\s+(?:and|but)\s+/gi)) {
+    if (m.index > last) out.push({ start: last, end: m.index })
+    last = m.index + m[0].length
+  }
+  if (last < sentence.length) out.push({ start: last, end: sentence.length })
+  return out
+}
+
+/** The rating category whose keyword appears first in `text`, if any. */
+function firstCategory(text: string): RatingKey | null {
+  let best: { key: RatingKey; index: number } | null = null
+  for (const key of Object.keys(RATING_WORDS) as RatingKey[]) {
+    const m = new RegExp(RATING_WORDS[key].source, 'i').exec(text)
+    if (m && (!best || m.index < best.index)) best = { key, index: m.index }
+  }
+  return best?.key ?? null
+}
+
+interface RatingClause extends Segment {
+  key: RatingKey | null
+}
+
+/**
+ * Group a sentence's segments into rating clauses. A new clause starts at a segment that
+ * mentions a different rating category than the current one; segments without a keyword
+ * ("maybe 85", "a bit thin") stay with the clause before them.
+ */
+function ratingClauses(sentence: string): RatingClause[] {
+  const out: RatingClause[] = []
+  for (const seg of segments(sentence)) {
+    const key = firstCategory(sentence.slice(seg.start, seg.end))
+    const cur = out[out.length - 1]
+    if (cur && (key === null || key === cur.key)) cur.end = seg.end
+    else out.push({ ...seg, key })
+  }
+  return out
+}
+
+const cleanComment = (s: string) =>
+  s
+    .trim()
+    .replace(/^(?:and|but|so|also)\s+/i, '')
+    .replace(/[\s,;:.!?]+$/, '')
+
+/** Ratings plus the sentences that held a score (those are not puzzle descriptions). */
+export function findRatingsDetailed(text: string): {
+  ratings: ReviewDraft['review']['ratings']
+  scoredSentences: Set<string>
+} {
   const ratings: ReviewDraft['review']['ratings'] = {
     overall: { score: null, comment: '' },
     puzzles: { score: null, comment: '' },
@@ -276,26 +333,39 @@ export function findRatings(text: string): ReviewDraft['review']['ratings'] {
     storyline: { score: null, comment: '' },
     difficulty: { score: null, comment: '' },
   }
+  const scoredSentences = new Set<string>()
   const ss = sentences(text)
   for (const s of ss) {
     const scaled = scaledScores(s)
     const found: FoundScore[] = [...scaled]
     for (const key of Object.keys(RATING_WORDS) as RatingKey[]) found.push(...bareScores(s, RATING_WORDS[key], found))
     found.sort((a, b) => a.index - b.index)
+    if (found.length) scoredSentences.add(s)
+    const groups = ratingClauses(s)
     for (const f of found) {
+      const g = groups.find((x) => f.index >= x.start && f.index < x.end)
+      // The score belongs to its clause's category, else the nearest keyword in the sentence.
       // A lone scaled score with no category word ("I'd say 8 out of 10") is the overall score.
-      const key = categoryAt(s, f.index) ?? 'overall'
+      const key = g?.key ?? categoryAt(s, f.index) ?? 'overall'
       if (ratings[key].score !== null) continue
-      ratings[key] = { score: f.score, comment: s }
+      ratings[key] = { score: f.score, comment: cleanComment(g ? s.slice(g.start, g.end) : s) }
     }
   }
   // Comment-only mentions for categories without a score (not puzzles: too many incidental mentions).
   for (const key of ['setting', 'storyline', 'difficulty'] as const) {
     if (ratings[key].comment) continue
-    const s = ss.find((x) => new RegExp(RATING_WORDS[key].source, 'i').test(x))
-    if (s) ratings[key] = { ...ratings[key], comment: s }
+    for (const s of ss) {
+      const g = ratingClauses(s).find((x) => x.key === key)
+      if (!g) continue
+      ratings[key] = { ...ratings[key], comment: cleanComment(s.slice(g.start, g.end)) }
+      break
+    }
   }
-  return ratings
+  return { ratings, scoredSentences }
+}
+
+export function findRatings(text: string): ReviewDraft['review']['ratings'] {
+  return findRatingsDetailed(text).ratings
 }
 
 // ---------------------------------------------------------------------------
@@ -390,7 +460,10 @@ export function findTools(text: string): string[] {
 const NAME = `[A-Z][a-z]+(?:-[A-Z][a-z]+)?`
 const NOT_NAMES = new Set([
   'The', 'A', 'An', 'My', 'Our', 'Some', 'Friends', 'Family', 'Me', 'Us', 'I', 'We', 'It', 'This', 'That', 'Just', 'Only',
-  'Visible', 'Live', 'No', 'About', 'Around', 'Time', 'Minutes',
+  'Visible', 'Live', 'No', 'About', 'Around', 'Time', 'Minutes', 'He', 'She', 'They', 'You', 'Him', 'Her', 'Them',
+  'Everyone', 'Everybody', 'Someone', 'People', 'Guys', 'Yes', 'Yeah', 'So', 'Then', 'Also', 'And', 'But', 'Overall',
+  'There', 'Here', 'Today', 'Yesterday', 'Last', 'Next', 'Pretty', 'Really', 'Very', 'Okay', 'Ok', 'Well', 'Puzzles',
+  'Story', 'Setting', 'Difficulty', 'Team', 'Crew', 'Group', 'Players',
 ])
 
 export function findCrew(text: string, exclude: (string | null)[] = []): string[] {
@@ -401,7 +474,8 @@ export function findCrew(text: string, exclude: (string | null)[] = []): string[
     new RegExp(`\\b(?:friends?|crew|team)\\s+${list}`, 'g'),
     // "Sam, Lee and I tried ..." / "me, Sam and Lee"
     new RegExp(`(${NAME}(?:\\s*,\\s*${NAME})*),?\\s+and\\s+(?:I|me)\\b`, 'g'),
-    new RegExp(`\\b(?:me|myself)\\s*,\\s*${list}`, 'g'),
+    // "Me, Sam and Priya played ..." / "me and Sam did ..."
+    new RegExp(`\\b(?:[Mm]e|[Mm]yself)\\s*(?:,|\\band\\b)\\s*${list}`, 'g'),
   ]
   const names: string[] = []
   for (const re of res) {
@@ -484,12 +558,39 @@ export function findAddress(text: string): string | null {
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
 const pad = (n: number) => String(n).padStart(2, '0')
 
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const daysBefore = (now: Date, n: number) => ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - n))
+
+/**
+ * Relative dates against `now`: today, yesterday, "last Saturday" / "on Saturday" /
+ * "this past Saturday" (the most recent such day before today), "3 days ago", "a week ago".
+ * Vague phrases ("last week", "last weekend", "a few days ago") resolve to null.
+ */
+export function findRelativeDate(text: string, now: Date = new Date()): string | null {
+  if (/\b(?:today|tonight|this (?:morning|afternoon|evening))\b/i.test(text)) return ymd(now)
+  if (/\b(?:yesterday|last night)\b/i.test(text)) return daysBefore(now, 1)
+  const wd = new RegExp(`\\b(?:last|on|this past|past)\\s+(${WEEKDAYS.join('|')})\\b`, 'i').exec(text)
+  if (wd) {
+    const target = WEEKDAYS.indexOf(wd[1].toLowerCase())
+    const back = (now.getDay() - target + 7) % 7 || 7
+    return daysBefore(now, back)
+  }
+  const ago = new RegExp(`\\b(${NUM.slice(1, -1)}|a|an)\\s+(days?|weeks?)\\s+ago\\b`, 'i').exec(text)
+  if (ago) {
+    const n = /^an?$/i.test(ago[1]) ? 1 : toNum(ago[1])
+    if (Number.isInteger(n) && n > 0) return daysBefore(now, /^week/i.test(ago[2]) ? n * 7 : n)
+  }
+  return null
+}
+
 export function findDate(text: string, now: Date = new Date()): string | null {
   const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(text)
   if (iso) return iso[0]
-  const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  if (/\b(?:today|tonight|this (?:morning|afternoon|evening))\b/i.test(text)) return ymd(now)
-  if (/\b(?:yesterday|last night)\b/i.test(text)) return ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+  return findMonthDate(text, now) ?? findRelativeDate(text, now)
+}
+
+function findMonthDate(text: string, now: Date): string | null {
   const monthRe = MONTHS.map((m) => m.slice(0, 3) + `(?:${m.slice(3)})?`).join('|')
   const md = new RegExp(`\\b(${monthRe})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b`, 'i').exec(text)
   const dm = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${monthRe})\\.?(?:,?\\s+(\\d{4}))?\\b`, 'i').exec(text)
@@ -527,12 +628,7 @@ export function mockExtract(transcript: string, opts: { now?: Date } = {}): Revi
   const company = findCompany(text, [name, city])
   draft.room = { ...draft.room, name, city, company, genre: findGenre(text), address: findAddress(text) }
 
-  const ratings = findRatings(text)
-  const ratingSentences = new Set(
-    Object.values(ratings)
-      .filter((r) => r.score !== null)
-      .map((r) => r.comment),
-  )
+  const { ratings, scoredSentences: ratingSentences } = findRatingsDetailed(text)
   const escaped = findEscaped(text)
   draft.review = {
     ...draft.review,
