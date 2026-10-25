@@ -15,6 +15,8 @@ const DOOR_W = 1.1
 const DOOR_H = 2.2
 const DOOR_T = 0.08
 const OPEN_ANGLE = -0.95
+/** Centre height of the sign above the door. */
+const SIGN_Y = 3.02
 export const GATE_DOOR_ID = 'gate:door'
 
 function makeHallwayTexture(): THREE.Texture | null {
@@ -296,8 +298,9 @@ export function GateDoor() {
           </group>
         </group>
 
-        {/* "Daily lock" sign */}
-        <group position={[0, DOOR_H + 0.42, 0.1]} rotation={[-0.05, 0, 0]}>
+        {/* "Daily lock" sign, hung high enough that the open leaf (which swings ~0.9 m
+            into the room) stays below it in perspective from about 1.7 m away and further. */}
+        <group position={[0, SIGN_Y, 0.1]} rotation={[-0.05, 0, 0]}>
           <mesh material={woodDark} position={[0, 0, -0.012]}>
             <boxGeometry args={[0.86, 0.3, 0.02]} />
           </mesh>
@@ -308,7 +311,7 @@ export function GateDoor() {
         </group>
 
         {/* Warm sconce above */}
-        <group position={[0, 3.0, 0.12]}>
+        <group position={[0, SIGN_Y + 0.45, 0.12]}>
           <mesh material={mats.brass}>
             <boxGeometry args={[0.18, 0.04, 0.18]} />
           </mesh>

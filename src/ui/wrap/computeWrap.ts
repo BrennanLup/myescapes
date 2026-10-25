@@ -29,6 +29,8 @@ export interface WrapStats {
   /** All puzzle types seen, most common first (ties by memorable count, then canonical order). */
   puzzleTypes: Array<{ type: PuzzleType; count: number; memorable: number }>
   favouritePuzzleType: { type: PuzzleType; count: number; memorable: number } | null
+  /** Every puzzle logged in the period (sum of `puzzleTypes` counts). */
+  totalPuzzles: number
   /** Cities with visit counts, most visited first (ties alphabetical). */
   cities: Array<{ city: string; count: number }>
   /** Sum of known escapeTimeMinutes. */
@@ -46,6 +48,14 @@ export interface WrapStats {
   /** First / last visit date in the period (ISO), or null. */
   firstDate: string | null
   lastDate: string | null
+}
+
+/** "A, B +2 more": the first `max` city names, then how many are left. */
+export function cityListLabel(cities: Array<{ city: string }>, max = 2): string {
+  if (cities.length === 0) return ''
+  const shown = cities.slice(0, max).map((c) => c.city).join(', ')
+  const rest = cities.length - max
+  return rest > 0 ? `${shown} +${rest} more` : shown
 }
 
 const yearOf = (date: string) => Number(date.slice(0, 4))
@@ -165,6 +175,7 @@ export function computeWrap(rooms: Room[], reviews: Review[], year: WrapYear): W
     fastestEscape,
     puzzleTypes,
     favouritePuzzleType: puzzleTypes[0] ?? null,
+    totalPuzzles: puzzleTypes.reduce((a, t) => a + t.count, 0),
     cities,
     totalMinutes,
     genres,
@@ -177,12 +188,4 @@ export function computeWrap(rooms: Room[], reviews: Review[], year: WrapYear): W
   }
 }
 
-/** Human labels for puzzle types. */
-export const PUZZLE_TYPE_LABELS: Record<PuzzleType, string> = {
-  'lock-and-key': 'Lock & key',
-  logic: 'Logic',
-  math: 'Math',
-  physical: 'Physical',
-  search: 'Search',
-  'audio-visual': 'Audio-visual',
-}
+export { PUZZLE_TYPE_LABELS } from '@/contracts/types'

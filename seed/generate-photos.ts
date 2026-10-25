@@ -1,5 +1,7 @@
 /**
- * Generates the cute placeholder polaroid photos for the seed rooms.
+ * Generates the cute placeholder photos for the seed rooms. They are bare photo
+ * scenes with no polaroid frame or caption: every view that shows them (board,
+ * review gallery, gate reveal, wrap) draws its own frame and handwritten caption.
  *
  *   npx tsx seed/generate-photos.ts
  *
@@ -17,7 +19,8 @@ import { GENRE_COLORS, PALETTE, UI } from '../src/contracts/style'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const OUT = path.resolve(here, '../public/seed/photos')
 
-// Image area inside the polaroid frame.
+// Photo size (roughly square; views crop it with object-fit: cover, so keep
+// important content away from the top and bottom ~10%).
 const W = 356
 const H = 330
 
@@ -404,34 +407,28 @@ function crewPhoto(rng: Rng, room: Room, review: Review | undefined): string {
   const escaped = review?.escaped ?? true
   const t = review?.escapeTimeMinutes
   const label = escaped ? (t != null ? `ESCAPED ${t}:00` : 'WE ESCAPED!') : 'SO CLOSE!'
-  s += `<g transform="rotate(-4 178 290)"><rect x="78" y="262" width="200" height="50" rx="6" fill="${PALETTE.paper}" stroke="${UI.ink}" stroke-width="3"/>`
-  s += `<text x="178" y="296" text-anchor="middle" font-family="'Fredoka', 'Nunito', sans-serif" font-weight="bold" font-size="21" textLength="${label.length > 10 ? 176 : 150}" lengthAdjust="spacingAndGlyphs" fill="${escaped ? UI.good : UI.bad}">${esc(label)}</text></g>`
+  s += `<g transform="rotate(-4 178 268)"><rect x="78" y="240" width="200" height="50" rx="6" fill="${PALETTE.paper}" stroke="${UI.ink}" stroke-width="3"/>`
+  s += `<text x="178" y="274" text-anchor="middle" font-family="'Fredoka', 'Nunito', sans-serif" font-weight="bold" font-size="21" textLength="${label.length > 10 ? 176 : 150}" lengthAdjust="spacingAndGlyphs" fill="${escaped ? UI.good : UI.bad}">${esc(label)}</text></g>`
   if (escaped) s += confetti(rng, 36)
   return s
 }
 
 // ---------------------------------------------------------------------------
-// Polaroid frame
+// Photo wrapper (no frame: the board, gallery, gate and wrap draw their own polaroid + caption)
 // ---------------------------------------------------------------------------
 
-function polaroid(inner: string, caption: string, tapeColor: string, rng: Rng): string {
-  const tilt = f((rng() - 0.5) * 6)
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 470" width="400" height="470">` +
-    `<rect x="8" y="10" width="388" height="456" rx="6" fill="#3b2a26" opacity="0.18"/>` +
-    `<rect x="4" y="4" width="388" height="456" rx="6" fill="${PALETTE.paper}" stroke="#e6d6bf" stroke-width="2"/>` +
-    `<clipPath id="pic"><rect x="20" y="20" width="${W}" height="${H}" rx="2"/></clipPath>` +
-    `<g clip-path="url(#pic)"><g transform="translate(20 20)">${inner}` +
-    `<rect width="${W}" height="${H}" fill="none" stroke="#3b2a26" stroke-opacity="0.12" stroke-width="18"/></g></g>` +
-    `<rect x="20" y="20" width="${W}" height="${H}" fill="none" stroke="#d9c6a8" stroke-width="1.5"/>` +
-    `<text x="200" y="405" text-anchor="middle" font-family="'Caveat', 'Comic Sans MS', cursive" font-size="36" fill="${UI.ink}" transform="rotate(${tilt} 200 405)">${esc(caption)}</text>` +
-    `<rect x="160" y="-8" width="80" height="28" fill="${tapeColor}" opacity="0.75" transform="rotate(-3 200 6)"/>` +
+function photoSvg(inner: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">` +
+    `<clipPath id="pic"><rect width="${W}" height="${H}"/></clipPath>` +
+    `<g clip-path="url(#pic)">${inner}` +
+    `<rect width="${W}" height="${H}" fill="none" stroke="#3b2a26" stroke-opacity="0.12" stroke-width="18"/></g>` +
     `</svg>\n`
 }
 
-export function renderPhoto(room: Room, review: Review | undefined, n: number, caption: string): string {
+export function renderPhoto(room: Room, review: Review | undefined, n: number): string {
   const rng = rngFor(`${room.id}-${n}`)
   const inner = n === 1 ? (SCENES[room.id] ?? GENRE_SCENES[room.genre] ?? attic)(rng, room.genre) : crewPhoto(rng, room, review)
-  return polaroid(inner, caption, GENRE_COLORS[room.genre] ?? GENRE_COLORS.other, rng)
+  return photoSvg(inner)
 }
 
 function main() {
@@ -442,7 +439,7 @@ function main() {
     for (const photo of room.photos) {
       const m = /\/seed\/photos\/(.+)-(\d+)\.svg$/.exec(photo.url)
       if (!m || m[1] !== room.id) continue
-      const svg = renderPhoto(room, review, Number(m[2]), photo.caption ?? room.name)
+      const svg = renderPhoto(room, review, Number(m[2]))
       const file = path.join(OUT, `${m[1]}-${m[2]}.svg`)
       writeFileSync(file, svg)
       console.log(`${path.relative(process.cwd(), file)}  ${(svg.length / 1024).toFixed(1)} KB`)

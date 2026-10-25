@@ -66,6 +66,16 @@ export const PUZZLE_TYPES = ['lock-and-key', 'logic', 'math', 'physical', 'searc
 export const PuzzleTypeSchema = z.enum(PUZZLE_TYPES)
 export type PuzzleType = z.infer<typeof PuzzleTypeSchema>
 
+/** Human labels for puzzle types (shared by the review overlay, the wrap and the gate). */
+export const PUZZLE_TYPE_LABELS: Record<PuzzleType, string> = {
+  'lock-and-key': 'Lock & key',
+  logic: 'Logic',
+  math: 'Math',
+  physical: 'Physical',
+  search: 'Search',
+  'audio-visual': 'Audio-visual',
+}
+
 export const PuzzleSchema = z.object({
   id: Id,
   reviewId: Id,

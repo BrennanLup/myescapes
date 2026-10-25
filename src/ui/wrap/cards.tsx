@@ -5,7 +5,7 @@
 import type { ReactNode } from 'react'
 import { GENRE_COLORS, PUZZLE_TYPE_COLORS } from '@/contracts/style'
 import type { Room, Review } from '@/contracts/types'
-import { PUZZLE_TYPE_LABELS, type WrapStats } from './computeWrap'
+import { cityListLabel, PUZZLE_TYPE_LABELS, type WrapStats } from './computeWrap'
 
 export interface WrapCard {
   key: string
@@ -287,7 +287,9 @@ export function buildCards(s: WrapStats): WrapCard[] {
             </div>
             <Rise i={2}>
               <p className="text-xl font-semibold">
-                {plural(fav.count, 'puzzle')} solved{fav.memorable ? `, ${fav.memorable} unforgettable` : ''}.
+                {fav.count} of the {plural(s.totalPuzzles, 'puzzle')} you solved {fav.count === 1 ? 'was' : 'were'}{' '}
+                {PUZZLE_TYPE_LABELS[fav.type].toLowerCase()}
+                {fav.memorable ? `, ${fav.memorable} unforgettable` : ''}.
               </p>
             </Rise>
             <Rise i={3} className="flex flex-wrap gap-2">
@@ -440,9 +442,9 @@ function Summary({ s }: { s: WrapStats }) {
           i={4}
           label="Puzzle type"
           value={s.favouritePuzzleType ? PUZZLE_TYPE_LABELS[s.favouritePuzzleType.type] : '-'}
-          sub={s.favouritePuzzleType ? `${s.favouritePuzzleType.count} solved` : undefined}
+          sub={s.favouritePuzzleType ? `${s.favouritePuzzleType.count} of ${plural(s.totalPuzzles, 'puzzle')}` : undefined}
         />
-        <Tile i={5} label="Cities" value={s.cities.length} sub={s.cities[0]?.city} />
+        <Tile i={5} label="Cities" value={s.cities.length} sub={cityListLabel(s.cities) || undefined} />
         <Tile i={6} label="Time inside" value={hoursLabel(s.totalMinutes)} />
         <Tile i={7} label="Crew MVP" value={s.crewMvp?.name ?? '-'} sub={s.crewMvp ? plural(s.crewMvp.count, 'room') : undefined} wide />
       </div>
