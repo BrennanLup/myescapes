@@ -1,0 +1,4255 @@
+{
+  "startedAt": "2026-10-25T05:50:35.432Z",
+  "port": 3330,
+  "server": {
+    "dataDir": "/tmp/myescapes-qa-c0qM59",
+    "startupMs": 3047,
+    "health": {
+      "ok": true
+    },
+    "log": "\n> myescapes@0.1.0 start\n> node scripts/start.mjs\n\n\u001b[38;5;215m[my-escapes]\u001b[0m Building the app...\n\n> myescapes@0.1.0 build\n> vite build\n\nvite v8.3.5 building client environment for production...\ntransforming...\n✓ 783 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/index.html                     0.48 kB │ gzip:   0.30 kB\ndist/assets/index-bFwtKcuy.css     71.16 kB │ gzip:  12.58 kB\ndist/assets/index-BYdZaImL.js   1,627.74 kB │ gzip: 460.47 kB\n\n✓ built in 1.61s\n\u001b[38;5;215m[my-escapes]\u001b[0m Starting the server...\n\n  My Escapes v0.1.0\n  Running at http://localhost:3330\n\n  [MOCK] Review extraction: mock (set ANTHROPIC_API_KEY in .env to switch to real)\n  [MOCK] Storage: seed (set GOOGLE_SHEET_ID + GOOGLE_SERVICE_ACCOUNT_JSON in .env to switch to real)\n\n  Press Ctrl+C to stop.\n\n\u001b[38;5;215m[my-escapes]\u001b[0m Ready at http://localhost:3330\n"
+  },
+  "viewports": {
+    "desktop": {
+      "viewport": "desktop",
+      "steps": [
+        {
+          "step": "1-load",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "world ready and loading screen gone",
+              "ok": true,
+              "info": 15305
+            },
+            {
+              "label": "data loaded",
+              "ok": true,
+              "info": "ready"
+            },
+            {
+              "label": "total transferred < 15 MB",
+              "ok": true,
+              "info": 1794465
+            }
+          ],
+          "details": {
+            "loadMs": 15305,
+            "wallClockLoadMs": 15316,
+            "dataStatus": "ready",
+            "rooms": 12,
+            "bytes": {
+              "transfer": 1794465,
+              "encoded": 1789065,
+              "decoded": 1808082,
+              "count": 18,
+              "top": [
+                {
+                  "name": "/assets/index-BYdZaImL.js",
+                  "transfer": 1628040,
+                  "body": 1627740
+                },
+                {
+                  "name": "/assets/index-bFwtKcuy.css",
+                  "transfer": 71461,
+                  "body": 71161
+                },
+                {
+                  "name": "/api/data",
+                  "transfer": 20555,
+                  "body": 20255
+                },
+                {
+                  "name": "/seed/photos/room_vault-1.svg",
+                  "transfer": 10880,
+                  "body": 10580
+                },
+                {
+                  "name": "/seed/photos/room_circus-1.svg",
+                  "transfer": 8343,
+                  "body": 8043
+                },
+                {
+                  "name": "/seed/photos/room_train-1.svg",
+                  "transfer": 7246,
+                  "body": 6946
+                },
+                {
+                  "name": "/seed/photos/room_rocket-1.svg",
+                  "transfer": 6473,
+                  "body": 6173
+                },
+                {
+                  "name": "/seed/photos/room_haunted-1.svg",
+                  "transfer": 5517,
+                  "body": 5217
+                }
+              ]
+            },
+            "gateOpenAtReady": true
+          },
+          "ms": 17851
+        },
+        {
+          "step": "2-gate",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "gate auto-opens on a fresh profile",
+              "ok": true
+            },
+            {
+              "label": "reveal says it opened",
+              "ok": true
+            },
+            {
+              "label": "gate stored as solved today",
+              "ok": true
+            },
+            {
+              "label": "gate does not show again after reload",
+              "ok": true
+            }
+          ],
+          "details": {
+            "kind": "lock",
+            "answer": "668"
+          },
+          "ms": 102364
+        },
+        {
+          "step": "1b-perf",
+          "status": "fail",
+          "checks": [
+            {
+              "label": "medium < 300 draw calls per frame",
+              "ok": true,
+              "info": 135
+            },
+            {
+              "label": "medium < 500k triangles per frame",
+              "ok": true,
+              "info": 44929
+            },
+            {
+              "label": "?debug=1 readout draw calls match WebGL (within 50%)",
+              "ok": false,
+              "info": {
+                "readout": "1.2 fps  medium\n1 draws  0.0k tris",
+                "measured": 135
+              }
+            },
+            {
+              "label": "runtime.fps roughly matches rAF fps",
+              "ok": true,
+              "info": {
+                "runtime": 1.17,
+                "raf": 1.15
+              }
+            }
+          ],
+          "details": {
+            "perf": {
+              "medium": {
+                "rafFps": 0.83,
+                "runtimeFps": 1.13,
+                "frames": 3,
+                "drawCallsAvg": 135,
+                "drawCallsMax": 135,
+                "trianglesAvg": 44929,
+                "trianglesMax": 44929,
+                "debugReadout": "1.1 fps  medium\n1 draws  0.0k tris",
+                "quality": "medium"
+              },
+              "low": {
+                "rafFps": 5.22,
+                "runtimeFps": 1.09,
+                "frames": 29,
+                "drawCallsAvg": 107,
+                "drawCallsMax": 107,
+                "trianglesAvg": 29628,
+                "trianglesMax": 29628,
+                "debugReadout": "1.1 fps  low\n107 draws  29.6k tris",
+                "quality": "low"
+              },
+              "high": {
+                "rafFps": 6.98,
+                "runtimeFps": 2.59,
+                "frames": 28,
+                "drawCallsAvg": 135,
+                "drawCallsMax": 135,
+                "trianglesAvg": 44929,
+                "trianglesMax": 44929,
+                "debugReadout": "1.8 fps  high\n1 draws  0.0k tris",
+                "quality": "high"
+              },
+              "medium-again": {
+                "rafFps": 1.15,
+                "runtimeFps": 1.17,
+                "frames": 2,
+                "drawCallsAvg": 135,
+                "drawCallsMax": 135,
+                "trianglesAvg": 44929,
+                "trianglesMax": 44929,
+                "debugReadout": "1.2 fps  medium\n1 draws  0.0k tris",
+                "quality": "medium"
+              }
+            }
+          },
+          "ms": 106288
+        },
+        {
+          "step": "3a-look-input",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "dragging left turns the camera left (yaw increases)",
+              "ok": true,
+              "info": 0.33
+            }
+          ],
+          "details": {
+            "mode": "drag fallback (pointer lock stubbed to fail)",
+            "yawDelta": 0.33
+          },
+          "ms": 18005
+        },
+        {
+          "step": "3b-walk-anchors",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "reached bulletin-board by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 7.51,
+                  "remaining": 0.01,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    0,
+                    1.6,
+                    -4.01
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "bulletin-board is hoverable from the stand point",
+              "ok": true,
+              "info": "photo:room_vault"
+            },
+            {
+              "label": "reached desk by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 7.98,
+                  "remaining": 0.32,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    -7.92,
+                    1.6,
+                    -3.02
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "desk is hoverable from the stand point",
+              "ok": true,
+              "info": "desk:terminal"
+            },
+            {
+              "label": "reached wrap-trophy by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 6.71,
+                  "remaining": 0.13,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    -7.01,
+                    1.6,
+                    3.62
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "wrap-trophy is hoverable from the stand point",
+              "ok": true,
+              "info": "wrap:trophy"
+            },
+            {
+              "label": "reached gate-door by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 6.19,
+                  "remaining": 0.61,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    -0.9,
+                    1.6,
+                    4.6
+                  ]
+                },
+                {
+                  "walked": 1.66,
+                  "remaining": 0.31,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    0.21,
+                    1.6,
+                    5.83
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "gate-door is hoverable from the stand point",
+              "ok": true,
+              "info": "gate:door"
+            },
+            {
+              "label": "reached living-area by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 1.66,
+                  "remaining": 0.11,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    1.06,
+                    1.6,
+                    4.41
+                  ]
+                },
+                {
+                  "walked": 5.66,
+                  "remaining": 0.25,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    1.21,
+                    1.6,
+                    -1.25
+                  ]
+                },
+                {
+                  "walked": 2.22,
+                  "remaining": 0.07,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    3.43,
+                    1.6,
+                    -1.2
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "reached shelves by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 4.13,
+                  "remaining": 0.04,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    7.56,
+                    1.6,
+                    -1.2
+                  ]
+                },
+                {
+                  "walked": 5.77,
+                  "remaining": 0.56,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    7.83,
+                    1.6,
+                    4.56
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "reached wishlist-board by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 5.66,
+                  "remaining": 0.1,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    7.8,
+                    1.6,
+                    -1.1
+                  ]
+                },
+                {
+                  "walked": 2.46,
+                  "remaining": 0.16,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    6.41,
+                    1.6,
+                    -3.13
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "wishlist-board is hoverable from the stand point",
+              "ok": true,
+              "info": "wishlist:board"
+            },
+            {
+              "label": "no collider/bounds violations while walking the route",
+              "ok": true,
+              "info": []
+            }
+          ],
+          "details": {
+            "legs": [
+              {
+                "anchor": "bulletin-board",
+                "walked": 7.51,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 7.51,
+                    "remaining": 0.01,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      0,
+                      1.6,
+                      -4.01
+                    ]
+                  }
+                ],
+                "at": [
+                  0,
+                  1.6,
+                  -4.01
+                ],
+                "hovered": "photo:room_vault",
+                "shot": "qa/screenshots/qa-desktop-07-anchor-bulletin-board.png"
+              },
+              {
+                "anchor": "desk",
+                "walked": 7.98,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 7.98,
+                    "remaining": 0.32,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      -7.92,
+                      1.6,
+                      -3.02
+                    ]
+                  }
+                ],
+                "at": [
+                  -7.92,
+                  1.6,
+                  -3.02
+                ],
+                "hovered": "desk:terminal",
+                "shot": "qa/screenshots/qa-desktop-08-anchor-desk.png"
+              },
+              {
+                "anchor": "wrap-trophy",
+                "walked": 6.71,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 6.71,
+                    "remaining": 0.13,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      -7.01,
+                      1.6,
+                      3.62
+                    ]
+                  }
+                ],
+                "at": [
+                  -7.01,
+                  1.6,
+                  3.62
+                ],
+                "hovered": "wrap:trophy",
+                "shot": "qa/screenshots/qa-desktop-09-anchor-wrap-trophy.png"
+              },
+              {
+                "anchor": "gate-door",
+                "walked": 7.85,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 6.19,
+                    "remaining": 0.61,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      -0.9,
+                      1.6,
+                      4.6
+                    ]
+                  },
+                  {
+                    "walked": 1.66,
+                    "remaining": 0.31,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      0.21,
+                      1.6,
+                      5.83
+                    ]
+                  }
+                ],
+                "at": [
+                  0.21,
+                  1.6,
+                  5.83
+                ],
+                "hovered": "gate:door",
+                "shot": "qa/screenshots/qa-desktop-10-anchor-gate-door.png"
+              },
+              {
+                "anchor": "living-area",
+                "walked": 9.54,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 1.66,
+                    "remaining": 0.11,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      1.06,
+                      1.6,
+                      4.41
+                    ]
+                  },
+                  {
+                    "walked": 5.66,
+                    "remaining": 0.25,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      1.21,
+                      1.6,
+                      -1.25
+                    ]
+                  },
+                  {
+                    "walked": 2.22,
+                    "remaining": 0.07,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      3.43,
+                      1.6,
+                      -1.2
+                    ]
+                  }
+                ],
+                "at": [
+                  3.43,
+                  1.6,
+                  -1.2
+                ],
+                "hovered": null,
+                "shot": "qa/screenshots/qa-desktop-11-anchor-living-area.png"
+              },
+              {
+                "anchor": "shelves",
+                "walked": 9.9,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 4.13,
+                    "remaining": 0.04,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      7.56,
+                      1.6,
+                      -1.2
+                    ]
+                  },
+                  {
+                    "walked": 5.77,
+                    "remaining": 0.56,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      7.83,
+                      1.6,
+                      4.56
+                    ]
+                  }
+                ],
+                "at": [
+                  7.83,
+                  1.6,
+                  4.56
+                ],
+                "hovered": null,
+                "shot": "qa/screenshots/qa-desktop-12-anchor-shelves.png"
+              },
+              {
+                "anchor": "wishlist-board",
+                "walked": 8.12,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 5.66,
+                    "remaining": 0.1,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      7.8,
+                      1.6,
+                      -1.1
+                    ]
+                  },
+                  {
+                    "walked": 2.46,
+                    "remaining": 0.16,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      6.41,
+                      1.6,
+                      -3.13
+                    ]
+                  }
+                ],
+                "at": [
+                  6.41,
+                  1.6,
+                  -3.13
+                ],
+                "hovered": "wishlist:board",
+                "shot": "qa/screenshots/qa-desktop-13-anchor-wishlist-board.png"
+              }
+            ],
+            "violations": []
+          },
+          "ms": 247078
+        },
+        {
+          "step": "3c-collisions",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "north-wall: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -7.5,
+                  1.6,
+                  -7.65
+                ],
+                "travelled": 1.65,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "south-wall: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -3,
+                  1.6,
+                  7.65
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "east-wall: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  9.65,
+                  1.6,
+                  -6
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "west-wall: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -9.65,
+                  1.6,
+                  0
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "nw-corner: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -9.65,
+                  1.6,
+                  -7.65
+                ],
+                "travelled": 1.63,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "couch: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  6.8,
+                  1.6,
+                  1.5
+                ],
+                "travelled": 0.8,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "desk: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -8.7,
+                  1.6,
+                  -3.6
+                ],
+                "travelled": 1.2,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "gate-door: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  0,
+                  1.6,
+                  6.63
+                ],
+                "travelled": 1.33,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "bookshelf: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  9.19,
+                  1.6,
+                  4
+                ],
+                "travelled": 1.19,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "coffee-table: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  4.25,
+                  1.6,
+                  0.5
+                ],
+                "travelled": 1.3,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "board: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  0,
+                  1.6,
+                  -7.51
+                ],
+                "travelled": 1.51,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "wishlist-board: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  9.33,
+                  1.6,
+                  -3
+                ],
+                "travelled": 1.03,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "collision monitor: no violations",
+              "ok": true,
+              "info": []
+            }
+          ],
+          "details": {
+            "colliderCount": 25,
+            "runs": [
+              {
+                "test": "north-wall",
+                "last": [
+                  -7.5,
+                  1.6,
+                  -7.65
+                ],
+                "travelled": 1.65,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "south-wall",
+                "last": [
+                  -3,
+                  1.6,
+                  7.65
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "east-wall",
+                "last": [
+                  9.65,
+                  1.6,
+                  -6
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "west-wall",
+                "last": [
+                  -9.65,
+                  1.6,
+                  0
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "nw-corner",
+                "last": [
+                  -9.65,
+                  1.6,
+                  -7.65
+                ],
+                "travelled": 1.63,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "couch",
+                "last": [
+                  6.8,
+                  1.6,
+                  1.5
+                ],
+                "travelled": 0.8,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "desk",
+                "last": [
+                  -8.7,
+                  1.6,
+                  -3.6
+                ],
+                "travelled": 1.2,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "gate-door",
+                "last": [
+                  0,
+                  1.6,
+                  6.63
+                ],
+                "travelled": 1.33,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "bookshelf",
+                "last": [
+                  9.19,
+                  1.6,
+                  4
+                ],
+                "travelled": 1.19,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "coffee-table",
+                "last": [
+                  4.25,
+                  1.6,
+                  0.5
+                ],
+                "travelled": 1.3,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "board",
+                "last": [
+                  0,
+                  1.6,
+                  -7.51
+                ],
+                "travelled": 1.51,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "wishlist-board",
+                "last": [
+                  9.33,
+                  1.6,
+                  -3
+                ],
+                "travelled": 1.03,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            ]
+          },
+          "ms": 196081
+        },
+        {
+          "step": "3d-ten-steps",
+          "status": "fail",
+          "checks": [
+            {
+              "label": "north: 10+ steps (7.5 m) straight from the exact centre",
+              "ok": true,
+              "info": {
+                "off": 0,
+                "dist": 7.51,
+                "steps": 10,
+                "end": [
+                  0,
+                  1.6,
+                  -7.51
+                ]
+              }
+            },
+            {
+              "label": "north: 10+ steps from centre within ±1.2 m lane",
+              "ok": true,
+              "info": [
+                {
+                  "off": 0,
+                  "dist": 7.51,
+                  "steps": 10,
+                  "end": [
+                    0,
+                    1.6,
+                    -7.51
+                  ]
+                },
+                {
+                  "off": 1.2,
+                  "dist": 7.51,
+                  "steps": 10,
+                  "end": [
+                    1.2,
+                    1.6,
+                    -7.51
+                  ]
+                },
+                {
+                  "off": -1.2,
+                  "dist": 7.51,
+                  "steps": 10,
+                  "end": [
+                    -1.2,
+                    1.6,
+                    -7.51
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "south: 10+ steps (7.5 m) straight from the exact centre",
+              "ok": false,
+              "info": {
+                "off": 0,
+                "dist": 6.63,
+                "steps": 8.8,
+                "end": [
+                  0,
+                  1.6,
+                  6.63
+                ]
+              }
+            },
+            {
+              "label": "south: 10+ steps from centre within ±1.2 m lane",
+              "ok": true,
+              "info": [
+                {
+                  "off": 0,
+                  "dist": 6.63,
+                  "steps": 8.8,
+                  "end": [
+                    0,
+                    1.6,
+                    6.63
+                  ]
+                },
+                {
+                  "off": 1.2,
+                  "dist": 7.65,
+                  "steps": 10.2,
+                  "end": [
+                    1.2,
+                    1.6,
+                    7.65
+                  ]
+                },
+                {
+                  "off": -1.2,
+                  "dist": 7.65,
+                  "steps": 10.2,
+                  "end": [
+                    -1.2,
+                    1.6,
+                    7.65
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "east: 10+ steps (7.5 m) straight from the exact centre",
+              "ok": false,
+              "info": {
+                "off": 0,
+                "dist": 5.65,
+                "steps": 7.5,
+                "end": [
+                  5.65,
+                  1.6,
+                  -0.17
+                ]
+              }
+            },
+            {
+              "label": "east: 10+ steps from centre within ±1.2 m lane",
+              "ok": true,
+              "info": [
+                {
+                  "off": 0,
+                  "dist": 5.65,
+                  "steps": 7.5,
+                  "end": [
+                    5.65,
+                    1.6,
+                    -0.17
+                  ]
+                },
+                {
+                  "off": 1.2,
+                  "dist": 1.65,
+                  "steps": 2.2,
+                  "end": [
+                    1.65,
+                    1.6,
+                    1.2
+                  ]
+                },
+                {
+                  "off": -1.2,
+                  "dist": 9.65,
+                  "steps": 12.9,
+                  "end": [
+                    9.65,
+                    1.6,
+                    -0.95
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "west: 10+ steps (7.5 m) straight from the exact centre",
+              "ok": true,
+              "info": {
+                "off": 0,
+                "dist": 9.65,
+                "steps": 12.9,
+                "end": [
+                  -9.65,
+                  1.6,
+                  0
+                ]
+              }
+            },
+            {
+              "label": "west: 10+ steps from centre within ±1.2 m lane",
+              "ok": true,
+              "info": [
+                {
+                  "off": 0,
+                  "dist": 9.65,
+                  "steps": 12.9,
+                  "end": [
+                    -9.65,
+                    1.6,
+                    0
+                  ]
+                },
+                {
+                  "off": 1.2,
+                  "dist": 9.65,
+                  "steps": 12.9,
+                  "end": [
+                    -9.65,
+                    1.6,
+                    1.2
+                  ]
+                },
+                {
+                  "off": -1.2,
+                  "dist": 9.65,
+                  "steps": 12.9,
+                  "end": [
+                    -9.65,
+                    1.6,
+                    -1.2
+                  ]
+                }
+              ]
+            }
+          ],
+          "details": {
+            "rays": [
+              {
+                "dir": "north",
+                "runs": [
+                  {
+                    "off": 0,
+                    "dist": 7.51,
+                    "steps": 10,
+                    "end": [
+                      0,
+                      1.6,
+                      -7.51
+                    ]
+                  },
+                  {
+                    "off": 1.2,
+                    "dist": 7.51,
+                    "steps": 10,
+                    "end": [
+                      1.2,
+                      1.6,
+                      -7.51
+                    ]
+                  },
+                  {
+                    "off": -1.2,
+                    "dist": 7.51,
+                    "steps": 10,
+                    "end": [
+                      -1.2,
+                      1.6,
+                      -7.51
+                    ]
+                  }
+                ]
+              },
+              {
+                "dir": "south",
+                "runs": [
+                  {
+                    "off": 0,
+                    "dist": 6.63,
+                    "steps": 8.8,
+                    "end": [
+                      0,
+                      1.6,
+                      6.63
+                    ]
+                  },
+                  {
+                    "off": 1.2,
+                    "dist": 7.65,
+                    "steps": 10.2,
+                    "end": [
+                      1.2,
+                      1.6,
+                      7.65
+                    ]
+                  },
+                  {
+                    "off": -1.2,
+                    "dist": 7.65,
+                    "steps": 10.2,
+                    "end": [
+                      -1.2,
+                      1.6,
+                      7.65
+                    ]
+                  }
+                ]
+              },
+              {
+                "dir": "east",
+                "runs": [
+                  {
+                    "off": 0,
+                    "dist": 5.65,
+                    "steps": 7.5,
+                    "end": [
+                      5.65,
+                      1.6,
+                      -0.17
+                    ]
+                  },
+                  {
+                    "off": 1.2,
+                    "dist": 1.65,
+                    "steps": 2.2,
+                    "end": [
+                      1.65,
+                      1.6,
+                      1.2
+                    ]
+                  },
+                  {
+                    "off": -1.2,
+                    "dist": 9.65,
+                    "steps": 12.9,
+                    "end": [
+                      9.65,
+                      1.6,
+                      -0.95
+                    ]
+                  }
+                ]
+              },
+              {
+                "dir": "west",
+                "runs": [
+                  {
+                    "off": 0,
+                    "dist": 9.65,
+                    "steps": 12.9,
+                    "end": [
+                      -9.65,
+                      1.6,
+                      0
+                    ]
+                  },
+                  {
+                    "off": 1.2,
+                    "dist": 9.65,
+                    "steps": 12.9,
+                    "end": [
+                      -9.65,
+                      1.6,
+                      1.2
+                    ]
+                  },
+                  {
+                    "off": -1.2,
+                    "dist": 9.65,
+                    "steps": 12.9,
+                    "end": [
+                      -9.65,
+                      1.6,
+                      -1.2
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "ms": 198600
+        },
+        {
+          "step": "4a-reviews",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "review 1 (E) opens the aimed room",
+              "ok": true,
+              "info": {
+                "shownId": "room_lighthouse",
+                "want": "room_lighthouse"
+              }
+            },
+            {
+              "label": "review 1 title matches room name",
+              "ok": true,
+              "info": {
+                "title": "The Last Lighthouse Keeper",
+                "want": "The Last Lighthouse Keeper"
+              }
+            },
+            {
+              "label": "review 1 shows company + city",
+              "ok": true
+            },
+            {
+              "label": "review 1 fits the viewport horizontally",
+              "ok": true,
+              "info": {
+                "w": 1440,
+                "h": 900,
+                "vw": 1440,
+                "vh": 900,
+                "scrollW": 1440
+              }
+            },
+            {
+              "label": "review 2 (E) opens the aimed room",
+              "ok": true,
+              "info": {
+                "shownId": "room_castle",
+                "want": "room_castle"
+              }
+            },
+            {
+              "label": "review 2 title matches room name",
+              "ok": true,
+              "info": {
+                "title": "Dragon's Keep",
+                "want": "Dragon's Keep"
+              }
+            },
+            {
+              "label": "review 2 shows company + city",
+              "ok": true
+            },
+            {
+              "label": "review 2 fits the viewport horizontally",
+              "ok": true,
+              "info": {
+                "w": 1440,
+                "h": 900,
+                "vw": 1440,
+                "vh": 900,
+                "scrollW": 1440
+              }
+            },
+            {
+              "label": "review 3 (E) opens the aimed room",
+              "ok": true,
+              "info": {
+                "shownId": "room_noir",
+                "want": "room_noir"
+              }
+            },
+            {
+              "label": "review 3 title matches room name",
+              "ok": true,
+              "info": {
+                "title": "The Velvet Room",
+                "want": "The Velvet Room"
+              }
+            },
+            {
+              "label": "review 3 shows company + city",
+              "ok": true
+            },
+            {
+              "label": "review 3 fits the viewport horizontally",
+              "ok": true,
+              "info": {
+                "w": 1440,
+                "h": 900,
+                "vw": 1440,
+                "vh": 900,
+                "scrollW": 1440
+              }
+            }
+          ],
+          "details": {
+            "opened": [
+              {
+                "roomId": "room_lighthouse",
+                "how": "E",
+                "title": "The Last Lighthouse Keeper",
+                "shownId": "room_lighthouse",
+                "shot": "qa/screenshots/qa-desktop-17-review-1.png"
+              },
+              {
+                "roomId": "room_castle",
+                "how": "E",
+                "title": "Dragon's Keep",
+                "shownId": "room_castle",
+                "shot": "qa/screenshots/qa-desktop-18-review-2.png"
+              },
+              {
+                "roomId": "room_noir",
+                "how": "E",
+                "title": "The Velvet Room",
+                "shownId": "room_noir",
+                "shot": "qa/screenshots/qa-desktop-19-review-3.png"
+              }
+            ]
+          },
+          "ms": 63482
+        },
+        {
+          "step": "4b-sorting",
+          "status": "fail",
+          "checks": [
+            {
+              "label": "sort genre via hud: pins regroup by genre",
+              "ok": true,
+              "info": [
+                "adventure",
+                "comedy",
+                "fantasy",
+                "heist",
+                "historical",
+                "horror",
+                "mystery",
+                "other",
+                "sci-fi",
+                "thriller"
+              ]
+            },
+            {
+              "label": "sort genre: pins animate (moving one frame after the change) and settle on targets",
+              "ok": true,
+              "info": {
+                "settled": true,
+                "midMoving": 12
+              }
+            },
+            {
+              "label": "sort genre: order changed",
+              "ok": true
+            },
+            {
+              "label": "sort genre: string re-tie sfx fired",
+              "ok": true,
+              "info": 1
+            },
+            {
+              "label": "sort genre: HUD chip shows pressed",
+              "ok": true,
+              "info": "true"
+            },
+            {
+              "label": "sort date via world-tab: pins regroup by date",
+              "ok": true,
+              "info": [
+                "2023",
+                "2024",
+                "2025",
+                "2026"
+              ]
+            },
+            {
+              "label": "sort date: pins animate (moving one frame after the change) and settle on targets",
+              "ok": false,
+              "info": {
+                "settled": true,
+                "midMoving": 0
+              }
+            },
+            {
+              "label": "sort date: order changed",
+              "ok": true
+            },
+            {
+              "label": "sort date: string re-tie sfx fired",
+              "ok": true,
+              "info": 1
+            },
+            {
+              "label": "sort date: HUD chip shows pressed",
+              "ok": true,
+              "info": "true"
+            },
+            {
+              "label": "sort rating via hud: pins regroup by rating",
+              "ok": true,
+              "info": [
+                "90+",
+                "80-89",
+                "70-79"
+              ]
+            },
+            {
+              "label": "sort rating: pins animate (moving one frame after the change) and settle on targets",
+              "ok": true,
+              "info": {
+                "settled": true,
+                "midMoving": 12
+              }
+            },
+            {
+              "label": "sort rating: order changed",
+              "ok": true
+            },
+            {
+              "label": "sort rating: string re-tie sfx fired",
+              "ok": true,
+              "info": 1
+            },
+            {
+              "label": "sort rating: HUD chip shows pressed",
+              "ok": true,
+              "info": "true"
+            },
+            {
+              "label": "sort city via world-tab: pins regroup by city",
+              "ok": true,
+              "info": [
+                "San Francisco",
+                "Toronto"
+              ]
+            },
+            {
+              "label": "sort city: pins animate (moving one frame after the change) and settle on targets",
+              "ok": true,
+              "info": {
+                "settled": true,
+                "midMoving": 12
+              }
+            },
+            {
+              "label": "sort city: order changed",
+              "ok": true
+            },
+            {
+              "label": "sort city: string re-tie sfx fired",
+              "ok": true,
+              "info": 1
+            },
+            {
+              "label": "sort city: HUD chip shows pressed",
+              "ok": true,
+              "info": "true"
+            }
+          ],
+          "details": {
+            "changes": [
+              {
+                "key": "genre",
+                "via": "hud",
+                "groups": [
+                  "adventure",
+                  "comedy",
+                  "fantasy",
+                  "heist",
+                  "historical",
+                  "horror",
+                  "mystery",
+                  "other",
+                  "sci-fi",
+                  "thriller"
+                ],
+                "orderChanged": true,
+                "midMoving": 12,
+                "stringSfx": 1,
+                "midShot": "qa/screenshots/qa-desktop-20-sort-genre-mid.png",
+                "settledShot": "qa/screenshots/qa-desktop-21-sort-genre-settled.png",
+                "pressed": "true"
+              },
+              {
+                "key": "date",
+                "via": "world-tab",
+                "groups": [
+                  "2023",
+                  "2024",
+                  "2025",
+                  "2026"
+                ],
+                "orderChanged": true,
+                "midMoving": 0,
+                "stringSfx": 1,
+                "midShot": "qa/screenshots/qa-desktop-22-sort-date-mid.png",
+                "settledShot": "qa/screenshots/qa-desktop-23-sort-date-settled.png",
+                "pressed": "true"
+              },
+              {
+                "key": "rating",
+                "via": "hud",
+                "groups": [
+                  "90+",
+                  "80-89",
+                  "70-79"
+                ],
+                "orderChanged": true,
+                "midMoving": 12,
+                "stringSfx": 1,
+                "midShot": "qa/screenshots/qa-desktop-24-sort-rating-mid.png",
+                "settledShot": "qa/screenshots/qa-desktop-25-sort-rating-settled.png",
+                "pressed": "true"
+              },
+              {
+                "key": "city",
+                "via": "world-tab",
+                "groups": [
+                  "San Francisco",
+                  "Toronto"
+                ],
+                "orderChanged": true,
+                "midMoving": 12,
+                "stringSfx": 1,
+                "midShot": "qa/screenshots/qa-desktop-26-sort-city-mid.png",
+                "settledShot": "qa/screenshots/qa-desktop-27-sort-city-settled.png",
+                "pressed": "true"
+              }
+            ]
+          },
+          "ms": 140569
+        },
+        {
+          "step": "5-add-entry",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "opening tap does not tick a checklist prompt (no ghost click)",
+              "ok": true,
+              "info": []
+            },
+            {
+              "label": "transcript filled",
+              "ok": true
+            },
+            {
+              "label": "confirm screen says mock extractor",
+              "ok": true,
+              "info": "Mock extractor (no API key)"
+            },
+            {
+              "label": "save enabled after filling required",
+              "ok": true
+            },
+            {
+              "label": "room count +1",
+              "ok": true
+            },
+            {
+              "label": "new pin is on the board and landed",
+              "ok": true
+            },
+            {
+              "label": "new pin is hoverable",
+              "ok": true,
+              "info": "photo:room_mvnfhblpzz2v1w"
+            },
+            {
+              "label": "persists in /api/data",
+              "ok": true,
+              "info": 13
+            },
+            {
+              "label": "review saved in /api/data",
+              "ok": true
+            },
+            {
+              "label": "new pin still on board after reload",
+              "ok": true
+            }
+          ],
+          "details": {
+            "promptsTickedOnOpen": [],
+            "transcript": "sample button",
+            "mode": "Mock extractor (no API key)",
+            "missingInitially": [],
+            "saveEnabledInitially": true,
+            "name": "QA desktop Vault 74619",
+            "newId": "room_mvnfhblpzz2v1w",
+            "hoverNew": "photo:room_mvnfhblpzz2v1w"
+          },
+          "ms": 113116
+        },
+        {
+          "step": "6a-wishlist",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "item added",
+              "ok": true
+            },
+            {
+              "label": "reorder up moves the item",
+              "ok": true,
+              "info": {
+                "idx0": 6,
+                "idx1": 5
+              }
+            },
+            {
+              "label": "mark done",
+              "ok": true
+            },
+            {
+              "label": "wish list persisted (added + done + order)",
+              "ok": true,
+              "info": {
+                "saved": {
+                  "id": "wish_mvnfk66dcppk8t",
+                  "name": "QA Wish desktop 3664",
+                  "city": "",
+                  "link": "",
+                  "addedBy": "",
+                  "priority": 6,
+                  "done": true
+                },
+                "serverIdx": 5,
+                "idx1": 5
+              }
+            },
+            {
+              "label": "HUD wish list button opens it",
+              "ok": true
+            }
+          ],
+          "details": {
+            "added": {
+              "id": "wish_mvnfk66dcppk8t",
+              "index": 6,
+              "total": 7
+            },
+            "server": {
+              "id": "wish_mvnfk66dcppk8t",
+              "name": "QA Wish desktop 3664",
+              "city": "",
+              "link": "",
+              "addedBy": "",
+              "priority": 6,
+              "done": true
+            }
+          },
+          "ms": 106978
+        },
+        {
+          "step": "6b-wrap",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "wrap starts at card 1",
+              "ok": true,
+              "info": "1 / 8"
+            },
+            {
+              "label": "stepped through every card",
+              "ok": true,
+              "info": [
+                "1 / 8",
+                "2 / 8",
+                "3 / 8",
+                "4 / 8",
+                "5 / 8",
+                "6 / 8",
+                "7 / 8",
+                "8 / 8"
+              ]
+            },
+            {
+              "label": "every card shows visible text once its animation settles",
+              "ok": true,
+              "info": []
+            },
+            {
+              "label": "prev goes back",
+              "ok": true
+            },
+            {
+              "label": "HUD wrap button opens it",
+              "ok": true
+            }
+          ],
+          "details": {
+            "total": 8,
+            "blankCards": [],
+            "seen": [
+              "1 / 8",
+              "2 / 8",
+              "3 / 8",
+              "4 / 8",
+              "5 / 8",
+              "6 / 8",
+              "7 / 8",
+              "8 / 8"
+            ]
+          },
+          "ms": 168282
+        },
+        {
+          "step": "2b-gate-wrong-answers",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "no hints after 1 miss",
+              "ok": true
+            },
+            {
+              "label": "2 wrong answers reveal hints",
+              "ok": true
+            },
+            {
+              "label": "hint text is visible (opacity 1, non-empty)",
+              "ok": true,
+              "info": {
+                "text": "✦\nHint 1: Solve the clues in order: clue 1 is the first digit.",
+                "opacity": "1"
+              }
+            },
+            {
+              "label": "skip becomes available (after 2 misses, or after the 3rd)",
+              "ok": true,
+              "info": {
+                "after2": false
+              }
+            },
+            {
+              "label": "skip enters the room",
+              "ok": true
+            }
+          ],
+          "details": {
+            "kind": "lock",
+            "miss1": "typed 111",
+            "miss2": "typed 111",
+            "hint": {
+              "text": "✦\nHint 1: Solve the clues in order: clue 1 is the first digit.",
+              "opacity": "1"
+            },
+            "skipAfter2": false,
+            "miss3": "typed 111",
+            "skipShowsReveal": false,
+            "lastSolvedAfterSkip": "2026-10-25"
+          },
+          "ms": 134267
+        },
+        {
+          "step": "2c-gate-kinds",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "gate lock: renders as lock",
+              "ok": true,
+              "info": "lock"
+            },
+            {
+              "label": "gate lock: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate lock: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 1440,
+                "vw": 1440
+              }
+            },
+            {
+              "label": "gate cipher: renders as cipher",
+              "ok": true,
+              "info": "cipher"
+            },
+            {
+              "label": "gate cipher: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate cipher: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 1440,
+                "vw": 1440
+              }
+            },
+            {
+              "label": "gate sequence: renders as sequence",
+              "ok": true,
+              "info": "sequence"
+            },
+            {
+              "label": "gate sequence: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate sequence: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 1440,
+                "vw": 1440
+              }
+            },
+            {
+              "label": "gate search: renders as search",
+              "ok": true,
+              "info": "search"
+            },
+            {
+              "label": "gate search: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate search: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 1440,
+                "vw": 1440
+              }
+            },
+            {
+              "label": "gate recall: renders as recall",
+              "ok": true,
+              "info": "recall"
+            },
+            {
+              "label": "gate recall: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate recall: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 1440,
+                "vw": 1440
+              }
+            }
+          ],
+          "details": {
+            "kinds": {
+              "lock": {
+                "kind": "lock",
+                "fit": {
+                  "sw": 1440,
+                  "vw": 1440
+                },
+                "solved": true
+              },
+              "cipher": {
+                "kind": "cipher",
+                "fit": {
+                  "sw": 1440,
+                  "vw": 1440
+                },
+                "solved": true
+              },
+              "sequence": {
+                "kind": "sequence",
+                "fit": {
+                  "sw": 1440,
+                  "vw": 1440
+                },
+                "solved": true
+              },
+              "search": {
+                "kind": "search",
+                "fit": {
+                  "sw": 1440,
+                  "vw": 1440
+                },
+                "solved": true
+              },
+              "recall": {
+                "kind": "recall",
+                "fit": {
+                  "sw": 1440,
+                  "vw": 1440
+                },
+                "solved": true
+              }
+            }
+          },
+          "ms": 562777
+        }
+      ],
+      "shots": [
+        "qa/screenshots/qa-desktop-01-loading.png",
+        "qa/screenshots/qa-desktop-02-gate-open.png",
+        "qa/screenshots/qa-desktop-03-gate-solved.png",
+        "qa/screenshots/qa-desktop-04-room-after-gate.png",
+        "qa/screenshots/qa-desktop-05-reload-no-gate.png",
+        "qa/screenshots/qa-desktop-06-debug-readout.png",
+        "qa/screenshots/qa-desktop-07-anchor-bulletin-board.png",
+        "qa/screenshots/qa-desktop-08-anchor-desk.png",
+        "qa/screenshots/qa-desktop-09-anchor-wrap-trophy.png",
+        "qa/screenshots/qa-desktop-10-anchor-gate-door.png",
+        "qa/screenshots/qa-desktop-11-anchor-living-area.png",
+        "qa/screenshots/qa-desktop-12-anchor-shelves.png",
+        "qa/screenshots/qa-desktop-13-anchor-wishlist-board.png",
+        "qa/screenshots/qa-desktop-14-push-north-wall.png",
+        "qa/screenshots/qa-desktop-15-push-couch.png",
+        "qa/screenshots/qa-desktop-16-push-gate-door.png",
+        "qa/screenshots/qa-desktop-17-review-1.png",
+        "qa/screenshots/qa-desktop-18-review-2.png",
+        "qa/screenshots/qa-desktop-19-review-3.png",
+        "qa/screenshots/qa-desktop-20-sort-genre-mid.png",
+        "qa/screenshots/qa-desktop-21-sort-genre-settled.png",
+        "qa/screenshots/qa-desktop-22-sort-date-mid.png",
+        "qa/screenshots/qa-desktop-23-sort-date-settled.png",
+        "qa/screenshots/qa-desktop-24-sort-rating-mid.png",
+        "qa/screenshots/qa-desktop-25-sort-rating-settled.png",
+        "qa/screenshots/qa-desktop-26-sort-city-mid.png",
+        "qa/screenshots/qa-desktop-27-sort-city-settled.png",
+        "qa/screenshots/qa-desktop-28-record-overlay.png",
+        "qa/screenshots/qa-desktop-29-record-transcript.png",
+        "qa/screenshots/qa-desktop-30-confirm-initial.png",
+        "qa/screenshots/qa-desktop-31-confirm-filled.png",
+        "qa/screenshots/qa-desktop-32-pin-flying.png",
+        "qa/screenshots/qa-desktop-33-pin-landed.png",
+        "qa/screenshots/qa-desktop-34-wishlist-board-unhovered.png",
+        "qa/screenshots/qa-desktop-35-wishlist-board.png",
+        "qa/screenshots/qa-desktop-36-wishlist-open.png",
+        "qa/screenshots/qa-desktop-37-wishlist-adding.png",
+        "qa/screenshots/qa-desktop-38-wishlist-edited.png",
+        "qa/screenshots/qa-desktop-39-wrap-card-1.png",
+        "qa/screenshots/qa-desktop-40-wrap-card-2.png",
+        "qa/screenshots/qa-desktop-41-wrap-card-3.png",
+        "qa/screenshots/qa-desktop-42-wrap-card-4.png",
+        "qa/screenshots/qa-desktop-43-wrap-card-5.png",
+        "qa/screenshots/qa-desktop-44-wrap-card-6.png",
+        "qa/screenshots/qa-desktop-45-wrap-card-7.png",
+        "qa/screenshots/qa-desktop-46-wrap-card-8.png",
+        "qa/screenshots/qa-desktop-47-end-hud.png",
+        "qa/screenshots/qa-desktop-90-gate-two-misses.png",
+        "qa/screenshots/qa-desktop-91-gate-skipped.png",
+        "qa/screenshots/qa-desktop-92-gate-kind-lock.png",
+        "qa/screenshots/qa-desktop-93-gate-kind-cipher.png",
+        "qa/screenshots/qa-desktop-94-gate-kind-sequence.png",
+        "qa/screenshots/qa-desktop-95-gate-kind-search.png",
+        "qa/screenshots/qa-desktop-96-gate-kind-recall.png"
+      ],
+      "notes": [],
+      "consoleErrors": [],
+      "consoleWarnings": [
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+      ],
+      "pageErrors": [],
+      "failedRequests": [],
+      "perf": {
+        "medium": {
+          "rafFps": 0.83,
+          "runtimeFps": 1.13,
+          "frames": 3,
+          "drawCallsAvg": 135,
+          "drawCallsMax": 135,
+          "trianglesAvg": 44929,
+          "trianglesMax": 44929,
+          "debugReadout": "1.1 fps  medium\n1 draws  0.0k tris",
+          "quality": "medium"
+        },
+        "low": {
+          "rafFps": 5.22,
+          "runtimeFps": 1.09,
+          "frames": 29,
+          "drawCallsAvg": 107,
+          "drawCallsMax": 107,
+          "trianglesAvg": 29628,
+          "trianglesMax": 29628,
+          "debugReadout": "1.1 fps  low\n107 draws  29.6k tris",
+          "quality": "low"
+        },
+        "high": {
+          "rafFps": 6.98,
+          "runtimeFps": 2.59,
+          "frames": 28,
+          "drawCallsAvg": 135,
+          "drawCallsMax": 135,
+          "trianglesAvg": 44929,
+          "trianglesMax": 44929,
+          "debugReadout": "1.8 fps  high\n1 draws  0.0k tris",
+          "quality": "high"
+        },
+        "medium-again": {
+          "rafFps": 1.15,
+          "runtimeFps": 1.17,
+          "frames": 2,
+          "drawCallsAvg": 135,
+          "drawCallsMax": 135,
+          "trianglesAvg": 44929,
+          "trianglesMax": 44929,
+          "debugReadout": "1.2 fps  medium\n1 draws  0.0k tris",
+          "quality": "medium"
+        }
+      }
+    },
+    "mobile": {
+      "viewport": "mobile",
+      "steps": [
+        {
+          "step": "1-load",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "world ready and loading screen gone",
+              "ok": true,
+              "info": 10547
+            },
+            {
+              "label": "data loaded",
+              "ok": true,
+              "info": "ready"
+            },
+            {
+              "label": "total transferred < 15 MB",
+              "ok": true,
+              "info": 1798143
+            }
+          ],
+          "details": {
+            "loadMs": 10547,
+            "wallClockLoadMs": 10551,
+            "dataStatus": "ready",
+            "rooms": 13,
+            "bytes": {
+              "transfer": 1798143,
+              "encoded": 1792743,
+              "decoded": 1811993,
+              "count": 18,
+              "top": [
+                {
+                  "name": "/assets/index-BYdZaImL.js",
+                  "transfer": 1628040,
+                  "body": 1627740
+                },
+                {
+                  "name": "/assets/index-bFwtKcuy.css",
+                  "transfer": 71461,
+                  "body": 71161
+                },
+                {
+                  "name": "/api/data",
+                  "transfer": 24190,
+                  "body": 23890
+                },
+                {
+                  "name": "/seed/photos/room_vault-1.svg",
+                  "transfer": 10880,
+                  "body": 10580
+                },
+                {
+                  "name": "/seed/photos/room_circus-1.svg",
+                  "transfer": 8343,
+                  "body": 8043
+                },
+                {
+                  "name": "/seed/photos/room_train-1.svg",
+                  "transfer": 7246,
+                  "body": 6946
+                },
+                {
+                  "name": "/seed/photos/room_rocket-1.svg",
+                  "transfer": 6473,
+                  "body": 6173
+                },
+                {
+                  "name": "/seed/photos/room_haunted-1.svg",
+                  "transfer": 5517,
+                  "body": 5217
+                }
+              ]
+            },
+            "gateOpenAtReady": true
+          },
+          "ms": 13065
+        },
+        {
+          "step": "2-gate",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "gate auto-opens on a fresh profile",
+              "ok": true
+            },
+            {
+              "label": "reveal says it opened",
+              "ok": true
+            },
+            {
+              "label": "gate stored as solved today",
+              "ok": true
+            },
+            {
+              "label": "gate does not show again after reload",
+              "ok": true
+            }
+          ],
+          "details": {
+            "kind": "lock",
+            "answer": "668"
+          },
+          "ms": 71254
+        },
+        {
+          "step": "1b-perf",
+          "status": "fail",
+          "checks": [
+            {
+              "label": "medium < 300 draw calls per frame",
+              "ok": true,
+              "info": 127
+            },
+            {
+              "label": "medium < 500k triangles per frame",
+              "ok": true,
+              "info": 38557
+            },
+            {
+              "label": "?debug=1 readout draw calls match WebGL (within 50%)",
+              "ok": false,
+              "info": {
+                "readout": "0.7 fps  medium\n1 draws  0.0k tris",
+                "measured": 127
+              }
+            },
+            {
+              "label": "runtime.fps roughly matches rAF fps",
+              "ok": true,
+              "info": {
+                "runtime": 0.74,
+                "raf": 1.21
+              }
+            }
+          ],
+          "details": {
+            "perf": {
+              "medium": {
+                "rafFps": 1.44,
+                "runtimeFps": 1.34,
+                "frames": 7,
+                "drawCallsAvg": 127,
+                "drawCallsMax": 127,
+                "trianglesAvg": 38557,
+                "trianglesMax": 38557,
+                "debugReadout": "1.3 fps  medium\n1 draws  0.0k tris",
+                "quality": "medium"
+              },
+              "low": {
+                "rafFps": 4.16,
+                "runtimeFps": 9.92,
+                "frames": 22,
+                "drawCallsAvg": 99,
+                "drawCallsMax": 99,
+                "trianglesAvg": 23256,
+                "trianglesMax": 23256,
+                "debugReadout": "7.0 fps  low\n99 draws  23.3k tris",
+                "quality": "low"
+              },
+              "high": {
+                "rafFps": 1.09,
+                "runtimeFps": 1.02,
+                "frames": 5,
+                "drawCallsAvg": 127,
+                "drawCallsMax": 127,
+                "trianglesAvg": 38557,
+                "trianglesMax": 38557,
+                "debugReadout": "1.0 fps  high\n1 draws  0.0k tris",
+                "quality": "high"
+              },
+              "medium-again": {
+                "rafFps": 1.21,
+                "runtimeFps": 0.74,
+                "frames": 6,
+                "drawCallsAvg": 127,
+                "drawCallsMax": 127,
+                "trianglesAvg": 38557,
+                "trianglesMax": 38557,
+                "debugReadout": "0.7 fps  medium\n1 draws  0.0k tris",
+                "quality": "medium"
+              }
+            }
+          },
+          "ms": 77495
+        },
+        {
+          "step": "3a-look-input",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "dragging left turns the camera left (yaw increases)",
+              "ok": true,
+              "info": 0.45
+            }
+          ],
+          "details": {
+            "yawDelta": 0.45
+          },
+          "ms": 1401
+        },
+        {
+          "step": "3b-walk-anchors",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "reached bulletin-board by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 7.46,
+                  "remaining": 0.04,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    0,
+                    1.6,
+                    -3.96
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "bulletin-board is hoverable from the stand point",
+              "ok": true,
+              "info": "photo:room_circus"
+            },
+            {
+              "label": "reached desk by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 8,
+                  "remaining": 0.35,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    -7.95,
+                    1.6,
+                    -3.05
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "desk is hoverable from the stand point",
+              "ok": true,
+              "info": "desk:terminal"
+            },
+            {
+              "label": "reached wrap-trophy by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 6.45,
+                  "remaining": 0.17,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    -6.99,
+                    1.6,
+                    3.33
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "wrap-trophy is hoverable from the stand point",
+              "ok": true,
+              "info": "wrap:trophy"
+            },
+            {
+              "label": "reached gate-door by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 5.71,
+                  "remaining": 0.1,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    -1.4,
+                    1.6,
+                    4.52
+                  ]
+                },
+                {
+                  "walked": 1.66,
+                  "remaining": 0.11,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    -0.09,
+                    1.6,
+                    5.53
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "gate-door is hoverable from the stand point",
+              "ok": true,
+              "info": "gate:door"
+            },
+            {
+              "label": "reached living-area by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 1.7,
+                  "remaining": 0.2,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    1.14,
+                    1.6,
+                    4.36
+                  ]
+                },
+                {
+                  "walked": 5.76,
+                  "remaining": 0.39,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    1.2,
+                    1.6,
+                    -1.39
+                  ]
+                },
+                {
+                  "walked": 2.6,
+                  "remaining": 0.3,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    3.8,
+                    1.6,
+                    -1.18
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "reached shelves by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 3.67,
+                  "remaining": 0.13,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    7.47,
+                    1.6,
+                    -1.2
+                  ]
+                },
+                {
+                  "walked": 5.84,
+                  "remaining": 0.63,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    7.84,
+                    1.6,
+                    4.63
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "reached wishlist-board by walking",
+              "ok": true,
+              "info": [
+                {
+                  "walked": 5.76,
+                  "remaining": 0.07,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    7.8,
+                    1.6,
+                    -1.13
+                  ]
+                },
+                {
+                  "walked": 2.46,
+                  "remaining": 0.18,
+                  "stuck": false,
+                  "teleported": false,
+                  "end": [
+                    6.39,
+                    1.6,
+                    -3.15
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "wishlist-board is hoverable from the stand point",
+              "ok": true,
+              "info": "wishlist:board"
+            },
+            {
+              "label": "no collider/bounds violations while walking the route",
+              "ok": true,
+              "info": []
+            }
+          ],
+          "details": {
+            "legs": [
+              {
+                "anchor": "bulletin-board",
+                "walked": 7.46,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 7.46,
+                    "remaining": 0.04,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      0,
+                      1.6,
+                      -3.96
+                    ]
+                  }
+                ],
+                "at": [
+                  0,
+                  1.6,
+                  -3.96
+                ],
+                "hovered": "photo:room_circus",
+                "shot": "qa/screenshots/qa-mobile-07-anchor-bulletin-board.png"
+              },
+              {
+                "anchor": "desk",
+                "walked": 8,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 8,
+                    "remaining": 0.35,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      -7.95,
+                      1.6,
+                      -3.05
+                    ]
+                  }
+                ],
+                "at": [
+                  -7.95,
+                  1.6,
+                  -3.05
+                ],
+                "hovered": "desk:terminal",
+                "shot": "qa/screenshots/qa-mobile-08-anchor-desk.png"
+              },
+              {
+                "anchor": "wrap-trophy",
+                "walked": 6.45,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 6.45,
+                    "remaining": 0.17,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      -6.99,
+                      1.6,
+                      3.33
+                    ]
+                  }
+                ],
+                "at": [
+                  -6.99,
+                  1.6,
+                  3.33
+                ],
+                "hovered": "wrap:trophy",
+                "shot": "qa/screenshots/qa-mobile-09-anchor-wrap-trophy.png"
+              },
+              {
+                "anchor": "gate-door",
+                "walked": 7.37,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 5.71,
+                    "remaining": 0.1,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      -1.4,
+                      1.6,
+                      4.52
+                    ]
+                  },
+                  {
+                    "walked": 1.66,
+                    "remaining": 0.11,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      -0.09,
+                      1.6,
+                      5.53
+                    ]
+                  }
+                ],
+                "at": [
+                  -0.09,
+                  1.6,
+                  5.53
+                ],
+                "hovered": "gate:door",
+                "shot": "qa/screenshots/qa-mobile-10-anchor-gate-door.png"
+              },
+              {
+                "anchor": "living-area",
+                "walked": 10.06,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 1.7,
+                    "remaining": 0.2,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      1.14,
+                      1.6,
+                      4.36
+                    ]
+                  },
+                  {
+                    "walked": 5.76,
+                    "remaining": 0.39,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      1.2,
+                      1.6,
+                      -1.39
+                    ]
+                  },
+                  {
+                    "walked": 2.6,
+                    "remaining": 0.3,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      3.8,
+                      1.6,
+                      -1.18
+                    ]
+                  }
+                ],
+                "at": [
+                  3.8,
+                  1.6,
+                  -1.18
+                ],
+                "hovered": null,
+                "shot": "qa/screenshots/qa-mobile-11-anchor-living-area.png"
+              },
+              {
+                "anchor": "shelves",
+                "walked": 9.51,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 3.67,
+                    "remaining": 0.13,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      7.47,
+                      1.6,
+                      -1.2
+                    ]
+                  },
+                  {
+                    "walked": 5.84,
+                    "remaining": 0.63,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      7.84,
+                      1.6,
+                      4.63
+                    ]
+                  }
+                ],
+                "at": [
+                  7.84,
+                  1.6,
+                  4.63
+                ],
+                "hovered": null,
+                "shot": "qa/screenshots/qa-mobile-12-anchor-shelves.png"
+              },
+              {
+                "anchor": "wishlist-board",
+                "walked": 8.22,
+                "teleported": false,
+                "legs": [
+                  {
+                    "walked": 5.76,
+                    "remaining": 0.07,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      7.8,
+                      1.6,
+                      -1.13
+                    ]
+                  },
+                  {
+                    "walked": 2.46,
+                    "remaining": 0.18,
+                    "stuck": false,
+                    "teleported": false,
+                    "end": [
+                      6.39,
+                      1.6,
+                      -3.15
+                    ]
+                  }
+                ],
+                "at": [
+                  6.39,
+                  1.6,
+                  -3.15
+                ],
+                "hovered": "wishlist:board",
+                "shot": "qa/screenshots/qa-mobile-13-anchor-wishlist-board.png"
+              }
+            ],
+            "violations": []
+          },
+          "ms": 173738
+        },
+        {
+          "step": "3c-collisions",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "north-wall: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -7.5,
+                  1.6,
+                  -7.65
+                ],
+                "travelled": 1.65,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "south-wall: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -3,
+                  1.6,
+                  7.65
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "east-wall: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  9.65,
+                  1.6,
+                  -6
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "west-wall: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -9.65,
+                  1.6,
+                  0
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "nw-corner: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -9.65,
+                  1.6,
+                  -7.65
+                ],
+                "travelled": 1.63,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "couch: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  6.8,
+                  1.6,
+                  1.5
+                ],
+                "travelled": 0.8,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "desk: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  -8.7,
+                  1.6,
+                  -3.6
+                ],
+                "travelled": 1.2,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "gate-door: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  0,
+                  1.6,
+                  6.63
+                ],
+                "travelled": 1.33,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "bookshelf: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  9.19,
+                  1.6,
+                  4
+                ],
+                "travelled": 1.19,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "coffee-table: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  4.25,
+                  1.6,
+                  0.5
+                ],
+                "travelled": 1.3,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "board: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  0,
+                  1.6,
+                  -7.51
+                ],
+                "travelled": 1.51,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "wishlist-board: stays in bounds and outside colliders while pushing 2.5 s",
+              "ok": true,
+              "info": {
+                "last": [
+                  9.33,
+                  1.6,
+                  -3
+                ],
+                "travelled": 1.03,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            },
+            {
+              "label": "collision monitor: no violations",
+              "ok": true,
+              "info": []
+            }
+          ],
+          "details": {
+            "colliderCount": 25,
+            "runs": [
+              {
+                "test": "north-wall",
+                "last": [
+                  -7.5,
+                  1.6,
+                  -7.65
+                ],
+                "travelled": 1.65,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "south-wall",
+                "last": [
+                  -3,
+                  1.6,
+                  7.65
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "east-wall",
+                "last": [
+                  9.65,
+                  1.6,
+                  -6
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "west-wall",
+                "last": [
+                  -9.65,
+                  1.6,
+                  0
+                ],
+                "travelled": 1.35,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "nw-corner",
+                "last": [
+                  -9.65,
+                  1.6,
+                  -7.65
+                ],
+                "travelled": 1.63,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "couch",
+                "last": [
+                  6.8,
+                  1.6,
+                  1.5
+                ],
+                "travelled": 0.8,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "desk",
+                "last": [
+                  -8.7,
+                  1.6,
+                  -3.6
+                ],
+                "travelled": 1.2,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "gate-door",
+                "last": [
+                  0,
+                  1.6,
+                  6.63
+                ],
+                "travelled": 1.33,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "bookshelf",
+                "last": [
+                  9.19,
+                  1.6,
+                  4
+                ],
+                "travelled": 1.19,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "coffee-table",
+                "last": [
+                  4.25,
+                  1.6,
+                  0.5
+                ],
+                "travelled": 1.3,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "board",
+                "last": [
+                  0,
+                  1.6,
+                  -7.51
+                ],
+                "travelled": 1.51,
+                "outOfBounds": 0,
+                "worstInside": null
+              },
+              {
+                "test": "wishlist-board",
+                "last": [
+                  9.33,
+                  1.6,
+                  -3
+                ],
+                "travelled": 1.03,
+                "outOfBounds": 0,
+                "worstInside": null
+              }
+            ]
+          },
+          "ms": 137467
+        },
+        {
+          "step": "3d-ten-steps",
+          "status": "fail",
+          "checks": [
+            {
+              "label": "north: 10+ steps (7.5 m) straight from the exact centre",
+              "ok": true,
+              "info": {
+                "off": 0,
+                "dist": 7.51,
+                "steps": 10,
+                "end": [
+                  0,
+                  1.6,
+                  -7.51
+                ]
+              }
+            },
+            {
+              "label": "north: 10+ steps from centre within ±1.2 m lane",
+              "ok": true,
+              "info": [
+                {
+                  "off": 0,
+                  "dist": 7.51,
+                  "steps": 10,
+                  "end": [
+                    0,
+                    1.6,
+                    -7.51
+                  ]
+                },
+                {
+                  "off": 1.2,
+                  "dist": 7.51,
+                  "steps": 10,
+                  "end": [
+                    1.2,
+                    1.6,
+                    -7.51
+                  ]
+                },
+                {
+                  "off": -1.2,
+                  "dist": 7.51,
+                  "steps": 10,
+                  "end": [
+                    -1.2,
+                    1.6,
+                    -7.51
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "south: 10+ steps (7.5 m) straight from the exact centre",
+              "ok": false,
+              "info": {
+                "off": 0,
+                "dist": 6.63,
+                "steps": 8.8,
+                "end": [
+                  0,
+                  1.6,
+                  6.63
+                ]
+              }
+            },
+            {
+              "label": "south: 10+ steps from centre within ±1.2 m lane",
+              "ok": true,
+              "info": [
+                {
+                  "off": 0,
+                  "dist": 6.63,
+                  "steps": 8.8,
+                  "end": [
+                    0,
+                    1.6,
+                    6.63
+                  ]
+                },
+                {
+                  "off": 1.2,
+                  "dist": 7.65,
+                  "steps": 10.2,
+                  "end": [
+                    1.2,
+                    1.6,
+                    7.65
+                  ]
+                },
+                {
+                  "off": -1.2,
+                  "dist": 7.65,
+                  "steps": 10.2,
+                  "end": [
+                    -1.2,
+                    1.6,
+                    7.65
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "east: 10+ steps (7.5 m) straight from the exact centre",
+              "ok": false,
+              "info": {
+                "off": 0,
+                "dist": 5.65,
+                "steps": 7.5,
+                "end": [
+                  5.65,
+                  1.6,
+                  -0.17
+                ]
+              }
+            },
+            {
+              "label": "east: 10+ steps from centre within ±1.2 m lane",
+              "ok": true,
+              "info": [
+                {
+                  "off": 0,
+                  "dist": 5.65,
+                  "steps": 7.5,
+                  "end": [
+                    5.65,
+                    1.6,
+                    -0.17
+                  ]
+                },
+                {
+                  "off": 1.2,
+                  "dist": 1.65,
+                  "steps": 2.2,
+                  "end": [
+                    1.65,
+                    1.6,
+                    1.2
+                  ]
+                },
+                {
+                  "off": -1.2,
+                  "dist": 9.65,
+                  "steps": 12.9,
+                  "end": [
+                    9.65,
+                    1.6,
+                    -0.95
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "west: 10+ steps (7.5 m) straight from the exact centre",
+              "ok": true,
+              "info": {
+                "off": 0,
+                "dist": 9.65,
+                "steps": 12.9,
+                "end": [
+                  -9.65,
+                  1.6,
+                  0
+                ]
+              }
+            },
+            {
+              "label": "west: 10+ steps from centre within ±1.2 m lane",
+              "ok": true,
+              "info": [
+                {
+                  "off": 0,
+                  "dist": 9.65,
+                  "steps": 12.9,
+                  "end": [
+                    -9.65,
+                    1.6,
+                    0
+                  ]
+                },
+                {
+                  "off": 1.2,
+                  "dist": 9.65,
+                  "steps": 12.9,
+                  "end": [
+                    -9.65,
+                    1.6,
+                    1.2
+                  ]
+                },
+                {
+                  "off": -1.2,
+                  "dist": 9.65,
+                  "steps": 12.9,
+                  "end": [
+                    -9.65,
+                    1.6,
+                    -1.2
+                  ]
+                }
+              ]
+            }
+          ],
+          "details": {
+            "rays": [
+              {
+                "dir": "north",
+                "runs": [
+                  {
+                    "off": 0,
+                    "dist": 7.51,
+                    "steps": 10,
+                    "end": [
+                      0,
+                      1.6,
+                      -7.51
+                    ]
+                  },
+                  {
+                    "off": 1.2,
+                    "dist": 7.51,
+                    "steps": 10,
+                    "end": [
+                      1.2,
+                      1.6,
+                      -7.51
+                    ]
+                  },
+                  {
+                    "off": -1.2,
+                    "dist": 7.51,
+                    "steps": 10,
+                    "end": [
+                      -1.2,
+                      1.6,
+                      -7.51
+                    ]
+                  }
+                ]
+              },
+              {
+                "dir": "south",
+                "runs": [
+                  {
+                    "off": 0,
+                    "dist": 6.63,
+                    "steps": 8.8,
+                    "end": [
+                      0,
+                      1.6,
+                      6.63
+                    ]
+                  },
+                  {
+                    "off": 1.2,
+                    "dist": 7.65,
+                    "steps": 10.2,
+                    "end": [
+                      1.2,
+                      1.6,
+                      7.65
+                    ]
+                  },
+                  {
+                    "off": -1.2,
+                    "dist": 7.65,
+                    "steps": 10.2,
+                    "end": [
+                      -1.2,
+                      1.6,
+                      7.65
+                    ]
+                  }
+                ]
+              },
+              {
+                "dir": "east",
+                "runs": [
+                  {
+                    "off": 0,
+                    "dist": 5.65,
+                    "steps": 7.5,
+                    "end": [
+                      5.65,
+                      1.6,
+                      -0.17
+                    ]
+                  },
+                  {
+                    "off": 1.2,
+                    "dist": 1.65,
+                    "steps": 2.2,
+                    "end": [
+                      1.65,
+                      1.6,
+                      1.2
+                    ]
+                  },
+                  {
+                    "off": -1.2,
+                    "dist": 9.65,
+                    "steps": 12.9,
+                    "end": [
+                      9.65,
+                      1.6,
+                      -0.95
+                    ]
+                  }
+                ]
+              },
+              {
+                "dir": "west",
+                "runs": [
+                  {
+                    "off": 0,
+                    "dist": 9.65,
+                    "steps": 12.9,
+                    "end": [
+                      -9.65,
+                      1.6,
+                      0
+                    ]
+                  },
+                  {
+                    "off": 1.2,
+                    "dist": 9.65,
+                    "steps": 12.9,
+                    "end": [
+                      -9.65,
+                      1.6,
+                      1.2
+                    ]
+                  },
+                  {
+                    "off": -1.2,
+                    "dist": 9.65,
+                    "steps": 12.9,
+                    "end": [
+                      -9.65,
+                      1.6,
+                      -1.2
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "ms": 115842
+        },
+        {
+          "step": "4a-reviews",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "review 1 (tap) opens the aimed room",
+              "ok": true,
+              "info": {
+                "shownId": "room_lighthouse",
+                "want": "room_lighthouse"
+              }
+            },
+            {
+              "label": "review 1 title matches room name",
+              "ok": true,
+              "info": {
+                "title": "The Last Lighthouse Keeper",
+                "want": "The Last Lighthouse Keeper"
+              }
+            },
+            {
+              "label": "review 1 shows company + city",
+              "ok": true
+            },
+            {
+              "label": "review 1 fits the viewport horizontally",
+              "ok": true,
+              "info": {
+                "w": 390,
+                "h": 844,
+                "vw": 390,
+                "vh": 844,
+                "scrollW": 390
+              }
+            },
+            {
+              "label": "review 2 (button) opens the aimed room",
+              "ok": true,
+              "info": {
+                "shownId": "room_mvnfhblpzz2v1w",
+                "want": "room_mvnfhblpzz2v1w"
+              }
+            },
+            {
+              "label": "review 2 title matches room name",
+              "ok": true,
+              "info": {
+                "title": "QA desktop Vault 74619",
+                "want": "QA desktop Vault 74619"
+              }
+            },
+            {
+              "label": "review 2 shows company + city",
+              "ok": true
+            },
+            {
+              "label": "review 2 fits the viewport horizontally",
+              "ok": true,
+              "info": {
+                "w": 390,
+                "h": 844,
+                "vw": 390,
+                "vh": 844,
+                "scrollW": 390
+              }
+            },
+            {
+              "label": "review 3 (tap) opens the aimed room",
+              "ok": true,
+              "info": {
+                "shownId": "room_noir",
+                "want": "room_noir"
+              }
+            },
+            {
+              "label": "review 3 title matches room name",
+              "ok": true,
+              "info": {
+                "title": "The Velvet Room",
+                "want": "The Velvet Room"
+              }
+            },
+            {
+              "label": "review 3 shows company + city",
+              "ok": true
+            },
+            {
+              "label": "review 3 fits the viewport horizontally",
+              "ok": true,
+              "info": {
+                "w": 390,
+                "h": 844,
+                "vw": 390,
+                "vh": 844,
+                "scrollW": 390
+              }
+            }
+          ],
+          "details": {
+            "opened": [
+              {
+                "roomId": "room_lighthouse",
+                "how": "tap",
+                "title": "The Last Lighthouse Keeper",
+                "shownId": "room_lighthouse",
+                "shot": "qa/screenshots/qa-mobile-17-review-1.png"
+              },
+              {
+                "roomId": "room_mvnfhblpzz2v1w",
+                "how": "button",
+                "title": "QA desktop Vault 74619",
+                "shownId": "room_mvnfhblpzz2v1w",
+                "shot": "qa/screenshots/qa-mobile-18-review-2.png"
+              },
+              {
+                "roomId": "room_noir",
+                "how": "tap",
+                "title": "The Velvet Room",
+                "shownId": "room_noir",
+                "shot": "qa/screenshots/qa-mobile-19-review-3.png"
+              }
+            ]
+          },
+          "ms": 54223
+        },
+        {
+          "step": "4b-sorting",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "sort genre via hud: pins regroup by genre",
+              "ok": true,
+              "info": [
+                "adventure",
+                "comedy",
+                "fantasy",
+                "heist",
+                "historical",
+                "horror",
+                "mystery",
+                "other",
+                "sci-fi",
+                "thriller"
+              ]
+            },
+            {
+              "label": "sort genre: pins animate (moving one frame after the change) and settle on targets",
+              "ok": true,
+              "info": {
+                "settled": true,
+                "midMoving": 13
+              }
+            },
+            {
+              "label": "sort genre: order changed",
+              "ok": true
+            },
+            {
+              "label": "sort genre: string re-tie sfx fired",
+              "ok": true,
+              "info": 1
+            },
+            {
+              "label": "sort date via world-tab: pins regroup by date",
+              "ok": true,
+              "info": [
+                "2023",
+                "2024",
+                "2025",
+                "2026"
+              ]
+            },
+            {
+              "label": "sort date: pins animate (moving one frame after the change) and settle on targets",
+              "ok": true,
+              "info": {
+                "settled": true,
+                "midMoving": 13
+              }
+            },
+            {
+              "label": "sort date: order changed",
+              "ok": true
+            },
+            {
+              "label": "sort date: string re-tie sfx fired",
+              "ok": true,
+              "info": 1
+            },
+            {
+              "label": "sort rating via world-tab: pins regroup by rating",
+              "ok": true,
+              "info": [
+                "90+",
+                "80-89",
+                "70-79"
+              ]
+            },
+            {
+              "label": "sort rating: pins animate (moving one frame after the change) and settle on targets",
+              "ok": true,
+              "info": {
+                "settled": true,
+                "midMoving": 13
+              }
+            },
+            {
+              "label": "sort rating: order changed",
+              "ok": true
+            },
+            {
+              "label": "sort rating: string re-tie sfx fired",
+              "ok": true,
+              "info": 1
+            },
+            {
+              "label": "sort city via world-tab: pins regroup by city",
+              "ok": true,
+              "info": [
+                "San Francisco",
+                "Toronto"
+              ]
+            },
+            {
+              "label": "sort city: pins animate (moving one frame after the change) and settle on targets",
+              "ok": true,
+              "info": {
+                "settled": true,
+                "midMoving": 11
+              }
+            },
+            {
+              "label": "sort city: order changed",
+              "ok": true
+            },
+            {
+              "label": "sort city: string re-tie sfx fired",
+              "ok": true,
+              "info": 1
+            }
+          ],
+          "details": {
+            "changes": [
+              {
+                "key": "genre",
+                "via": "hud",
+                "groups": [
+                  "adventure",
+                  "comedy",
+                  "fantasy",
+                  "heist",
+                  "historical",
+                  "horror",
+                  "mystery",
+                  "other",
+                  "sci-fi",
+                  "thriller"
+                ],
+                "orderChanged": true,
+                "midMoving": 13,
+                "stringSfx": 1,
+                "midShot": "qa/screenshots/qa-mobile-20-sort-genre-mid.png",
+                "settledShot": "qa/screenshots/qa-mobile-21-sort-genre-settled.png",
+                "pressed": null
+              },
+              {
+                "key": "date",
+                "via": "world-tab",
+                "groups": [
+                  "2023",
+                  "2024",
+                  "2025",
+                  "2026"
+                ],
+                "orderChanged": true,
+                "midMoving": 13,
+                "stringSfx": 1,
+                "midShot": "qa/screenshots/qa-mobile-22-sort-date-mid.png",
+                "settledShot": "qa/screenshots/qa-mobile-23-sort-date-settled.png",
+                "pressed": null
+              },
+              {
+                "key": "rating",
+                "via": "world-tab",
+                "groups": [
+                  "90+",
+                  "80-89",
+                  "70-79"
+                ],
+                "orderChanged": true,
+                "midMoving": 13,
+                "stringSfx": 1,
+                "midShot": "qa/screenshots/qa-mobile-24-sort-rating-mid.png",
+                "settledShot": "qa/screenshots/qa-mobile-25-sort-rating-settled.png",
+                "pressed": null
+              },
+              {
+                "key": "city",
+                "via": "world-tab",
+                "groups": [
+                  "San Francisco",
+                  "Toronto"
+                ],
+                "orderChanged": true,
+                "midMoving": 11,
+                "stringSfx": 1,
+                "midShot": "qa/screenshots/qa-mobile-26-sort-city-mid.png",
+                "settledShot": "qa/screenshots/qa-mobile-27-sort-city-settled.png",
+                "pressed": null
+              }
+            ]
+          },
+          "ms": 118692
+        },
+        {
+          "step": "5-add-entry",
+          "status": "fail",
+          "checks": [
+            {
+              "label": "opening tap does not tick a checklist prompt (no ghost click)",
+              "ok": false,
+              "info": [
+                "prompt-puzzles"
+              ]
+            },
+            {
+              "label": "transcript filled",
+              "ok": true
+            },
+            {
+              "label": "confirm screen says mock extractor",
+              "ok": true,
+              "info": "Mock extractor (no API key)"
+            },
+            {
+              "label": "save enabled after filling required",
+              "ok": true
+            },
+            {
+              "label": "room count +1",
+              "ok": true
+            },
+            {
+              "label": "new pin is on the board and landed",
+              "ok": true
+            },
+            {
+              "label": "new pin is hoverable",
+              "ok": true,
+              "info": "photo:room_mvngky8t8u9cxl"
+            },
+            {
+              "label": "persists in /api/data",
+              "ok": true,
+              "info": 14
+            },
+            {
+              "label": "review saved in /api/data",
+              "ok": true
+            },
+            {
+              "label": "new pin still on board after reload",
+              "ok": true
+            }
+          ],
+          "details": {
+            "promptsTickedOnOpen": [
+              "prompt-puzzles"
+            ],
+            "transcript": "typed",
+            "mode": "Mock extractor (no API key)",
+            "missingInitially": [
+              "error-review.visibleTimer",
+              "error-review.multiRoom",
+              "error-review.flashlights",
+              "error-review.liveActors",
+              "error-review.ratings.storyline.score",
+              "error-review.ratings.difficulty.score"
+            ],
+            "saveEnabledInitially": false,
+            "name": "QA mobile Vault 27282",
+            "newId": "room_mvngky8t8u9cxl",
+            "hoverNew": "photo:room_mvngky8t8u9cxl"
+          },
+          "ms": 85515
+        },
+        {
+          "step": "6a-wishlist",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "item added",
+              "ok": true
+            },
+            {
+              "label": "reorder up moves the item",
+              "ok": true,
+              "info": {
+                "idx0": 7,
+                "idx1": 6
+              }
+            },
+            {
+              "label": "mark done",
+              "ok": true
+            },
+            {
+              "label": "wish list persisted (added + done + order)",
+              "ok": true,
+              "info": {
+                "saved": {
+                  "id": "wish_mvngmyi1rwwwnr",
+                  "name": "QA Wish mobile 17350",
+                  "city": "",
+                  "link": "",
+                  "addedBy": "",
+                  "priority": 7,
+                  "done": true
+                },
+                "serverIdx": 6,
+                "idx1": 6
+              }
+            },
+            {
+              "label": "HUD wish list button opens it",
+              "ok": true
+            }
+          ],
+          "details": {
+            "added": {
+              "id": "wish_mvngmyi1rwwwnr",
+              "index": 7,
+              "total": 8
+            },
+            "server": {
+              "id": "wish_mvngmyi1rwwwnr",
+              "name": "QA Wish mobile 17350",
+              "city": "",
+              "link": "",
+              "addedBy": "",
+              "priority": 7,
+              "done": true
+            }
+          },
+          "ms": 78275
+        },
+        {
+          "step": "6b-wrap",
+          "status": "fail",
+          "checks": [
+            {
+              "label": "wrap starts at card 1",
+              "ok": false,
+              "info": "2 / 8"
+            },
+            {
+              "label": "stepped through every card",
+              "ok": false,
+              "info": [
+                "2 / 8",
+                "3 / 8",
+                "4 / 8",
+                "5 / 8",
+                "6 / 8",
+                "7 / 8",
+                "8 / 8",
+                "1 / 8"
+              ]
+            },
+            {
+              "label": "every card shows visible text once its animation settles",
+              "ok": true,
+              "info": []
+            }
+          ],
+          "details": {
+            "total": 8,
+            "blankCards": [],
+            "seen": [
+              "2 / 8",
+              "3 / 8",
+              "4 / 8",
+              "5 / 8",
+              "6 / 8",
+              "7 / 8",
+              "8 / 8",
+              "1 / 8"
+            ]
+          },
+          "ms": 164476,
+          "error": "locator.click: Timeout 60000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('wrap-prev')\u001b[22m\n\u001b[2m    - locator resolved to <button disabled type=\"button\" data-testid=\"wrap-prev\" aria-label=\"Previous card\" class=\"grid h-14 w-14 place-items-center rounded-full transition disabled:opacity-30 bg-white/20 text-white hover:bg-white/30\">…</button>\u001b[22m\n\u001b[2m  - attempting click action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible, enabled and stable\u001b[22m"
+        },
+        {
+          "step": "2b-gate-wrong-answers",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "no hints after 1 miss",
+              "ok": true
+            },
+            {
+              "label": "2 wrong answers reveal hints",
+              "ok": true
+            },
+            {
+              "label": "hint text is visible (opacity 1, non-empty)",
+              "ok": true,
+              "info": {
+                "text": "✦\nHint 1: Solve the clues in order: clue 1 is the first digit.",
+                "opacity": "1"
+              }
+            },
+            {
+              "label": "skip becomes available (after 2 misses, or after the 3rd)",
+              "ok": true,
+              "info": {
+                "after2": false
+              }
+            },
+            {
+              "label": "skip enters the room",
+              "ok": true
+            }
+          ],
+          "details": {
+            "kind": "lock",
+            "miss1": "typed 111",
+            "miss2": "typed 111",
+            "hint": {
+              "text": "✦\nHint 1: Solve the clues in order: clue 1 is the first digit.",
+              "opacity": "1"
+            },
+            "skipAfter2": false,
+            "miss3": "typed 111",
+            "skipShowsReveal": false,
+            "lastSolvedAfterSkip": "2026-10-25"
+          },
+          "ms": 94600
+        },
+        {
+          "step": "2c-gate-kinds",
+          "status": "pass",
+          "checks": [
+            {
+              "label": "gate lock: renders as lock",
+              "ok": true,
+              "info": "lock"
+            },
+            {
+              "label": "gate lock: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate lock: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 390,
+                "vw": 390
+              }
+            },
+            {
+              "label": "gate cipher: renders as cipher",
+              "ok": true,
+              "info": "cipher"
+            },
+            {
+              "label": "gate cipher: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate cipher: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 390,
+                "vw": 390
+              }
+            },
+            {
+              "label": "gate sequence: renders as sequence",
+              "ok": true,
+              "info": "sequence"
+            },
+            {
+              "label": "gate sequence: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate sequence: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 390,
+                "vw": 390
+              }
+            },
+            {
+              "label": "gate search: renders as search",
+              "ok": true,
+              "info": "search"
+            },
+            {
+              "label": "gate search: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate search: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 390,
+                "vw": 390
+              }
+            },
+            {
+              "label": "gate recall: renders as recall",
+              "ok": true,
+              "info": "recall"
+            },
+            {
+              "label": "gate recall: solvable through UI",
+              "ok": true
+            },
+            {
+              "label": "gate recall: no horizontal overflow",
+              "ok": true,
+              "info": {
+                "sw": 390,
+                "vw": 390
+              }
+            }
+          ],
+          "details": {
+            "kinds": {
+              "lock": {
+                "kind": "lock",
+                "fit": {
+                  "sw": 390,
+                  "vw": 390
+                },
+                "solved": true
+              },
+              "cipher": {
+                "kind": "cipher",
+                "fit": {
+                  "sw": 390,
+                  "vw": 390
+                },
+                "solved": true
+              },
+              "sequence": {
+                "kind": "sequence",
+                "fit": {
+                  "sw": 390,
+                  "vw": 390
+                },
+                "solved": true
+              },
+              "search": {
+                "kind": "search",
+                "fit": {
+                  "sw": 390,
+                  "vw": 390
+                },
+                "solved": true
+              },
+              "recall": {
+                "kind": "recall",
+                "fit": {
+                  "sw": 390,
+                  "vw": 390
+                },
+                "solved": true
+              }
+            }
+          },
+          "ms": 373771
+        }
+      ],
+      "shots": [
+        "qa/screenshots/qa-mobile-01-loading.png",
+        "qa/screenshots/qa-mobile-02-gate-open.png",
+        "qa/screenshots/qa-mobile-03-gate-solved.png",
+        "qa/screenshots/qa-mobile-04-room-after-gate.png",
+        "qa/screenshots/qa-mobile-05-reload-no-gate.png",
+        "qa/screenshots/qa-mobile-06-debug-readout.png",
+        "qa/screenshots/qa-mobile-07-anchor-bulletin-board.png",
+        "qa/screenshots/qa-mobile-08-anchor-desk.png",
+        "qa/screenshots/qa-mobile-09-anchor-wrap-trophy.png",
+        "qa/screenshots/qa-mobile-10-anchor-gate-door.png",
+        "qa/screenshots/qa-mobile-11-anchor-living-area.png",
+        "qa/screenshots/qa-mobile-12-anchor-shelves.png",
+        "qa/screenshots/qa-mobile-13-anchor-wishlist-board.png",
+        "qa/screenshots/qa-mobile-14-push-north-wall.png",
+        "qa/screenshots/qa-mobile-15-push-couch.png",
+        "qa/screenshots/qa-mobile-16-push-gate-door.png",
+        "qa/screenshots/qa-mobile-17-review-1.png",
+        "qa/screenshots/qa-mobile-18-review-2.png",
+        "qa/screenshots/qa-mobile-19-review-3.png",
+        "qa/screenshots/qa-mobile-20-sort-genre-mid.png",
+        "qa/screenshots/qa-mobile-21-sort-genre-settled.png",
+        "qa/screenshots/qa-mobile-22-sort-date-mid.png",
+        "qa/screenshots/qa-mobile-23-sort-date-settled.png",
+        "qa/screenshots/qa-mobile-24-sort-rating-mid.png",
+        "qa/screenshots/qa-mobile-25-sort-rating-settled.png",
+        "qa/screenshots/qa-mobile-26-sort-city-mid.png",
+        "qa/screenshots/qa-mobile-27-sort-city-settled.png",
+        "qa/screenshots/qa-mobile-28-record-overlay.png",
+        "qa/screenshots/qa-mobile-29-record-transcript.png",
+        "qa/screenshots/qa-mobile-30-confirm-initial.png",
+        "qa/screenshots/qa-mobile-31-confirm-filled.png",
+        "qa/screenshots/qa-mobile-32-pin-flying.png",
+        "qa/screenshots/qa-mobile-33-pin-landed.png",
+        "qa/screenshots/qa-mobile-34-wishlist-board-unhovered.png",
+        "qa/screenshots/qa-mobile-35-wishlist-board.png",
+        "qa/screenshots/qa-mobile-36-wishlist-open.png",
+        "qa/screenshots/qa-mobile-37-wishlist-adding.png",
+        "qa/screenshots/qa-mobile-38-wishlist-edited.png",
+        "qa/screenshots/qa-mobile-39-wrap-card-1.png",
+        "qa/screenshots/qa-mobile-40-wrap-card-2.png",
+        "qa/screenshots/qa-mobile-41-wrap-card-3.png",
+        "qa/screenshots/qa-mobile-42-wrap-card-4.png",
+        "qa/screenshots/qa-mobile-43-wrap-card-5.png",
+        "qa/screenshots/qa-mobile-44-wrap-card-6.png",
+        "qa/screenshots/qa-mobile-45-wrap-card-7.png",
+        "qa/screenshots/qa-mobile-46-wrap-card-8.png",
+        "qa/screenshots/qa-mobile-90-gate-two-misses.png",
+        "qa/screenshots/qa-mobile-91-gate-skipped.png",
+        "qa/screenshots/qa-mobile-92-gate-kind-lock.png",
+        "qa/screenshots/qa-mobile-93-gate-kind-cipher.png",
+        "qa/screenshots/qa-mobile-94-gate-kind-sequence.png",
+        "qa/screenshots/qa-mobile-95-gate-kind-search.png",
+        "qa/screenshots/qa-mobile-96-gate-kind-recall.png"
+      ],
+      "notes": [],
+      "consoleErrors": [],
+      "consoleWarnings": [
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+        "THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+      ],
+      "pageErrors": [],
+      "failedRequests": [],
+      "perf": {
+        "medium": {
+          "rafFps": 1.44,
+          "runtimeFps": 1.34,
+          "frames": 7,
+          "drawCallsAvg": 127,
+          "drawCallsMax": 127,
+          "trianglesAvg": 38557,
+          "trianglesMax": 38557,
+          "debugReadout": "1.3 fps  medium\n1 draws  0.0k tris",
+          "quality": "medium"
+        },
+        "low": {
+          "rafFps": 4.16,
+          "runtimeFps": 9.92,
+          "frames": 22,
+          "drawCallsAvg": 99,
+          "drawCallsMax": 99,
+          "trianglesAvg": 23256,
+          "trianglesMax": 23256,
+          "debugReadout": "7.0 fps  low\n99 draws  23.3k tris",
+          "quality": "low"
+        },
+        "high": {
+          "rafFps": 1.09,
+          "runtimeFps": 1.02,
+          "frames": 5,
+          "drawCallsAvg": 127,
+          "drawCallsMax": 127,
+          "trianglesAvg": 38557,
+          "trianglesMax": 38557,
+          "debugReadout": "1.0 fps  high\n1 draws  0.0k tris",
+          "quality": "high"
+        },
+        "medium-again": {
+          "rafFps": 1.21,
+          "runtimeFps": 0.74,
+          "frames": 6,
+          "drawCallsAvg": 127,
+          "drawCallsMax": 127,
+          "trianglesAvg": 38557,
+          "trianglesMax": 38557,
+          "debugReadout": "0.7 fps  medium\n1 draws  0.0k tris",
+          "quality": "medium"
+        }
+      }
+    }
+  },
+  "finishedAt": "2026-10-25T06:53:15.224Z"
+}
