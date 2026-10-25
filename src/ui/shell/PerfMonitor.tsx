@@ -18,6 +18,28 @@ export function PerfMonitor() {
   const governor = useRef(initialGovernor())
   const readout = useRef<HTMLDivElement | null>(null)
   const lastReadout = useRef(0)
+  const frameTotals = useRef({ calls: 0, triangles: 0 })
+
+  // Post-processing renders several passes per frame, and `gl.info` resets on every
+  // render call by default. With the readout on, count across the whole frame instead.
+  useEffect(() => {
+    if (!flags.debug) return
+    const prev = gl.info.autoReset
+    gl.info.autoReset = false
+    gl.info.reset()
+    return () => {
+      gl.info.autoReset = prev
+    }
+  }, [flags.debug, gl])
+
+  // Runs first each frame (negative priority does not take over rendering): keep the
+  // previous frame's totals, then start counting the new frame from zero.
+  useFrame(() => {
+    if (!flags.debug) return
+    frameTotals.current.calls = gl.info.render.calls
+    frameTotals.current.triangles = gl.info.render.triangles
+    gl.info.reset()
+  }, -1000)
 
   // Load budget check, once the page has finished loading.
   useEffect(() => {
@@ -66,7 +88,7 @@ export function PerfMonitor() {
 
     if (readout.current && state.clock.elapsedTime - lastReadout.current > 0.5) {
       lastReadout.current = state.clock.elapsedTime
-      const info = gl.info.render
+      const info = frameTotals.current
       readout.current.textContent = `${runtime.fps.toFixed(runtime.fps < 10 ? 1 : 0)} fps  ${st.settings.quality}\n${info.calls} draws  ${(info.triangles / 1000).toFixed(1)}k tris`
     }
   })

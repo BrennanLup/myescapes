@@ -24,7 +24,7 @@ Settings: look sensitivity (0.2-3), invert Y, head bob, quality presets (`qualit
 - Writes an EMA-smoothed `runtime.fps` every frame.
 - Governor (`stepGovernor`): after a 3 s warm-up, if fps stays below 40 for 6 s at medium or high quality, it switches to Low once per session and shows "Switched to Low quality for smoother play". It is disabled under `navigator.webdriver`, in a hidden tab and before `worldReady`.
 - 1.5 s after window load, it prints a console warning if `totalAssetBytes()` or the summed `transferSize` of the navigation and resource entries is over `LOAD_BUDGET_BYTES`.
-- `?debug=1` shows an fps, draw-call and triangle readout (`perf-readout`, read from `gl.info`).
+- `?debug=1` shows an fps, draw-call and triangle readout (`perf-readout`, read from `gl.info`, totalled across all render passes of a frame). On narrow screens the HUD buttons sit in one row along the top, and on touch the controls hint sits under them, clear of the joystick.
 
 ## Simplifications
 - The downgrade goes straight to Low (it matches the toast copy), not one preset at a time.
