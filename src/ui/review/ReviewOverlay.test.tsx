@@ -4,7 +4,7 @@ import { bus } from '@/contracts/events'
 import { FIXTURE_DATASET } from '@/contracts/fixtures'
 import { useStore } from '@/state/store'
 import { ReviewOverlay } from './index'
-import { boardOrder, neighbours, formatDate, initials, safeUrl } from './helpers'
+import { boardOrder, neighbours, formatAddress, formatDate, initials, mapsUrl, safeUrl } from './helpers'
 
 function setup(pins: Array<{ roomId: string; order: number }> = []) {
   useStore.getState().setDataset(structuredClone(FIXTURE_DATASET))
@@ -162,6 +162,14 @@ describe('ReviewOverlay', () => {
 })
 
 describe('helpers', () => {
+  it('formatAddress does not repeat a city the address already contains', () => {
+    expect(formatAddress('418 Bayview Wharf, San Francisco, CA', 'San Francisco')).toBe('418 Bayview Wharf, San Francisco, CA')
+    expect(formatAddress('12 Main St', 'Toronto')).toBe('12 Main St, Toronto')
+    expect(formatAddress('', 'Toronto')).toBe('Toronto')
+    expect(formatAddress('12 Main St', '')).toBe('12 Main St')
+    expect(mapsUrl('1 Rue X, paris', 'Paris')).toContain(encodeURIComponent('1 Rue X, paris'))
+    expect(mapsUrl('1 Rue X, paris', 'Paris')).not.toContain('Paris')
+  })
   it('boardOrder sorts pins and appends unpinned rooms', () => {
     const rooms = FIXTURE_DATASET.rooms
     const pins = [

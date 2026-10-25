@@ -7,6 +7,7 @@ import { CalendarIcon, ChevronLeft, ChevronRight, CloseIcon, GlobeIcon, PinIcon 
 import {
   avatarColor,
   boardOrder,
+  formatAddress,
   formatDate,
   galleryPhotos,
   genreColor,
@@ -119,7 +120,7 @@ function Header({ room, review, titleId }: { room: Room; review?: Review; titleI
             className="inline-flex min-h-10 max-w-full items-center gap-1.5 rounded-full border border-panel-edge bg-white/70 px-3 text-sm font-bold text-teal hover:bg-white focus-visible:outline-3 focus-visible:outline-accent"
           >
             <PinIcon size={16} />
-            <span className="truncate">{room.address ? `${room.address}, ${room.city}` : room.city}</span>
+            <span className="truncate">{formatAddress(room.address, room.city)}</span>
           </a>
         )}
       </div>

@@ -102,7 +102,7 @@ src/
   gate/                 Daily memory puzzle (door + overlay)
   ui/                   Overlays: review, record, confirm, wrap, shell (loading, HUD, settings)
   audio/                Synthesized ambience and sound effects
-seed/                   12 sample rooms and generated SVG polaroids
+seed/                   12 sample rooms and generated SVG photos
 e2e/                    Playwright tests
 scripts/                start.mjs (one-command run), screenshot helper
 ```

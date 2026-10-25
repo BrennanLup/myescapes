@@ -78,7 +78,9 @@ describe('seed/reviews.json', () => {
         const file = path.join(root, 'public', p.url)
         expect(existsSync(file)).toBe(true)
         const kb = statSync(file).size / 1024
-        expect(kb).toBeGreaterThan(3)
+        expect(kb).toBeGreaterThan(1.5)
+        // Bare photo: the views draw their own polaroid frame and caption.
+        expect(readFileSync(file, 'utf8')).not.toContain('Caveat')
         expect(kb).toBeLessThan(14)
       })
     }

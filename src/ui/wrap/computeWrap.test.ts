@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FIXTURE_DATASET } from '@/contracts/fixtures'
 import type { Review, Room } from '@/contracts/types'
-import { availableYears, computeWrap, defaultWrapYear } from './computeWrap'
+import { availableYears, cityListLabel, computeWrap, defaultWrapYear } from './computeWrap'
 
 const { rooms, reviews } = FIXTURE_DATASET
 
@@ -35,6 +35,8 @@ describe('computeWrap on the fixture', () => {
     // so canonical order decides: lock-and-key.
     expect(w.favouritePuzzleType?.type).toBe('lock-and-key')
     expect(w.cities).toEqual([{ city: 'San Francisco', count: 2 }])
+    expect(w.totalPuzzles).toBe(w.puzzleTypes.reduce((a, t) => a + t.count, 0))
+    expect(w.totalPuzzles).toBe(reviews.filter((r) => r.date.startsWith('2025')).reduce((a, r) => a + r.puzzles.length, 0))
     expect(w.totalMinutes).toBe(99)
     expect(w.crewMvp).toEqual({ name: 'Maya', count: 2 })
     expect(w.longestEscapeStreak).toBe(2)
@@ -152,5 +154,15 @@ describe('computeWrap edge cases', () => {
     const w = computeWrap(many, revs, 'all')
     expect(w.roomsDone).toBe(200)
     expect(availableYears(revs)).toHaveLength(15)
+  })
+})
+
+describe('cityListLabel', () => {
+  it('lists cities and summarises the rest', () => {
+    expect(cityListLabel([])).toBe('')
+    expect(cityListLabel([{ city: 'Toronto' }])).toBe('Toronto')
+    expect(cityListLabel([{ city: 'San Francisco' }, { city: 'Toronto' }])).toBe('San Francisco, Toronto')
+    expect(cityListLabel([{ city: 'A' }, { city: 'B' }, { city: 'C' }, { city: 'D' }])).toBe('A, B +2 more')
+    expect(cityListLabel([{ city: 'A' }, { city: 'B' }], 1)).toBe('A +1 more')
   })
 })

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { bus } from '@/contracts/events'
 import { GENRE_COLORS, PUZZLE_TYPE_COLORS } from '@/contracts/style'
+import { PUZZLE_TYPE_LABELS } from '@/contracts/types'
 import { useStore } from '@/state/store'
 import type { Challenge, CipherChallenge, LockChallenge, SequenceChallenge } from './generators'
 import { canHint, canSkip } from './machine'
@@ -300,7 +301,7 @@ function Reveal({ gate, skipped, revisit, onContinue, onReplay }: { gate: DailyG
           )}
           <div className="mt-2 rounded-xl border border-panel-edge bg-paper p-2.5 text-[15px] text-ink">
             <span className="mr-1 rounded-full px-2 py-0.5 text-xs font-bold text-white" style={{ background: PUZZLE_TYPE_COLORS[puzzle.type] ?? '#7a8a8a' }}>
-              {puzzle.type}
+              {PUZZLE_TYPE_LABELS[puzzle.type] ?? puzzle.type}
             </span>
             {puzzle.description}
           </div>

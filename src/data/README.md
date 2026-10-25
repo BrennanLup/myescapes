@@ -14,7 +14,7 @@ Storage for rooms, reviews, puzzles, wishlist and crew, the `/api/data`, `/api/e
 | `src/data/server/sheetMapping.ts` | Pure row-to-entity mapping in both directions (unit-tested) |
 | `server/routes/sheet.ts` | `sheetRoutes(app, { repository? })` and `storageMode()` |
 | `seed/reviews.json` | 12 rooms (6 San Francisco, 6 Toronto), 12 reviews, 5 crew, 6 wishlist items |
-| `seed/generate-photos.ts` | Builds the polaroid SVGs in `public/seed/photos/` (`npx tsx seed/generate-photos.ts`) |
+| `seed/generate-photos.ts` | Builds the seed photo SVGs in `public/seed/photos/` (`npx tsx seed/generate-photos.ts`) |
 
 Browser code must only import `src/data/index.ts`. The `server/` subfolder uses Node APIs.
 
@@ -62,11 +62,11 @@ Writes:
 
 12 invented rooms from 6 companies. Fog City Escapes, Lockbox Social and Maple & Key each run several rooms, and Lockbox Social runs rooms in both cities. The seed covers all 10 genres and all 6 puzzle types, with dates from 2023 to 2026. Three escapes failed and one escape time is unknown. Every boolean is used both ways, `toolsUsed` varies, and 7 reviews have a voice transcript. All addresses and websites are fake (`*.example.com`).
 
-Photos are 18 SVG polaroids of about 3.5-10 KB each, made from simple shapes in the `style.ts` palette:
+Photos are 18 bare SVG photo scenes (356x330, no frame or caption: the board, gallery, gate and wrap draw their own polaroid frame and handwritten caption) of about 3-10 KB each, made from simple shapes in the `style.ts` palette:
 - `<roomId>-1.svg` is a scene for the room's genre: lighthouse, vault door, rocket, haunted house with a friendly ghost, saloon, pickle circus tent, castle with dragon, jungle temple, steam train, lab with hamster, attic, or jazz club.
 - `<roomId>-2.svg`, where it exists, is a crew photo holding an "ESCAPED 49:00" or "SO CLOSE!" sign.
 
-Room photos go in `room.photos`. Seed `review.photos` are empty. The caption font falls back to the browser's cursive font, because an SVG loaded as an `<img>` cannot use page web fonts.
+Room photos go in `room.photos`. Seed `review.photos` are empty.
 
 ## Tests
 

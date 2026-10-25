@@ -1,5 +1,5 @@
 import type { BoardPin } from '@/state/store'
-import type { Photo, PuzzleType, RatingKey, Review, Room } from '@/contracts/types'
+import type { Photo, RatingKey, Review, Room } from '@/contracts/types'
 import { GENRE_COLORS } from '@/contracts/style'
 
 /** Room ids in board order: board pins sorted by `order`, else the rooms array order. */
@@ -32,14 +32,7 @@ export const RATING_LABELS: Record<RatingKey, string> = {
   difficulty: 'Difficulty',
 }
 
-export const PUZZLE_TYPE_LABELS: Record<PuzzleType, string> = {
-  'lock-and-key': 'Lock & key',
-  logic: 'Logic',
-  math: 'Math',
-  physical: 'Physical',
-  search: 'Search',
-  'audio-visual': 'Audio-visual',
-}
+export { PUZZLE_TYPE_LABELS } from '@/contracts/types'
 
 export function genreLabel(genre: string): string {
   if (genre === 'sci-fi') return 'Sci-fi'
@@ -104,8 +97,17 @@ export function prettyHost(url: string): string {
   }
 }
 
+/** "address, city", without repeating the city when the address already names it. */
+export function formatAddress(address: string, city: string): string {
+  const a = address.trim()
+  const c = city.trim()
+  if (!a) return c
+  if (!c || a.toLowerCase().includes(c.toLowerCase())) return a
+  return `${a}, ${c}`
+}
+
 export function mapsUrl(address: string, city: string): string {
-  const q = [address, city].filter(Boolean).join(', ')
+  const q = formatAddress(address, city)
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`
 }
 
