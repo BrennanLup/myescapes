@@ -13,10 +13,11 @@ import { bus } from '@/contracts/events'
 import { interactable } from '@/contracts/interaction'
 import { runtime } from '@/contracts/runtime'
 import { ANCHORS, type Vec3 } from '@/contracts/scene'
-import { boxFromCenter, useColliders } from '@/contracts/colliders'
+import { useColliders } from '@/contracts/colliders'
 import { GENRE_COLORS, PALETTE, UI } from '@/contracts/style'
 import { SORT_KEYS, SORT_LABELS, type Review, type Room, type SortKey } from '@/contracts/types'
 import { useStore, type BoardPin } from '@/state/store'
+import { boardColliders } from './colliders'
 import { layoutBoard, PHOTO_ASPECT, PIN_LOCAL_Y, PIN_LOCAL_Z, slotPinLocal, type BoardLayout, type LayoutGroup } from './layout'
 import {
   drawLabelCard,
@@ -469,10 +470,7 @@ export function BulletinBoard() {
   const initialized = useRef(false)
   const prevLastAdded = useRef<string | null>(lastAddedRoomId)
 
-  const colliderBoxes = useMemo(
-    () => [boxFromCenter('board:north', [AX, AY, AZ + BOARD_D / 2], [BOARD_W, BOARD_H, BOARD_D])],
-    [],
-  )
+  const colliderBoxes = useMemo(() => boardColliders(), [])
   useColliders(colliderBoxes)
 
   // Hover id without re-rendering.

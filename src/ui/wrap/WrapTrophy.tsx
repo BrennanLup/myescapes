@@ -9,19 +9,14 @@ import * as THREE from 'three'
 import { Anchor } from '@/world/Anchor'
 import { getMaterial } from '@/world/materials'
 import { interactable } from '@/contracts/interaction'
-import { anchorToWorld, ANCHORS, type Vec3 } from '@/contracts/scene'
-import { useColliders, type AABB } from '@/contracts/colliders'
+import { useColliders } from '@/contracts/colliders'
 import { useStore } from '@/state/store'
 import { LIGHT, PALETTE } from '@/contracts/style'
 import { CAL_H, CAL_W, drawCalendar } from './calendarTexture'
+import { SHELF_DEPTH, SHELF_W, SHELF_Y, WALL_Z, wrapColliders } from './colliders'
 
 export const WRAP_TROPHY_ID = 'wrap:trophy'
 
-/** Wall surface in anchor-local Z (anchor sits 0.25 m in front of the west wall). */
-const WALL_Z = -(ANCHORS.wrapTrophy.position[0] + 10)
-const SHELF_Y = 1.1
-const SHELF_DEPTH = 0.34
-const SHELF_W = 1.5
 /** Brass always glows a touch so it reads as gold in dim corners; hover adds more. */
 const BASE_GLOW = 0.08
 
@@ -275,13 +270,7 @@ export function WrapTrophy() {
     felt.emissiveIntensity = next * 0.05
   })
 
-  const boxes = useMemo<AABB[]>(() => {
-    const a = anchorToWorld('wrapTrophy', [-SHELF_W / 2 - 0.03, SHELF_Y - 0.12, WALL_Z])
-    const b = anchorToWorld('wrapTrophy', [SHELF_W / 2 + 0.03, SHELF_Y + 0.6, WALL_Z + SHELF_DEPTH + 0.02])
-    const min: Vec3 = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.min(a[2], b[2])]
-    const max: Vec3 = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.max(a[2], b[2])]
-    return [{ id: 'wrap:shelf', min, max }]
-  }, [])
+  const boxes = useMemo(() => wrapColliders(), [])
   useColliders(boxes)
 
   const shelfZ = WALL_Z + SHELF_DEPTH / 2

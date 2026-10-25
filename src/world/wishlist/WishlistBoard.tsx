@@ -7,11 +7,12 @@ import * as THREE from 'three'
 import { Anchor } from '@/world/Anchor'
 import { getMaterial } from '@/world/materials'
 import { ANCHORS } from '@/contracts/scene'
-import { boxFromCenter, useColliders } from '@/contracts/colliders'
+import { useColliders } from '@/contracts/colliders'
 import { interactable } from '@/contracts/interaction'
 import { LIGHT } from '@/contracts/style'
 import { useStore } from '@/state/store'
 import { CANVAS_H, CANVAS_W, drawChalkList } from './chalkTexture'
+import { wishlistColliders } from './colliders'
 
 export const BOARD_ID = 'wishlist:board'
 
@@ -159,11 +160,7 @@ export function WishlistBoard() {
   )
   useEffect(() => () => chalkMat.dispose(), [chalkMat])
 
-  const boxes = useMemo(() => {
-    const a = ANCHORS.wishlistBoard
-    // Board hangs on the east wall facing -X; reserve a thin slab in front of it.
-    return [boxFromCenter('wishlist:board', [a.position[0] - 0.15, a.position[1], a.position[2]], [0.3, H + 0.1, W + 0.1])]
-  }, [])
+  const boxes = useMemo(() => wishlistColliders(), [])
   useColliders(boxes)
 
   useFrame((_, dt) => {

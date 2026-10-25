@@ -43,5 +43,5 @@ A small daily memory puzzle that greets you on entry, framed as a vintage safe d
 
 ## Simplifications
 - The gate is picked once per day per page load, from the data present when it first opens. An entry added mid-session doesn't swap it.
-- The door's open swing is purely visual. Its collider covers the swing area.
+- The door opens a right angle, so the open leaf stands against its hinge side (world x of about +0.55) instead of sweeping across the doorway. Colliders (`colliders.ts`, pure): `gate:door` is a 0.12 m slab that hugs the wall across the casing, and `gate:door-leaf` (only while solved) wraps the open leaf. Both stay clear of the x = 0 line, so from the room centre you can walk 7.5 m south.
 - No backdrop blur behind the overlay: it made software-WebGL screenshots time out.

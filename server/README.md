@@ -25,7 +25,8 @@ npm run serve          # just the server (expects dist/ to exist)
 | --- | --- |
 | `index.ts` | `buildServer({ distDir?, logger? })` and the CLI entry (listen, banner, graceful shutdown, port-in-use message) |
 | `env.ts` | Loads `.env` quietly (imported first), `appVersion()` from package.json, `resolvePort()`, `startupBanner()` |
-| `static.ts` | Static serving of `dist/`, caching, SPA fallback, JSON 404s, "run npm run build" page |
+| `static.ts` | Static serving of `dist/`, caching, br/gzip variants, SPA fallback, JSON 404s, "run npm run build" page |
+| `precompress.ts` | `precompressDist(dir)`: writes `.br`/`.gz` siblings for text assets (post-build step and at startup) |
 | `routes/extract.ts`, `routes/sheet.ts` | API routes (owned by other workstreams) |
 
 ## Routes and behaviour
@@ -37,6 +38,7 @@ npm run serve          # just the server (expects dist/ to exist)
 - `/assets/*` (Vite hashed files): `Cache-Control: public, max-age=31536000, immutable`. A missing asset is a plain 404, never HTML.
 - `index.html` (and the SPA fallback for any other GET): `Cache-Control: no-cache`.
 - Other files in `dist/` (favicon etc.): `public, max-age=3600`.
+- Compression: text files in `dist/` (`.js .css .svg .html .json ...`, 512 bytes or more) get precompressed `.br` (quality 11) and `.gz` (level 9) siblings. `npm run build` writes them (`tsx server/precompress.ts` after `vite build`), and startup rewrites any that are missing or older than their source. When `Accept-Encoding` allows, the server sends the compressed sibling with `Content-Encoding: br|gzip`, the original `Content-Type`, the same `Cache-Control` as the plain file, and `Vary: accept-encoding`. Images and clients without `Accept-Encoding` get the plain file. The 1.63 MB bundle goes out as about 360 KB of brotli (456 KB gzip).
 - No `dist/` at startup: GETs get a small 503 page saying to run `npm run build`; the API still works. The check happens once at startup, so restart after building.
 
 On start the server prints which features are real or mock and which env vars switch them (names only, never values). Ctrl+C / SIGTERM closes the server gracefully (forced exit after 5 s). If the port is taken it prints `Try another port: PORT=3001 npm start` and exits 1.

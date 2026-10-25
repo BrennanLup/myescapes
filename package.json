@@ -11,7 +11,7 @@
     "start": "node scripts/start.mjs",
     "dev": "vite",
     "dev:server": "tsx watch server/index.ts",
-    "build": "vite build",
+    "build": "vite build && tsx server/precompress.ts",
     "serve": "tsx server/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",

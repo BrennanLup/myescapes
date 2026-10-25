@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AABB } from '@/contracts/colliders'
-import { ANCHORS, HALF_D, HALF_W, LAMPS, ROOM } from '@/contracts/scene'
+import { ANCHORS, HALF_D, HALF_W, LAMPS, PLAYER, ROOM } from '@/contracts/scene'
 import { LIVING_COLLIDERS } from './layout'
 import { buildLivingSet } from './set'
 
@@ -80,6 +80,30 @@ describe('living colliders', () => {
         expect(overlap, `${c.id} overlaps ${name}`).toBe(false)
       }
     }
+  })
+
+  it('nothing stands squarely on the room centre lines (x = 0, z = 0)', () => {
+    // A box that only grazes a line (like the orange bean bag) just nudges the player aside, but one
+    // that covers the line itself stops a straight walk from the centre dead (the old floor lamp did).
+    const band = 0.15
+    for (const c of LIVING_COLLIDERS) {
+      expect(c.min[2] < band && c.max[2] > -band, `${c.id} sits on the z = 0 line`).toBe(false)
+      expect(c.min[0] < band && c.max[0] > -band, `${c.id} sits on the x = 0 line`).toBe(false)
+    }
+    // The floor lamp keeps a full player radius off the line, so the walk east is not even nudged.
+    const lamp = LIVING_COLLIDERS.find((c) => c.id === 'living:floor-lamp')!
+    expect(lamp.min[2]).toBeGreaterThan(PLAYER.radius)
+  })
+
+  it('stands the floor lamp just behind the north end of the couch', () => {
+    const lamp = LIVING_COLLIDERS.find((c) => c.id === 'living:floor-lamp')!
+    const couch = LIVING_COLLIDERS.find((c) => c.id === 'living:couch')!
+    // Behind the couch back (the couch faces -X, towards the room).
+    expect(lamp.min[0]).toBeGreaterThanOrEqual(couch.max[0])
+    expect(lamp.min[0] - couch.max[0]).toBeLessThan(0.3)
+    // Level with the couch's north end, so the shade hangs over the arm as a reading light.
+    expect(LAMPS.floorLamp[2]).toBeGreaterThan(couch.min[2])
+    expect(LAMPS.floorLamp[2]).toBeLessThan(couch.min[2] + 0.6)
   })
 
   it('colliders do not overlap each other', () => {

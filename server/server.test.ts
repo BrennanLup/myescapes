@@ -1,11 +1,13 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { brotliDecompressSync, gunzipSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { buildServer, type EscapeServer } from './index'
 import { ServerStatusSchema, HealthSchema } from '../src/contracts/api'
 import { CACHE_IMMUTABLE, CACHE_NONE, cacheControlFor } from './static'
+import { precompressDist } from './precompress'
 import { startupBanner, resolvePort } from './env'
 
 const INDEX = '<!doctype html><html><body><div id="root">spa</div></body></html>'
@@ -95,6 +97,98 @@ describe('buildServer with a dist folder', () => {
   })
 })
 
+describe('precompressed static assets', () => {
+  const JS = `export const rooms = [${Array.from({ length: 400 }, (_, i) => `{ id: ${i}, name: "room ${i}" }`).join(', ')}]\n`
+  const CSS = `.cozy{color:#ffb067;padding:12px}\n`.repeat(200)
+  const BIG_INDEX = `<!doctype html><html><body><div id="root">spa</div>${'<!-- cozy -->'.repeat(100)}</body></html>`
+  const JPG = Buffer.alloc(4096, 7)
+  let dir: string
+  let app: EscapeServer
+
+  beforeAll(async () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'escapes-gz-'))
+    mkdirSync(path.join(dir, 'assets'))
+    writeFileSync(path.join(dir, 'index.html'), BIG_INDEX)
+    writeFileSync(path.join(dir, 'assets', 'index-abc123.js'), JS)
+    writeFileSync(path.join(dir, 'assets', 'index-abc123.css'), CSS)
+    writeFileSync(path.join(dir, 'assets', 'tiny-1.js'), 'x()')
+    writeFileSync(path.join(dir, 'photo.jpg'), JPG)
+    app = await buildServer({ distDir: dir })
+  })
+  afterAll(async () => {
+    await app.close()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('writes .br and .gz siblings at startup for text assets only', () => {
+    for (const f of ['index.html', 'assets/index-abc123.js', 'assets/index-abc123.css']) {
+      expect(existsSync(path.join(dir, `${f}.br`))).toBe(true)
+      expect(existsSync(path.join(dir, `${f}.gz`))).toBe(true)
+    }
+    expect(existsSync(path.join(dir, 'photo.jpg.br'))).toBe(false)
+    expect(existsSync(path.join(dir, 'assets', 'tiny-1.js.br'))).toBe(false)
+  })
+
+  it('does not rewrite fresh siblings', () => {
+    const again = precompressDist(dir)
+    expect(again.files).toHaveLength(3)
+    expect(again.written).toBe(0)
+  })
+
+  it('serves brotli when the client accepts br', async () => {
+    const res = await app.inject({ method: 'GET', url: '/assets/index-abc123.js', headers: { 'accept-encoding': 'br, gzip' } })
+    expect(res.statusCode).toBe(200)
+    expect(res.headers['content-encoding']).toBe('br')
+    expect(res.headers['content-type']).toMatch(/javascript/)
+    expect(res.headers['cache-control']).toBe(CACHE_IMMUTABLE)
+    expect(String(res.headers.vary)).toMatch(/accept-encoding/i)
+    expect(res.rawPayload.length).toBeLessThan(JS.length / 3)
+    expect(brotliDecompressSync(res.rawPayload).toString()).toBe(JS)
+  })
+
+  it('serves gzip when the client accepts only gzip', async () => {
+    const res = await app.inject({ method: 'GET', url: '/assets/index-abc123.css', headers: { 'accept-encoding': 'gzip' } })
+    expect(res.headers['content-encoding']).toBe('gzip')
+    expect(res.headers['content-type']).toMatch(/text\/css/)
+    expect(res.headers['cache-control']).toBe(CACHE_IMMUTABLE)
+    expect(gunzipSync(res.rawPayload).toString()).toBe(CSS)
+  })
+
+  it('serves the plain file without Accept-Encoding, still varying on it', async () => {
+    const res = await app.inject({ method: 'GET', url: '/assets/index-abc123.js' })
+    expect(res.headers['content-encoding']).toBeUndefined()
+    expect(String(res.headers.vary)).toMatch(/accept-encoding/i)
+    expect(res.body).toBe(JS)
+  })
+
+  it('compresses index.html and the SPA fallback, keeping no-cache', async () => {
+    for (const url of ['/', '/some/route']) {
+      const res = await app.inject({ method: 'GET', url, headers: { 'accept-encoding': 'gzip, deflate, br' } })
+      expect(res.statusCode).toBe(200)
+      expect(res.headers['content-encoding']).toBe('br')
+      expect(res.headers['content-type']).toMatch(/text\/html/)
+      expect(res.headers['cache-control']).toBe(CACHE_NONE)
+      expect(brotliDecompressSync(res.rawPayload).toString()).toBe(BIG_INDEX)
+    }
+  })
+
+  it('falls back to the plain file when no compressed sibling exists', async () => {
+    const tiny = await app.inject({ method: 'GET', url: '/assets/tiny-1.js', headers: { 'accept-encoding': 'br, gzip' } })
+    expect(tiny.headers['content-encoding']).toBeUndefined()
+    expect(tiny.body).toBe('x()')
+    const jpg = await app.inject({ method: 'GET', url: '/photo.jpg', headers: { 'accept-encoding': 'br, gzip' } })
+    expect(jpg.statusCode).toBe(200)
+    expect(jpg.headers['content-encoding']).toBeUndefined()
+    expect(jpg.headers['content-type']).toMatch(/image\/jpeg/)
+    expect(jpg.rawPayload.length).toBe(JPG.length)
+  })
+
+  it('still 404s a missing asset with Accept-Encoding', async () => {
+    const res = await app.inject({ method: 'GET', url: '/assets/missing.js', headers: { 'accept-encoding': 'br, gzip' } })
+    expect(res.statusCode).toBe(404)
+  })
+})
+
 describe('buildServer without a dist folder', () => {
   it('serves a friendly build-needed page, keeps API working', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'escapes-empty-'))
@@ -120,6 +214,8 @@ describe('helpers', () => {
   it('cacheControlFor', () => {
     expect(cacheControlFor('assets/x-1.js')).toBe(CACHE_IMMUTABLE)
     expect(cacheControlFor('index.html')).toBe(CACHE_NONE)
+    expect(cacheControlFor('assets/x-1.js.br')).toBe(CACHE_IMMUTABLE)
+    expect(cacheControlFor('index.html.gz')).toBe(CACHE_NONE)
   })
 
   it('resolvePort', () => {
