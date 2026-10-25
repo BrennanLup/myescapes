@@ -1,0 +1,17 @@
+# Interaction system (workstream 9)
+
+Exports (`index.tsx`): `InteractionSystem` (inside the Canvas), `Reticle` (DOM overlay), `useIsHovered(id)`, plus `interactHovered()` and `useInteraction` (local store with the hovered spec and live pointer-lock flag).
+
+## How it works
+- **Raycast** from the screen centre at ~30 Hz. The raycastable mesh list is re-collected every 0.5 s (or when the scene's child count changes): every visible mesh (occluders) plus hidden meshes inside an interactable (hit boxes). Per tick, a bounding-sphere pre-filter (ray hit + within reach) cuts the list to a handful before the real triangle test, so ~300 interactables stay cheap.
+- **Resolution**: nearest hit decides; walk up the parents to the first `userData.interactable`; must be within `spec.maxDistance ?? DEFAULT_INTERACT_DISTANCE`. A non-interactable mesh in front blocks, unless an interactable lies within 12 cm behind it (thin occluders like the red string or glass).
+- **Ignored by the raycast**: objects (and their subtrees) with `userData.raycastIgnore` / `noRaycast`, invisible groups, and non-interactable "ghost" meshes (transparent with `depthWrite: false`, e.g. light beams, glows).
+- **Hover**: `store.setHovered(id)` + `bus.emit('hover:changed', { id, kind })` on change. Cleared when an overlay opens / world not ready (`selectControlsEnabled`) or the target unmounts.
+- **Highlight**: inverted hull, no post pass. Each visible mesh under the target (max 32; instanced/skinned/troika text skipped) gets a copy that shares its geometry, grown ~0.6 to 3 cm (scaled with distance) about its bounding-box centre, unlit `LIGHT.ledTeal` with a gentle pulse. Closed meshes use back faces; flat meshes (planes) use a coplanar hull with polygon offset, so they get a border. The hulls live in a scene-root group and copy their source's world matrix each frame.
+- **Interact**: left click while already pointer-locked (the locking click is ignored), `E` key (not while typing in inputs), or a touch tap (< 300 ms, < 12 px) on the canvas or any `[data-look-surface]` element, which raycasts at the tap point. Emits `spec.event`, then `interact { id, kind }`, then `sfx { name: 'click' }`.
+- **Reticle**: soft dot at screen centre (hidden on touch unless hovering) that grows into a teal ring on hover. Desktop prompt chip: key-cap `E` + label. Touch: a round "Tap" button with the label below it. "Click to look around" hint on desktop while not pointer-locked. Everything is hidden while an overlay is open or the world is loading.
+
+## Notes for other workstreams
+- Decorative meshes that sit in front of interactables (labels, string, glass) can set `userData.raycastIgnore = true` so they never block.
+- An invisible mesh inside an interactable works as a hit box. To hide an interactable entirely, unmount it or hide a group around it.
+- Pointer lock is requested by the player controller; this module only reads `document.pointerLockElement` (and `store.pointerLocked`).
