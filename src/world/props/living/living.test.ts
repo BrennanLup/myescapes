@@ -1,0 +1,120 @@
+import { describe, expect, it } from 'vitest'
+import type { AABB } from '@/contracts/colliders'
+import { ANCHORS, HALF_D, HALF_W, LAMPS, ROOM } from '@/contracts/scene'
+import { LIVING_COLLIDERS } from './layout'
+import { buildLivingSet } from './set'
+
+type P = [number, number]
+
+/** Clear walking paths (x, z polylines) with a 1.5 m wide corridor (0.75 m half-width). */
+const SPAWN: P = [ANCHORS.spawn.position[0], ANCHORS.spawn.position[2]]
+const PATHS: Record<string, P[]> = {
+  board: [SPAWN, [0, -7.0]],
+  door: [SPAWN, [0, 7.6]],
+  desk: [SPAWN, [-8.2, -3]],
+  wishlist: [SPAWN, [0, -2.6], [8.8, -3]],
+}
+const HALF_PATH = 0.75
+
+/** Other workstreams' footprints (x/z rectangles incl. a standing zone in front). */
+const FOOTPRINTS: Record<string, { min: P; max: P }> = {
+  board: { min: [-4.6, -HALF_D], max: [4.6, -7.0] },
+  desk: { min: [-HALF_W, -4.5], max: [-7.6, -1.5] },
+  wishlist: { min: [8.6, -4.6], max: [HALF_W, -1.4] },
+  gate: { min: [-0.7, 6.6], max: [0.7, HALF_D] },
+  trophy: { min: [-HALF_W, 2.7], max: [-9.0, 4.3] },
+}
+
+function rectSegDistance(b: AABB, a: P, c: P): number {
+  // Sample the segment densely; boxes are small so 5 cm steps are plenty.
+  const len = Math.hypot(c[0] - a[0], c[1] - a[1])
+  const n = Math.max(2, Math.ceil(len / 0.05))
+  let best = Infinity
+  for (let i = 0; i <= n; i++) {
+    const t = i / n
+    const x = a[0] + (c[0] - a[0]) * t
+    const z = a[1] + (c[1] - a[1]) * t
+    const dx = Math.max(b.min[0] - x, 0, x - b.max[0])
+    const dz = Math.max(b.min[2] - z, 0, z - b.max[2])
+    best = Math.min(best, Math.hypot(dx, dz))
+  }
+  return best
+}
+
+describe('living colliders', () => {
+  it('ids are unique and namespaced', () => {
+    const ids = LIVING_COLLIDERS.map((c) => c.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    for (const id of ids) expect(id.startsWith('living:')).toBe(true)
+    for (const name of ['couch', 'coffee-table', 'side-table', 'floor-lamp', 'bookshelf']) expect(ids).toContain(`living:${name}`)
+    expect(ids.filter((i) => i.includes('plant')).length).toBeGreaterThanOrEqual(5)
+    expect(ids.filter((i) => i.includes('beanbag')).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('every box is inside the room and well-formed', () => {
+    for (const c of LIVING_COLLIDERS) {
+      expect(c.min[0], c.id).toBeGreaterThanOrEqual(-HALF_W)
+      expect(c.max[0], c.id).toBeLessThanOrEqual(HALF_W)
+      expect(c.min[2], c.id).toBeGreaterThanOrEqual(-HALF_D)
+      expect(c.max[2], c.id).toBeLessThanOrEqual(HALF_D)
+      expect(c.min[1], c.id).toBeGreaterThanOrEqual(0)
+      expect(c.max[1], c.id).toBeLessThanOrEqual(ROOM.height)
+      for (let k = 0; k < 3; k++) expect(c.max[k], c.id).toBeGreaterThan(c.min[k])
+    }
+  })
+
+  it('keeps a 1.5 m path clear from spawn to the board, desk, wishlist and door', () => {
+    for (const [name, pts] of Object.entries(PATHS)) {
+      for (let i = 0; i < pts.length - 1; i++) {
+        for (const c of LIVING_COLLIDERS) {
+          expect(rectSegDistance(c, pts[i], pts[i + 1]), `${c.id} blocks path to ${name}`).toBeGreaterThan(HALF_PATH)
+        }
+      }
+    }
+  })
+
+  it("stays out of other anchors' footprints", () => {
+    for (const [name, f] of Object.entries(FOOTPRINTS)) {
+      for (const c of LIVING_COLLIDERS) {
+        const overlap = c.min[0] < f.max[0] && c.max[0] > f.min[0] && c.min[2] < f.max[1] && c.max[2] > f.min[1]
+        expect(overlap, `${c.id} overlaps ${name}`).toBe(false)
+      }
+    }
+  })
+
+  it('colliders do not overlap each other', () => {
+    const cs = LIVING_COLLIDERS
+    for (let i = 0; i < cs.length; i++)
+      for (let j = i + 1; j < cs.length; j++) {
+        const a = cs[i]
+        const b = cs[j]
+        const o = a.min[0] < b.max[0] && a.max[0] > b.min[0] && a.min[2] < b.max[2] && a.max[2] > b.min[2]
+        expect(o, `${a.id} vs ${b.id}`).toBe(false)
+      }
+  })
+})
+
+describe('living set geometry', () => {
+  const set = buildLivingSet()
+
+  it('lamp shades sit exactly at the LAMPS positions', () => {
+    const check = (mark: string, p: readonly number[]) => {
+      const m = set.marks.get(mark)
+      expect(m, mark).toBeDefined()
+      for (let k = 0; k < 3; k++) expect(m![k]).toBeCloseTo(p[k], 5)
+    }
+    check('floorLampShade', LAMPS.floorLamp)
+    check('pendantA', LAMPS.pendantA)
+    check('pendantB', LAMPS.pendantB)
+  })
+
+  it('stays under the draw-call budget', () => {
+    // One mesh per merged bucket + one instanced mesh for books.
+    expect(set.parts.length + 1).toBeLessThan(60)
+    expect(set.books.length).toBeGreaterThan(60)
+  })
+
+  it('emissive lamp parts never cast shadows', () => {
+    for (const p of set.parts) if (p.mat === 'emissiveWarm') expect(p.castShadow).toBe(false)
+  })
+})
