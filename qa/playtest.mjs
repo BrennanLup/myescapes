@@ -3,12 +3,13 @@
 //
 //   node qa/playtest.mjs                 # both viewports
 //   node qa/playtest.mjs desktop         # one viewport
-//   QA_PORT=3330 node qa/playtest.mjs    # port (3300-3399)
+//   QA_PORT=3330 node qa/playtest.mjs    # port (3300-3599)
+//   QA_TAG=qa2 node qa/playtest.mjs      # screenshot/results prefix (round 2 uses qa2; default qa)
 //
 // Starts the app exactly like a user (`NO_OPEN=1 PORT=… DATA_DIR=<fresh temp dir> npm start`), waits for /health,
 // then drives the real UI (keyboard / joystick / taps) and polls `window.__ESCAPE__` for state.
-// Writes screenshots to qa/screenshots/qa-<viewport>-<nn>-<step>.png and machine-readable results to
-// qa/playtest-results.json. Software WebGL (SwiftShader) is slow: everything polls with generous timeouts.
+// Writes screenshots to qa/screenshots/<tag>-<viewport>-<nn>-<step>.png and machine-readable results to
+// qa/playtest-results[-<tag>][-<viewport>].json. Software WebGL (SwiftShader) is slow: everything polls with generous timeouts.
 import { chromium, devices } from '@playwright/test'
 import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -19,6 +20,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SHOTS = path.join(ROOT, 'qa', 'screenshots')
 const PORT = Number(process.env.QA_PORT ?? 3330)
+const TAG = process.env.QA_TAG ?? 'qa'
 const BASE = `http://localhost:${PORT}`
 const SLOW = 120_000
 const GL_ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
@@ -140,7 +142,7 @@ function makeHelpers(page, vp, bag) {
     isMobile,
     async shot(step) {
       shotN++
-      const file = `qa/screenshots/qa-${vp.name}-${String(shotN).padStart(2, '0')}-${step}.png`
+      const file = `qa/screenshots/${TAG}-${vp.name}-${String(shotN).padStart(2, '0')}-${step}.png`
       try {
         await page.screenshot({ path: path.join(ROOT, file), timeout: 60_000 })
       } catch (e) {
@@ -453,6 +455,14 @@ async function runViewport(browser, vp) {
   // 1. Load + measurements -------------------------------------------------
   await step('1-load', async ({ check, details }) => {
     const t0 = Date.now()
+    const encodings = []
+    const onResp = async (r) => {
+      const u = new URL(r.url())
+      if (!/\.(js|css|html)$|^\/$/.test(u.pathname)) return
+      const h = await r.allHeaders().catch(() => ({}))
+      encodings.push({ path: u.pathname, status: r.status(), encoding: h['content-encoding'] ?? null, length: h['content-length'] ?? null, vary: h['vary'] ?? null })
+    }
+    page.on('response', onResp)
     await page.goto(BASE + '/', { waitUntil: 'commit', timeout: SLOW })
     await page.waitForSelector('[data-testid=loading-screen]', { state: 'attached', timeout: SLOW }).catch(() => {})
     await H.shot('loading')
@@ -484,6 +494,24 @@ async function runViewport(browser, vp) {
     })
     details.bytes = bytes
     check('total transferred < 15 MB', bytes.transfer > 0 && bytes.transfer < 15 * 1024 * 1024, bytes.transfer)
+    page.off('response', onResp)
+    details.encodings = encodings
+    const js = encodings.filter((e) => e.path.endsWith('.js'))
+    check('JS bundle served br/gzip compressed (content-encoding)', js.length > 0 && js.every((e) => /^(br|gzip)$/.test(e.encoding ?? '')), js)
+    const jsTiming = bytes.top.find((x) => x.name.endsWith('.js'))
+    // Also verify directly with explicit Accept-Encoding headers (what a non-Chromium client gets).
+    if (jsTiming) {
+      const url = BASE + jsTiming.name
+      // Node fetch transparently decodes; use the raw content-length header instead.
+      const head = async (ae) => {
+        const r = await fetch(url, { headers: { 'accept-encoding': ae } })
+        const len = r.headers.get('content-length')
+        await r.arrayBuffer()
+        return { ae, encoding: r.headers.get('content-encoding'), contentLength: len ? Number(len) : null, vary: r.headers.get('vary') }
+      }
+      details.jsProbe = [await head('br'), await head('gzip'), await head('identity')]
+      check('JS: br when accepted, gzip when only gzip, identity otherwise', details.jsProbe[0].encoding === 'br' && details.jsProbe[1].encoding === 'gzip' && !details.jsProbe[2].encoding, details.jsProbe)
+    }
     details.gateOpenAtReady = (await H.state('overlay.kind')) === 'gate'
     void worldReadyAt
   })
@@ -500,7 +528,9 @@ async function runViewport(browser, vp) {
       .waitForFunction(() => document.querySelector('[data-testid=gate-overlay]').getAnimations({ subtree: true }).every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity), null, { timeout: 15_000 })
       .catch(() => {})
     await H.shot('gate-solved')
-    check('reveal says it opened', /opens|Solved/i.test(await page.getByTestId('gate-reveal').innerText()))
+    details.revealText = (await page.getByTestId('gate-reveal').innerText()).replace(/\s+/g, ' ').trim()
+    check('reveal says it opened', /opens|Solved/i.test(details.revealText))
+    check('reveal shows no raw id slug (e.g. lock-and-key)', !/\b[a-z]+(?:-[a-z]+){2,}\b/.test(details.revealText), details.revealText)
     await page.getByTestId('gate-continue').click()
     await H.waitOverlay(null)
     check('gate stored as solved today', !!(await page.evaluate(() => localStorage.getItem('myescapes.gate.lastSolved'))))
@@ -519,6 +549,55 @@ async function runViewport(browser, vp) {
     }
     check('gate does not show again after reload', !reopened)
     await H.shot('reload-no-gate')
+  })
+
+  // HUD layout: mobile buttons sit in one row along the top edge; the help card stays clear of the joystick.
+  await step('1c-hud-layout', async ({ check, details }) => {
+    const vpSize = page.viewportSize()
+    const rects = await page.evaluate(() => {
+      const r = (el) => {
+        if (!el) return null
+        const b = el.getBoundingClientRect()
+        return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height), bottom: Math.round(b.bottom), right: Math.round(b.right) }
+      }
+      const btns = [...document.querySelectorAll('[data-testid=hud] button')].map((b) => ({ id: b.getAttribute('data-testid'), ...r(b) }))
+      return { hud: r(document.querySelector('[data-testid=hud-row]')), btns, joystick: r(document.querySelector('[data-joystick]')), tap: r(document.querySelector('[data-testid=interact-tap]')) }
+    })
+    details.rects = rects
+    const lowest = Math.max(...rects.btns.map((b) => b.bottom))
+    details.lowestHudButton = lowest
+    if (H.isMobile) {
+      check('mobile: HUD row exists', !!rects.hud)
+      // Row buttons only (the DEMO MODE badge on the title line is a button too); centres within 4 px.
+      const row = rects.btns.filter((b) => b.y > rects.hud.y - 2 && b.bottom < rects.hud.bottom + 2)
+      const mids = row.map((b) => b.y + b.h / 2)
+      details.rowButtons = row.map((b) => `${b.id}@${b.y}+${b.h}`)
+      check('mobile: all HUD row buttons on one line (centres within 4 px)', row.length >= 6 && Math.max(...mids) - Math.min(...mids) <= 4, details.rowButtons)
+      check('mobile: HUD buttons stay in the top 15% of the screen', lowest <= vpSize.height * 0.15, { lowest, limit: vpSize.height * 0.15 })
+      check('mobile: HUD row fits the width', rects.btns.every((b) => b.x >= 0 && b.right <= vpSize.width), rects.btns)
+    } else {
+      check('desktop: HUD buttons stay in the top 20% of the screen', lowest <= vpSize.height * 0.2, lowest)
+    }
+    // Open the help card and check it against the joystick / Tap button.
+    await page.getByTestId('help-button').click()
+    await page.getByTestId('controls-hint').waitFor({ state: 'visible', timeout: 30_000 })
+    await sleep(800)
+    const hint = await page.getByTestId('controls-hint').evaluate((el) => {
+      const b = el.getBoundingClientRect()
+      return { x: Math.round(b.x), y: Math.round(b.y), right: Math.round(b.right), bottom: Math.round(b.bottom) }
+    })
+    details.hint = hint
+    await H.shot('hud-help-card')
+    const overlap = (a, b) => !!a && !!b && a.x < b.right && b.x < a.right && a.y < b.bottom && b.y < a.bottom
+    const gap = (a, b) => (a && b ? Math.max(b.y - a.bottom, a.y - b.bottom, b.x - a.right, a.x - b.right) : null)
+    details.hintJoystickGap = gap(hint, rects.joystick)
+    if (H.isMobile) {
+      check('mobile: help card does not overlap the joystick', !overlap(hint, rects.joystick), { hint, joystick: rects.joystick })
+      check('mobile: help card keeps >= 8 px from the joystick', details.hintJoystickGap >= 8, details.hintJoystickGap)
+      check('mobile: help card does not overlap the Tap button', !overlap(hint, rects.tap), { hint, tap: rects.tap })
+    }
+    await page.getByTestId('hint-close').click().catch(() => {})
+    await page.getByTestId('controls-hint').waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {})
   })
 
   // Perf: fps + draw calls at spawn, per quality preset (debug readout too).
@@ -729,6 +808,10 @@ async function runViewport(browser, vp) {
       check(`review ${i + 1} (${how}) opens the aimed room`, shownId === pin.roomId, { shownId, want: pin.roomId })
       check(`review ${i + 1} title matches room name`, title === room?.name, { title, want: room?.name })
       check(`review ${i + 1} shows company + city`, text.includes(room.company) && text.includes(room.city))
+      const cityRe = new RegExp(room.city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+      const repeatLines = text.split('\n').filter((l) => (l.match(cityRe) ?? []).length > 1)
+      details.opened[details.opened.length - 1].addressLines = text.split('\n').filter((l) => /\d/.test(l) && l.toLowerCase().includes(room.city.toLowerCase())).slice(0, 3)
+      check(`review ${i + 1}: no line repeats the city (address)`, repeatLines.length === 0, repeatLines)
       const overflow = await overlay.evaluate((el) => {
         const r = el.getBoundingClientRect()
         return { w: r.width, h: r.height, vw: innerWidth, vh: innerHeight, scrollW: document.documentElement.scrollWidth }
@@ -857,8 +940,40 @@ async function runViewport(browser, vp) {
     await H.waitOverlay('confirm', 60_000)
     await sleep(800)
     details.mode = await page.getByTestId('confirm-mode').innerText().catch(() => null)
+    details.uiDraft = await page.evaluate(() => {
+      const v = (id) => document.querySelector(`[data-testid="${id}"]`)?.value ?? null
+      return {
+        date: v('field-review.date'),
+        comments: ['overall', 'puzzles', 'setting', 'storyline', 'difficulty'].map((k) => v(`field-review.ratings.${k}.comment`)),
+        overlayText: document.querySelector('[data-testid=confirm-overlay]')?.innerText.slice(0, 2000) ?? null,
+      }
+    })
     check('confirm screen says mock extractor', /mock/i.test(details.mode ?? ''), details.mode)
     await H.shot('confirm-initial')
+    // QA #9: the casual transcript ("Me, Sam and Priya played", "last Saturday", per-rating comments) through the real endpoint.
+    {
+      const casual =
+        'Last Saturday we did The Clockmaker’s Attic by Puzzle Forge in Oakland. It was a steampunk mystery, we escaped in 52 minutes with two hints. ' +
+        'Me, Sam and Priya played. Favourite puzzle was a gear alignment lock. I would rate it 88 overall, puzzles 90, setting 85.'
+      const draft = await (await fetch(`${BASE}/api/extract`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ transcript: casual }) })).json()
+      const now = new Date()
+      const lastSat = new Date(now)
+      lastSat.setDate(now.getDate() - (((now.getDay() + 1) % 7) || 7))
+      const want = `${lastSat.getFullYear()}-${String(lastSat.getMonth() + 1).padStart(2, '0')}-${String(lastSat.getDate()).padStart(2, '0')}`
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const comments = Object.fromEntries(Object.entries(draft.review.ratings).map(([k, r]) => [k, r]))
+      const scored = Object.values(draft.review.ratings).filter((r) => r.score !== null)
+      const cmts = scored.map((r) => r.comment).filter(Boolean)
+      details.casualDraft = { room: draft.room, date: draft.review.date, crew: draft.review.crew, ratings: comments, flags: draft.flags, escapeTime: draft.review.escapeTimeMinutes }
+      check('mock: crew from "Me, Sam and Priya played" includes Sam + Priya', ['Sam', 'Priya'].every((n) => draft.review.crew.includes(n)), draft.review.crew)
+      check(`mock: "last Saturday" -> ${want} (not today ${today})`, draft.review.date === want, draft.review.date)
+      check('mock: scores 88 / 90 / 85 extracted', draft.review.ratings.overall.score === 88 && draft.review.ratings.puzzles.score === 90 && draft.review.ratings.setting.score === 85, scored.map((r) => r.score))
+      check('mock: rating comments not duplicated across ratings', new Set(cmts).size === cmts.length, cmts)
+      if (H.isMobile) {
+        check('UI (typed casual transcript): date field = last Saturday', details.uiDraft.date === want, details.uiDraft.date)
+        check('UI: crew chips show Sam and Priya', /Sam/.test(details.uiDraft.overlayText ?? '') && /Priya/.test(details.uiDraft.overlayText ?? ''))
+      }
+    }
     const missingInitially = await page.$$eval('[data-testid^="error-"]', (els) => els.map((e) => e.getAttribute('data-testid')))
     details.missingInitially = missingInitially
     details.saveEnabledInitially = await page.getByTestId('confirm-save').isEnabled()
@@ -1003,6 +1118,7 @@ async function runViewport(browser, vp) {
         return n
       })
       if (!txt || visibleText === 0) details.blankCards.push({ card: i, txt: txt.slice(0, 60), visibleText })
+      ;(details.cardTexts ??= []).push(txt.replace(/\s+/g, ' ').slice(0, 400))
       await H.shot(`wrap-card-${i}`)
       if (i < total) await page.getByTestId('wrap-next').click()
     }
@@ -1045,8 +1161,8 @@ async function runViewport(browser, vp) {
         check('hint text is visible (opacity 1, non-empty)', h.text.trim().length > 5 && Number(h.opacity) > 0.9, h)
       }
       details.skipAfter2 = await p2.getByTestId('gate-skip').isVisible().catch(() => false)
-      await p2.screenshot({ path: path.join(ROOT, `qa/screenshots/qa-${vp.name}-90-gate-two-misses.png`) })
-      bag.shots.push(`qa/screenshots/qa-${vp.name}-90-gate-two-misses.png`)
+      await p2.screenshot({ path: path.join(ROOT, `qa/screenshots/${TAG}-${vp.name}-90-gate-two-misses.png`) })
+      bag.shots.push(`qa/screenshots/${TAG}-${vp.name}-90-gate-two-misses.png`)
       if (!details.skipAfter2) {
         details.miss3 = await missGate(p2)
         await sleep(600)
@@ -1064,8 +1180,8 @@ async function runViewport(browser, vp) {
       if (details.skipShowsReveal) await p2.getByTestId('gate-continue').click()
       await p2.waitForFunction(() => (window.__ESCAPE__.store.getState().overlay?.kind ?? null) === null, null, { timeout: SLOW })
       await sleep(1500)
-      await p2.screenshot({ path: path.join(ROOT, `qa/screenshots/qa-${vp.name}-91-gate-skipped.png`) })
-      bag.shots.push(`qa/screenshots/qa-${vp.name}-91-gate-skipped.png`)
+      await p2.screenshot({ path: path.join(ROOT, `qa/screenshots/${TAG}-${vp.name}-91-gate-skipped.png`) })
+      bag.shots.push(`qa/screenshots/${TAG}-${vp.name}-91-gate-skipped.png`)
       check('skip enters the room', true)
       details.lastSolvedAfterSkip = await p2.evaluate(() => localStorage.getItem('myescapes.gate.lastSolved'))
     } finally {
@@ -1086,7 +1202,7 @@ async function runViewport(browser, vp) {
         await sleep(1200)
         const kind = await gateKind(p3)
         const fit = await p3.evaluate(() => ({ sw: document.documentElement.scrollWidth, vw: innerWidth }))
-        const file = `qa/screenshots/qa-${vp.name}-${92 + i}-gate-kind-${k}.png`
+        const file = `qa/screenshots/${TAG}-${vp.name}-${92 + i}-gate-kind-${k}.png`
         await p3.screenshot({ path: path.join(ROOT, file) })
         bag.shots.push(file)
         let solved = false
@@ -1130,7 +1246,7 @@ try {
     server.stop()
   }
   results.finishedAt = new Date().toISOString()
-  const file = path.join(ROOT, 'qa', `playtest-results${only ? '-' + only : ''}.json`)
+  const file = path.join(ROOT, 'qa', `playtest-results${TAG !== 'qa' ? '-' + TAG : ''}${only ? '-' + only : ''}.json`)
   writeFileSync(file, JSON.stringify(results, null, 2))
   log('results ->', path.relative(ROOT, file))
   const summary = Object.values(results.viewports).flatMap((b) => b.steps.map((s) => `${b.viewport.padEnd(8)} ${s.step.padEnd(24)} ${s.status}`))
