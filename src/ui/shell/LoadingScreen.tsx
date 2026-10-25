@@ -54,11 +54,12 @@ export function LoadingScreen() {
     return () => clearInterval(t)
   }, [timeDone, phase])
 
-  const enter = useRef(() => {})
-  enter.current = () => {
+  const enter = useRef((_gesture: boolean) => {})
+  enter.current = (gesture: boolean) => {
     if (phase !== 'loading') return
     setPhase('leaving')
-    bus.emit('user:gesture')
+    // Only a real click/key press may unlock audio; automation's autostart is not one.
+    if (gesture) bus.emit('user:gesture')
   }
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export function LoadingScreen() {
 
   // Automation: skip the button.
   useEffect(() => {
-    if (ready && flags.autostart) enter.current()
+    if (ready && flags.autostart) enter.current(false)
   }, [ready, flags.autostart])
 
   // Enter / Space also enters once ready.
@@ -81,7 +82,7 @@ export function LoadingScreen() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault()
-        enter.current()
+        enter.current(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -99,7 +100,7 @@ export function LoadingScreen() {
       role="dialog"
       aria-label="Loading My Escapes"
       aria-busy={!ready}
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden px-4 font-body text-paper transition-opacity ease-out"
+      className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden px-4 font-body text-paper transition-opacity ease-out"
       style={{
         opacity: leaving ? 0 : 1,
         transitionDuration: `${FADE_MS}ms`,
@@ -165,7 +166,7 @@ export function LoadingScreen() {
                 type="button"
                 data-testid="enter-button"
                 autoFocus
-                onClick={() => enter.current()}
+                onClick={() => enter.current(true)}
                 className="flex min-h-14 items-center gap-3 rounded-full bg-accent px-9 font-display text-xl font-semibold text-accent-ink shadow-[0_10px_30px_rgba(224,123,57,.55)] ring-4 ring-[rgba(255,217,176,.25)] transition hover:scale-[1.04] hover:bg-[#ea8a48] focus-visible:outline-none focus-visible:ring-[rgba(45,226,208,.7)] active:scale-95"
               >
                 <IconKey width={26} height={26} />

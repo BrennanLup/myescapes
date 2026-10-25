@@ -88,7 +88,7 @@ const pendant = (id: string, position: Vec3): SpotLightSpec => ({
 })
 
 /** Warm bounce colour off the honey floor, so ceilings and undersides never go muddy. */
-export const HEMI_GROUND = '#9a6550'
+export const HEMI_GROUND = LIGHT.hemiGround
 
 /** Midpoint of an LED strip, nudged into the room so the spill hits nearby surfaces. */
 export function stripMidpoint(i: number, nudge: Vec3 = [0, 0, 0]): Vec3 {
@@ -112,7 +112,7 @@ export function lightRig(quality: QualityPreset): LightRig {
       position: LAMPS.boardSpot,
       target: [...ANCHORS.bulletinBoard.position] as Vec3,
       color: LIGHT.fillWarm,
-      intensity: 40,
+      intensity: 26,
       distance: 10,
       decay: 2,
       angle: 0.9,
@@ -123,7 +123,7 @@ export function lightRig(quality: QualityPreset): LightRig {
   ]
   if (quality !== 'low') {
     // Teal spill from the long north strip onto the top of the wall and ceiling.
-    lights.push(lamp('ledSpillNorth', stripMidpoint(0, [0, -0.35, 0.5]), 3, 7, LIGHT.ledTeal))
+    lights.push(lamp('ledSpillNorth', stripMidpoint(0, [0, -0.5, 1.2]), 1.4, 7, LIGHT.ledTeal))
     // Cool dusk light coming in through the windows (mostly south). No shadows.
     lights.push({
       kind: 'directional',

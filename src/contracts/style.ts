@@ -54,7 +54,7 @@ export const LIGHT = {
   windowCool: '#9fc6ff',
   /** Ambient / hemisphere. */
   hemiSky: '#ffe2c4',
-  hemiGround: '#5a3a3a',
+  hemiGround: '#b07a5e',
   /** Fog / clear colour (outside, unseen mostly). */
   background: '#2a1f2d',
 } as const

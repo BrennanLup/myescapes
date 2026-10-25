@@ -47,6 +47,9 @@ export class AudioEngine {
 
   /** Create or resume the context. Call only from a user gesture. Returns false if unsupported. */
   unlock(): boolean {
+    // Without a real user activation the browser refuses to start audio and logs a
+    // warning ("AudioContext was not allowed to start"). Wait for a genuine gesture.
+    if (!hasUserActivation()) return false
     if (this.ctx) {
       if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => {})
       return true
@@ -418,4 +421,10 @@ export class AudioEngine {
     g.connect(this.sfxBus!)
     this.noise(t, dur).connect(bp).connect(g)
   }
+}
+
+/** True when the page has had a real user gesture (or the browser can't tell us). */
+export function hasUserActivation(): boolean {
+  const ua = typeof navigator !== 'undefined' ? (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation : undefined
+  return !ua || ua.hasBeenActive
 }

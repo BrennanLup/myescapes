@@ -156,7 +156,7 @@ const generators: Record<TextureName, () => HTMLCanvasElement | null> = {
       while (x < 512) {
         const len = lengths[k % 2]
         const seed = 1000 + row * 50 + k++
-        const tone = 0.84 + r() * 0.14
+        const tone = 0.88 + r() * 0.1
         // Draw twice (wrapped) so the tile repeats seamlessly.
         for (const dx of [0, 512]) {
           const px = x + dx

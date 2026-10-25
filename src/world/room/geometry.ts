@@ -8,7 +8,6 @@ import { ANCHORS, HALF_D, HALF_W, LED_STRIPS, ROOM, type Vec3, type WallId } fro
 import {
   WAINSCOT_HEIGHT,
   WALL_IDS,
-  rng,
   splitAtHeight,
   wallBoxToWorld,
   wallHalfLength,
@@ -24,13 +23,15 @@ export type Bucket =
   | 'trim'
   | 'beams'
   | 'floor'
-  | 'grooves'
   | 'ceiling'
   | 'glass'
   | 'housing'
 
+/** UV units per metre for the room shell's world-planar UVs (1 UV unit = 2 m). */
+export const UV_PER_METRE = 0.5
+
 /** World-planar UVs in metres * scale, picked per vertex by the dominant normal axis. */
-function planarUV(g: THREE.BufferGeometry, scale = 0.5) {
+function planarUV(g: THREE.BufferGeometry, scale = UV_PER_METRE) {
   const pos = g.getAttribute('position')
   const nor = g.getAttribute('normal')
   const uv = g.getAttribute('uv') as THREE.BufferAttribute
@@ -139,22 +140,8 @@ function buildWindow(b: Builder, wall: WallId, o: Rect) {
 }
 
 function buildFloor(b: Builder) {
+  // One quad; the plank texture (tiled per metre in index.tsx) draws the seams and joints.
   b.hquad('floor', -HALF_W, HALF_W, -HALF_D, HALF_D, 0, true)
-  // Plank seams: planks run east-west (along X), 0.22 m wide, staggered end joints.
-  const plank = 0.22
-  const seam = 0.012
-  const y = 0.0015
-  const rand = rng(7)
-  for (let z = -HALF_D + plank; z < HALF_D - 1e-6; z += plank) {
-    b.hquad('grooves', -HALF_W, HALF_W, z - seam / 2, z + seam / 2, y, true)
-  }
-  for (let z = -HALF_D; z < HALF_D - 1e-6; z += plank) {
-    let x = -HALF_W + 0.4 + rand() * 1.6
-    while (x < HALF_W - 0.2) {
-      b.hquad('grooves', x - seam / 2, x + seam / 2, z, Math.min(z + plank, HALF_D), y, true)
-      x += 1.6 + rand() * 1.0
-    }
-  }
 }
 
 function buildCeiling(b: Builder) {

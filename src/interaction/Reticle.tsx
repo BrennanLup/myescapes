@@ -5,6 +5,7 @@
 import { useStore } from '@/state/store'
 import { interactHovered, useInteraction } from './controller'
 import { touchPrompt } from './logic'
+import { useShell } from '@/ui/shell/shellStore'
 
 export function Reticle() {
   const overlay = useStore((s) => s.overlay)
@@ -14,6 +15,8 @@ export function Reticle() {
   const hovered = useInteraction((s) => s.hovered)
   const docLocked = useInteraction((s) => s.locked)
   const locked = storeLocked || docLocked
+  // The controls hint card already explains click-to-look and sits in the same spot.
+  const hintOpen = useShell((s) => s.hintOpen)
 
   if (overlay || !worldReady) return null
   const active = !!hovered
@@ -73,7 +76,7 @@ export function Reticle() {
       )}
 
       {/* look hint (desktop, not locked) */}
-      {!isTouch && !locked && (
+      {!isTouch && !locked && !hintOpen && (
         <div
           data-testid="look-hint"
           className="absolute bottom-[14%] left-1/2 -translate-x-1/2 animate-pulse whitespace-nowrap rounded-full bg-[rgba(42,31,45,0.62)] px-4 py-2 font-display text-[15px] text-[var(--color-panel)] shadow-[0_4px_14px_rgba(0,0,0,0.3)] backdrop-blur-sm"

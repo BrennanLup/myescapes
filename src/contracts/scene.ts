@@ -62,7 +62,7 @@ const WALL_INSET = 0.02
 
 export const ANCHORS = {
   /** Player start. rotationY is the camera yaw (0 = looking towards -Z / north wall). */
-  spawn: { position: [0, PLAYER.eyeHeight, 5.5], rotationY: 0, size: [0, 0, 0], owner: 'src/player' },
+  spawn: { position: [0, PLAYER.eyeHeight, 3.5], rotationY: 0, size: [0, 0, 0], owner: 'src/player' },
   /** Big cork board centred on the north wall. Position = centre of the board face. */
   bulletinBoard: {
     position: [0, 2.05, -HALF_D + WALL_INSET],

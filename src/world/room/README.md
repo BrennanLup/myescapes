@@ -2,7 +2,7 @@
 
 Exports `Room`: the 20 x 16 x 4 m room.
 
-- **Floor**: `woodFloor` plane plus merged plank seams (planks run east-west, 0.22 m wide, staggered end joints) drawn in a translucent clone of `woodDark`.
+- **Floor**: one `woodFloor` plane. The `planks` texture draws the seams and staggered end joints; `index.tsx` uses `getTiledMaterial` so one tile covers 2.5 m x 1.25 m of the world-planar UVs (`UV_PER_METRE` = 0.5): honey planks ~0.31 m wide running east-west. Walls, ceiling, beams and trim get tiled clones the same way, so texture detail is at real-world scale.
 - **Ceiling**: `ceiling` plane with three `woodDark` beams running east-west at z = -4, 0, 4 (the z = 0 beam sits over pendant A).
 - **Walls**: 0.3 m thick boxes built outside the interior, cut around `WINDOWS` by `segmentWall` (no CSG). Two-tone: `plasterAccent` wainscot below 0.9 m, `plaster` above, cream chair rail, `baseboard` skirting and a two-step crown moulding. Baseboard and chair rail skip the gate door span on the south wall; no hole is cut for the door.
 - **Windows**: `woodLight` reveal liner, casing, deep sill, mullions (two verticals on wide windows) and a see-through `glass` pane (the shared glass material is cloned and forced transparent).
