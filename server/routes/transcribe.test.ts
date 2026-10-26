@@ -80,9 +80,10 @@ describe('upload helpers', () => {
   })
 
   it('never reserves less than the file size allows', () => {
-    expect(minPlausibleSeconds(400_000, 'webm')).toBe(10)
-    expect(minPlausibleSeconds(1_920_000, 'wav')).toBe(10)
-    expect(secondsToReserve(1, 400_000, 'webm')).toBe(10)
+    expect(minPlausibleSeconds(30_000, 'webm')).toBe(10)
+    expect(minPlausibleSeconds(80_000, 'wav')).toBe(10)
+    expect(minPlausibleSeconds(40_000, 'flac')).toBe(10)
+    expect(secondsToReserve(1, 30_000, 'webm')).toBe(10)
     expect(secondsToReserve(42.2, 1000, 'webm')).toBe(43)
     expect(secondsToReserve(null, 10, 'webm')).toBe(1)
   })
@@ -180,10 +181,35 @@ describe('POST /api/transcribe', () => {
   it('counts by file size when the claimed duration is too small, and by the provider when it measures more', async () => {
     const { transcriber } = fakeProvider([{ text: 'a', durationSeconds: null }, { text: 'b', durationSeconds: 50 }])
     const a = await app({ transcribe: { transcriber } })
-    await send(a, upload({ bytes: 400_000, durationSeconds: 1 })) // >= 10 s of compressed audio
+    await send(a, upload({ bytes: 30_000, durationSeconds: 1 })) // >= 10 s of compressed audio
     expect(await usedSeconds()).toBe(10)
     await send(a, upload({ bytes: 1000, durationSeconds: 5 }))
     expect(await usedSeconds()).toBe(60)
+    await a.close()
+  })
+
+  it('a 20-minute voice note claimed as 0 s is counted as about 20 minutes (realistic size floor)', async () => {
+    // About 3.6 MB: 20 minutes of opus at 24 kbit/s; the provider (gpt-4o-transcribe) reports no duration.
+    const { transcriber } = fakeProvider([{ text: 'long', durationSeconds: null }, { text: 'again', durationSeconds: null }])
+    const a = await app({ env: { CAP_TRANSCRIBE_SECONDS_PER_USER: '1200' }, transcribe: { transcriber } })
+    expect((await send(a, upload({ bytes: 3_600_000, durationSeconds: 0 }))).statusCode).toBe(200)
+    expect(await usedSeconds()).toBe(1200)
+    // The daily cap is now used up: the next one is refused.
+    expect((await send(a, upload({ bytes: 3_600_000, durationSeconds: 0 }))).statusCode).toBe(429)
+    await a.close()
+  })
+
+  it('when the provider measures more than was reserved, the overrun is counted up to the caps', async () => {
+    const { transcriber, calls } = fakeProvider([{ text: 'long', durationSeconds: 500 }])
+    const a = await app({ env: { CAP_TRANSCRIBE_SECONDS_PER_USER: '60', CAP_TRANSCRIBE_SECONDS_GLOBAL: '300' }, transcribe: { transcriber } })
+    expect((await send(a, upload({ bytes: 1000, durationSeconds: 5 }))).statusCode).toBe(200)
+    expect(await usedSeconds()).toBe(60)
+    expect((await send(a, upload({ bytes: 1000, durationSeconds: 1 }))).statusCode).toBe(429)
+    // The global counter got all 500 s, clamped to its own limit of 300: nobody else fits today.
+    const res = await send(a, upload({ bytes: 1000, durationSeconds: 1 }), FX.users.bob)
+    expect(res.statusCode).toBe(429)
+    expect(SpendingCapErrorSchema.parse(res.json()).cap).toMatchObject({ scope: 'global', used: 300 })
+    expect(calls).toHaveLength(1)
     await a.close()
   })
 

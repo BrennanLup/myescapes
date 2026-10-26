@@ -24,6 +24,7 @@ import { utcDay } from './db/usage'
 import { multipart } from './routes/photos.testutil'
 import { facts, socialKit, U as FU, type Kit } from './routes/visits.testkit'
 import { buildTestApp, type TestApp } from './testing'
+import { demoWritesAllowed } from './routes/logs.phase1'
 
 let t: TestApp
 beforeAll(async () => {
@@ -482,5 +483,77 @@ describe('signed-out demo writes in production', () => {
     expect(dataAfter).toBe(dataBefore)
     expect(dataAfter).not.toContain('anonymous secret note')
     expect((await p.inject({ method: 'GET', url: '/api/wishlist' })).body).toBe(wishBefore)
+  })
+})
+
+describe('signed-out demo writes on a Railway deploy without NODE_ENV', () => {
+  it('only local and test servers write the shared demo overlay', () => {
+    expect(demoWritesAllowed({ NODE_ENV: 'production' })).toBe(false)
+    expect(demoWritesAllowed({ RAILWAY_ENVIRONMENT_NAME: 'production' })).toBe(false)
+    expect(demoWritesAllowed({ NODE_ENV: 'development', RAILWAY_PUBLIC_DOMAIN: 'x.up.railway.app' })).toBe(false)
+    expect(demoWritesAllowed({ NODE_ENV: 'test' })).toBe(true)
+    expect(demoWritesAllowed({})).toBe(true)
+  })
+
+  it('POST /api/entries answers 401 when Railway variables are present', async () => {
+    const r = await buildTestApp({ env: { NODE_ENV: '', RAILWAY_ENVIRONMENT_NAME: 'production' } })
+    try {
+      const fx = FIXTURE_DATASET
+      const entry: Entry = { room: fx.rooms[0], review: { ...fx.reviews[0], id: 'rev_anon2', voiceTranscript: 'anonymous secret note' } }
+      expect((await r.inject({ method: 'POST', url: '/api/entries', payload: entry })).statusCode).toBe(401)
+      expect((await r.inject({ method: 'GET', url: '/api/data' })).body).not.toContain('anonymous secret note')
+    } finally {
+      await r.close()
+    }
+  })
+})
+
+describe('per-client rate limits behind the proxy', () => {
+  it('trusts only private proxy hops by default, so a client-supplied X-Forwarded-For does not get a fresh bucket', async () => {
+    const r = await buildTestApp({})
+    try {
+      const codes: number[] = []
+      for (let i = 0; i < 70; i++) {
+        // The client sends a random address; Railway's edge appends the address it really saw, then an internal hop.
+        const res = await r.inject({ method: 'GET', url: '/api/invites/NOSUCHCODE2', headers: { 'x-forwarded-for': `198.51.${i}.${i}, 203.0.113.9, 10.0.0.2` } })
+        codes.push(res.statusCode)
+      }
+      expect(codes.filter((c) => c === 429).length).toBeGreaterThan(0)
+      // A different real client still has its own bucket.
+      expect((await r.inject({ method: 'GET', url: '/api/invites/NOSUCHCODE2', headers: { 'x-forwarded-for': '203.0.113.10' } })).statusCode).not.toBe(429)
+    } finally {
+      await r.close()
+    }
+  })
+
+  it('TRUST_PROXY_HOPS is a small whole number, default 3, and only private peers are proxies', async () => {
+    const { trustProxyHops, trustProxyFor, isPrivateAddress } = await import('./proxy')
+    expect(trustProxyHops({})).toBe(3)
+    const trust = trustProxyFor({})
+    expect(trust('10.4.0.7', 0)).toBe(true)
+    expect(trust('::ffff:100.64.1.2', 0)).toBe(true)
+    expect(trust('fd12::1', 0)).toBe(true)
+    expect(trust('10.4.0.7', 2)).toBe(true)
+    expect(trust('10.4.0.7', 3)).toBe(false)
+    expect(trust('203.0.113.9', 0)).toBe(false)
+    expect(isPrivateAddress('8.8.8.8')).toBe(false)
+    expect(isPrivateAddress('not an ip')).toBe(false)
+    expect(trustProxyHops({ TRUST_PROXY_HOPS: '2' })).toBe(2)
+    expect(trustProxyHops({ TRUST_PROXY_HOPS: 'true' })).toBe(3)
+    expect(trustProxyHops({ TRUST_PROXY_HOPS: '-1' })).toBe(3)
+  })
+
+  it('signed-in callers are limited per account, whatever address they claim', async () => {
+    const r = await buildTestApp({ fixtures: true })
+    try {
+      let limited = false
+      for (let i = 0; i < 70 && !limited; i++) {
+        const res = await r.inject({ method: 'GET', url: '/api/invites/NOSUCHCODE3', as: FX.users.alice, headers: { 'x-forwarded-for': `10.1.${i}.${i}` } })
+        limited = res.statusCode === 429
+      }
+      expect(limited).toBe(true)
+    } finally {
+      await r.close()
+    }
   })
 })

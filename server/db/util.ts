@@ -67,3 +67,16 @@ export function googleMapsUrl(placeId: string | null, name: string): string | nu
   if (!placeId) return null
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}&query_place_id=${encodeURIComponent(placeId)}`
 }
+
+/** Only http(s) links are stored, so a page never renders a `javascript:` URL. */
+export function safeWebsite(url: string | null | undefined): string | null {
+  if (!url) return null
+  const s = /^https?:\/\//i.test(url) ? url : `https://${url}`
+  try {
+    const u = new URL(s)
+    if ((u.protocol !== 'http:' && u.protocol !== 'https:') || !u.hostname.includes('.')) return null
+    return u.toString()
+  } catch {
+    return null
+  }
+}

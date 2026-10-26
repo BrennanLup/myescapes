@@ -24,7 +24,17 @@ export async function phase1Routes(app: FastifyInstance, ctx: AppContext) {
   })
 }
 
-/** Signed-out writes go to a seed overlay every signed-out visitor reads: never in production. */
+/**
+ * Signed-out writes go to a seed overlay every signed-out visitor reads, so they are allowed only
+ * on a local or test server: never with NODE_ENV=production, and never on a Railway deploy (Railway
+ * injects RAILWAY_ENVIRONMENT_NAME / RAILWAY_PUBLIC_DOMAIN) even if NODE_ENV was left unset there.
+ */
+export function demoWritesAllowed(env: NodeJS.ProcessEnv): boolean {
+  if (env.NODE_ENV === 'production') return false
+  if (env.NODE_ENV === 'test') return true
+  return !(env.RAILWAY_ENVIRONMENT_NAME || env.RAILWAY_ENVIRONMENT || env.RAILWAY_PUBLIC_DOMAIN || env.RAILWAY_PROJECT_ID)
+}
+
 export function assertDemoWritable(ctx: AppContext) {
-  if (ctx.env.NODE_ENV === 'production') throw new HttpError('unauthorized', 'Sign in to save. The demo room keeps changes on this page only.')
+  if (!demoWritesAllowed(ctx.env)) throw new HttpError('unauthorized', 'Sign in to save. The demo room keeps changes on this page only.')
 }

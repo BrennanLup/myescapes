@@ -7,6 +7,7 @@
 import Fastify, { type FastifyInstance, type InjectOptions, type LightMyRequestResponse } from 'fastify'
 import fastifyMultipart from '@fastify/multipart'
 import fastifyRateLimit from '@fastify/rate-limit'
+import { trustProxyFor } from '../proxy'
 import { createContext, type AppContext, type DbState } from '../context'
 import type { Db } from '../db/client'
 import { loadFixtures } from '../db/fixtures'
@@ -53,7 +54,7 @@ export async function buildVoiceTestApp(opts: VoiceTestAppOptions = {}): Promise
       return typeof id === 'string' && id ? sessionUserById(testDb.db, id) : null
     },
   })
-  const app = Fastify({ logger: false, trustProxy: true })
+  const app = Fastify({ logger: false, trustProxy: trustProxyFor({}) })
   installErrorHandler(app)
   await app.register(fastifyMultipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 20 } })
   await app.register(fastifyRateLimit, { global: false })

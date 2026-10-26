@@ -5,7 +5,7 @@
 // Railway's health check: when migrations fail or time out the server still listens, DB-backed
 // routes answer 503 `db_unavailable`, and migrations are retried in the background.
 import { ROOT, appVersion, resolvePort, startupBanner } from './env'
-import Fastify, { type FastifyInstance } from 'fastify'
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify'
 import fastifyCookie from '@fastify/cookie'
 import fastifyMultipart from '@fastify/multipart'
 import fastifyRateLimit from '@fastify/rate-limit'
@@ -15,6 +15,7 @@ import { authMode, resolveUser } from './auth'
 import { createContext, type AppContext, type DbState } from './context'
 import type { DbHandle } from './db/client'
 import { installErrorHandler } from './http'
+import { trustProxyFor } from './proxy'
 import { registerRoutes } from './routes/registry'
 import { extractionMode } from './routes/extract'
 import { transcriptionMode } from './routes/transcribe'
@@ -37,6 +38,19 @@ export type EscapeServer = FastifyInstance & { distReady: boolean; ctx: AppConte
 /** Upload ceiling for multipart routes (voice notes up to 25 MB; photos are much smaller). */
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
+/** Rate-limit bucket: the signed-in user when there is one, else the client address. */
+export function rateLimitKey(ctx: AppContext) {
+  return async (req: FastifyRequest): Promise<string> => {
+    try {
+      const user = await ctx.getUser(req)
+      if (user) return `user:${user.id}`
+    } catch {
+      // Database down or bad session: fall back to the address.
+    }
+    return `ip:${req.ip}`
+  }
+}
+
 export async function buildServer(opts: BuildServerOptions = {}): Promise<EscapeServer> {
   const ctx =
     opts.context ??
@@ -44,12 +58,12 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Escape
       dbState: opts.db ? { status: 'ready', handle: opts.db, error: null } : undefined,
       resolveUser,
     })
-  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 10 * 1024 * 1024, trustProxy: true })
+  const app = Fastify({ logger: opts.logger ?? false, bodyLimit: 10 * 1024 * 1024, trustProxy: trustProxyFor(ctx.env) })
   installErrorHandler(app)
   await app.register(fastifyCookie)
   await app.register(fastifyMultipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 20 } })
   // Opt-in per route: defineRoute(..., { config: { rateLimit: { max, timeWindow } } }).
-  await app.register(fastifyRateLimit, { global: false })
+  await app.register(fastifyRateLimit, { global: false, keyGenerator: rateLimitKey(ctx) })
   await registerRoutes(app, ctx)
   const distReady = await registerStatic(app, opts.distDir ?? path.join(ROOT, 'dist'), { headTags: (url) => headTagsFor(url, ctx) })
   app.decorate('distReady', distReady)

@@ -23,7 +23,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import { ROUTES } from '../../src/contracts/routes'
 import type { AppContext } from '../context'
-import { capsFromEnv, releaseUsage, reserveUsage, spendingCapError, usageSummary } from '../db/usage'
+import { capsFromEnv, chargeUsage, releaseUsage, reserveUsage, spendingCapError, usageSummary } from '../db/usage'
 import { defineRoute, HttpError, httpError } from '../http'
 import { describeProviderError, mockTranscriber, openaiTranscriber, type Transcriber } from './transcribe.provider'
 
@@ -73,12 +73,18 @@ export function audioKind(mimetype: string | undefined, filename: string | undef
 }
 
 /**
- * The shortest the recording can plausibly be, from its size: compressed voice never exceeds
- * ~320 kbit/s (40 kB/s); uncompressed or lossless audio stays under ~192 kB/s (48 kHz stereo 16-bit).
+ * The shortest the recording can plausibly be, from its size. A client's duration claim is never
+ * trusted below this, and with gpt-4o-transcribe the provider reports no duration, so this floor is
+ * what keeps the caps honest. Rates are low on purpose (speech stays intelligible at these sizes):
+ * lossy formats 3 kB/s (24 kbit/s; the phone recorder asks for 20 kbit/s, see
+ * src/mobile/log/recorder.ts, so honest notes are counted by their real length), WAV 8 kB/s
+ * (8 kHz 8-bit mono, the smallest common PCM) and FLAC 4 kB/s.
  */
+export const MIN_BYTES_PER_SECOND: Record<string, number> = { wav: 8_000, flac: 4_000 }
+export const LOSSY_MIN_BYTES_PER_SECOND = 3_000
+
 export function minPlausibleSeconds(bytes: number, ext: string): number {
-  const maxBytesPerSecond = ext === 'wav' || ext === 'flac' ? 192_000 : 40_000
-  return bytes / maxBytesPerSecond
+  return bytes / (MIN_BYTES_PER_SECOND[ext] ?? LOSSY_MIN_BYTES_PER_SECOND)
 }
 
 /** Seconds to reserve before the provider call: the larger of the client's claim and the size floor, at least 1. */
@@ -223,8 +229,11 @@ export async function transcribeRoutes(app: FastifyInstance, ctx: AppContext, op
         if (counted < reserved) {
           await releaseUsage(db, { userId: user.id, kind: 'transcription', amount: reserved - counted, now }).catch(() => {})
         } else if (counted > reserved) {
-          // The provider measured more than claimed. Count what still fits; the transcript is already paid for.
-          await reserveUsage(db, { userId: user.id, kind: 'transcription', amount: counted - reserved, now, caps: capsFromEnv(ctx.env) }).catch(() => null)
+          // The provider measured more than reserved. The transcript is already paid for: always count
+          // the difference (clamped to each cap), so the user and global counters reach their limits.
+          await chargeUsage(db, { userId: user.id, kind: 'transcription', amount: counted - reserved, now, caps: capsFromEnv(ctx.env) }).catch((err) => {
+            log(`could not count ${counted - reserved} extra seconds (${err instanceof Error ? err.name : 'error'})`)
+          })
         }
 
         const result: TranscribeResult = {

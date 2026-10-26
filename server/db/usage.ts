@@ -116,6 +116,30 @@ export async function reserveUsage(
   return { ok: true }
 }
 
+/**
+ * Count `amount` that was already spent (e.g. the provider measured more audio than was reserved).
+ * Unlike `reserveUsage` this never fails: each counter (user and global) goes up by the amount,
+ * clamped to its limit, so an overrun still fills the caps and the next request is refused.
+ */
+export async function chargeUsage(db: Db, opts: { userId: string; kind: SpendingKind; amount: number; now?: Date; caps?: Caps }) {
+  const day = utcDay(opts.now ?? new Date())
+  const amount = Math.max(0, Math.ceil(opts.amount))
+  if (amount === 0) return
+  const limits = (opts.caps ?? capsFromEnv())[opts.kind]
+  for (const [subject, limit] of [
+    [opts.userId, limits.user],
+    [GLOBAL_SUBJECT, limits.global],
+  ] as const) {
+    await db
+      .insert(usageCounters)
+      .values({ subject, day, kind: opts.kind, amount: Math.min(amount, limit) })
+      .onConflictDoUpdate({
+        target: [usageCounters.subject, usageCounters.day, usageCounters.kind],
+        set: { amount: sql`greatest(${usageCounters.amount}, least(${usageCounters.amount} + ${amount}, ${limit}))`, updatedAt: new Date() },
+      })
+  }
+}
+
 /** Give back a reservation (e.g. the provider call failed). Never goes below zero. */
 export async function releaseUsage(db: Db, opts: { userId: string; kind: SpendingKind; amount: number; now?: Date }) {
   const day = utcDay(opts.now ?? new Date())

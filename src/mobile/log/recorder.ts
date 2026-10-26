@@ -18,6 +18,9 @@ export interface Recording {
 /** Preferred containers, best first. iPhones record audio/mp4; Chrome and Firefox webm/ogg with Opus. */
 const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg']
 
+/** Requested recorder bitrate (speech). */
+export const VOICE_BITS_PER_SECOND = 20_000
+
 export function pickMimeType(isSupported: ((t: string) => boolean) | undefined): string | undefined {
   if (!isSupported) return undefined
   for (const t of MIME_CANDIDATES) {
@@ -167,7 +170,9 @@ export function usePhoneRecorder(): PhoneRecorder {
     try {
       const MR = window.MediaRecorder
       const mimeType = pickMimeType(MR.isTypeSupported?.bind(MR))
-      const mr = mimeType ? new MR(s, { mimeType }) : new MR(s)
+      // Speech needs little: a low bitrate keeps uploads small on basement signal, and keeps the
+      // file under the server's size floor for counting seconds (3 kB/s, server/routes/transcribe.ts).
+      const mr = new MR(s, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: VOICE_BITS_PER_SECOND })
       mr.ondataavailable = (e: BlobEvent) => {
         if (e.data && e.data.size > 0) chunks.current.push(e.data)
       }

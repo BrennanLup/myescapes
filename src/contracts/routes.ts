@@ -62,7 +62,7 @@ import {
   VisitPuzzleInputSchema,
   WishlistItemV2Schema,
 } from './models'
-import { DatasetSchema, EntrySchema, ReviewDraftSchema } from './types'
+import { DatasetSchema, EntryInputSchema, EntrySchema, ReviewDraftSchema } from './types'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -170,7 +170,7 @@ export const ROUTES = {
   entries: route({
     method: 'POST', path: '/api/entries', auth: 'optional', ws: 4,
     summary: 'Phase 1 save (room + review). Signed in: stored in Postgres as a venue/game/visit/review. Signed out: the local seed overlay (Phase 1 demo, to be retired by 20).',
-    body: EntrySchema, response: EntrySchema,
+    body: EntryInputSchema, response: EntrySchema,
   }),
   putWishlist: route({
     method: 'PUT', path: '/api/wishlist', auth: 'optional', ws: 4,

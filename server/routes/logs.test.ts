@@ -18,6 +18,7 @@ import {
   sessions,
   usageCounters,
   users,
+  venues,
   visitParticipants,
   visitPhotos,
   visits,
@@ -26,6 +27,8 @@ import {
 import { resetDb } from '../db/testing'
 import { buildTestApp, type TestApp } from '../testing'
 import { resolveUser } from '../auth'
+import { FIXTURE_DATASET } from '../../src/contracts/fixtures'
+import type { Entry } from '../../src/contracts/types'
 
 const U = FX.users
 let t: TestApp
@@ -383,5 +386,43 @@ describe('wish list and Phase 1 data are per user', () => {
     expect(data.source).toBe('postgres')
     expect(data.reviews.map((r: { id: string }) => r.id)).toEqual([FX.visits.together])
     expect(JSON.stringify(data)).not.toContain('Alice private transcript')
+  })
+})
+
+describe('POST /api/entries (signed in) size limits and website rule', () => {
+  afterEach(reload)
+  const base = (): Entry => {
+    const fx = structuredClone(FIXTURE_DATASET)
+    return { room: { ...fx.rooms[0], id: 'room_lim', name: 'Limit Room', company: 'Limit Co', city: 'Limitville', website: '' }, review: { ...fx.reviews[0], id: 'rev_lim', roomId: 'room_lim' } }
+  }
+  const post = (entry: unknown) => t.inject({ method: 'POST', url: '/api/entries', as: U.alice, payload: entry as object })
+
+  it('rejects oversized names, transcripts, puzzle lists and crews before anything is written', async () => {
+    const venuesBefore = (await t.db.select({ id: venues.id }).from(venues)).length
+    const e = base()
+    const huge = 'x'.repeat(200_000)
+    const p0 = e.review.puzzles[0] ?? { id: 'p0', reviewId: 'rev_lim', description: 'lock', type: 'logic' as const, memorable: false }
+    const cases: Entry[] = [
+      { ...e, room: { ...e.room, name: huge } },
+      { ...e, room: { ...e.room, company: huge } },
+      { ...e, room: { ...e.room, website: huge } },
+      { ...e, review: { ...e.review, voiceTranscript: 'y'.repeat(50_001) } },
+      { ...e, review: { ...e.review, puzzles: Array.from({ length: 41 }, (_, i) => ({ ...p0, id: `p${i}` })) } },
+      { ...e, review: { ...e.review, crew: Array.from({ length: 21 }, (_, i) => `Friend ${i}`) } },
+    ]
+    for (const c of cases) expect((await post(c)).statusCode).toBe(400)
+    expect((await t.db.select({ id: venues.id }).from(venues)).length).toBe(venuesBefore)
+  })
+
+  it('stores only http(s) websites on the venue and game it creates', async () => {
+    const e = base()
+    expect((await post({ ...e, room: { ...e.room, website: 'javascript:alert(1)' } })).statusCode).toBe(200)
+    const v = (await t.db.select().from(venues).where(eq(venues.name, 'Limit Co')))[0]
+    expect(v.website).toBeNull()
+    const g = (await t.db.select().from(games).where(eq(games.venueId, v.id)))[0]
+    expect(g.website).toBeNull()
+    const e2 = base()
+    expect((await post({ room: { ...e2.room, id: 'room_lim2', company: 'Limit Co Two', website: 'limit.example/room' }, review: { ...e2.review, id: 'rev_lim2', roomId: 'room_lim2' } })).statusCode).toBe(200)
+    expect((await t.db.select().from(venues).where(eq(venues.name, 'Limit Co Two')))[0].website).toBe('https://limit.example/room')
   })
 })

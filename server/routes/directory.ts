@@ -17,7 +17,7 @@ import { ROUTES } from '../../src/contracts/routes'
 import type { AppContext, SessionUser } from '../context'
 import type { Db } from '../db/client'
 import { cities, games, sources, venues } from '../db/schema'
-import { citySlug, googleMapsUrl, haversineKm, isUniqueViolation, slugify, uniqueSlug } from '../db/util'
+import { citySlug, googleMapsUrl, haversineKm, isUniqueViolation, safeWebsite, slugify, uniqueSlug } from '../db/util'
 import { defineRoute, httpError } from '../http'
 import { gameAggregate, publicReviewPage, puzzleHighlights, wantsSpoilers } from './reviews.lib'
 import {
@@ -34,6 +34,9 @@ import {
   venuesInCity,
 } from './directory.queries'
 import { seedLoaderEnabled, startDirectorySeedLoader } from './directory.seed'
+
+/** Kept here for existing importers; the rule lives in server/db/util.ts. */
+export { safeWebsite }
 
 const WRITE_LIMIT = { rateLimit: { max: 30, timeWindow: '1 minute' } }
 const READ_LIMIT = { rateLimit: { max: 120, timeWindow: '1 minute' } }
@@ -53,19 +56,6 @@ export function toGame(g: GameRow): Game {
   return {
     id: g.id, venueId: g.venueId, slug: g.slug, name: g.name, genre: toGenre(g.genre), minPlayers: g.minPlayers, maxPlayers: g.maxPlayers,
     durationMinutes: g.durationMinutes, description: g.description, website: g.website, status: g.status,
-  }
-}
-
-/** Only http(s) links are stored, so a page never renders a `javascript:` URL. */
-export function safeWebsite(url: string | null | undefined): string | null {
-  if (!url) return null
-  const s = /^https?:\/\//i.test(url) ? url : `https://${url}`
-  try {
-    const u = new URL(s)
-    if ((u.protocol !== 'http:' && u.protocol !== 'https:') || !u.hostname.includes('.')) return null
-    return u.toString()
-  } catch {
-    return null
   }
 }
 

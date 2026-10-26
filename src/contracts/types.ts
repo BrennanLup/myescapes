@@ -159,6 +159,43 @@ export type Dataset = z.infer<typeof DatasetSchema>
 export const EntrySchema = z.object({ room: RoomSchema, review: ReviewSchema })
 export type Entry = z.infer<typeof EntrySchema>
 
+/**
+ * What `POST /api/entries` accepts: the Entry shape with the same size limits as the Phase 2
+ * schemas (NewVenueSchema / NewGameSchema / ReviewInputSchema / VisitInput), so a Phase 1 save
+ * can't create oversized public venues and games or thousands of puzzle and crew rows.
+ * Read-side schemas (EntrySchema, DatasetSchema) stay unbounded so stored data always parses.
+ */
+const short = (n: number) => z.string().max(n)
+const LimitedRatingSchema = RatingSchema.extend({ comment: short(10_000).default('') })
+export const ENTRY_LIMITS = { name: 160, city: 120, address: 300, website: 500, comment: 10_000, transcript: 50_000, puzzles: 40, crew: 20, crewName: 60, tools: 40, photos: 20 } as const
+export const EntryInputSchema = z.object({
+  room: RoomSchema.extend({
+    id: Id.max(200),
+    name: short(ENTRY_LIMITS.name).min(1),
+    company: short(ENTRY_LIMITS.name).min(1),
+    city: short(ENTRY_LIMITS.city).min(1),
+    address: short(ENTRY_LIMITS.address).default(''),
+    website: short(ENTRY_LIMITS.website).default(''),
+    photos: z.array(PhotoSchema.extend({ url: short(2048).min(1), caption: short(300).optional() })).max(ENTRY_LIMITS.photos).default([]),
+  }),
+  review: ReviewSchema.extend({
+    id: Id.max(200),
+    roomId: Id.max(200),
+    crew: z.array(short(ENTRY_LIMITS.crewName)).max(ENTRY_LIMITS.crew).default([]),
+    ratings: z.object({
+      overall: LimitedRatingSchema,
+      puzzles: LimitedRatingSchema,
+      setting: LimitedRatingSchema,
+      storyline: LimitedRatingSchema,
+      difficulty: LimitedRatingSchema,
+    }),
+    puzzles: z.array(PuzzleSchema.extend({ id: Id.max(200), reviewId: Id.max(200), description: short(500).min(1) })).max(ENTRY_LIMITS.puzzles).default([]),
+    toolsUsed: z.array(short(60)).max(ENTRY_LIMITS.tools).default([]),
+    voiceTranscript: short(ENTRY_LIMITS.transcript).default(''),
+    photos: z.array(PhotoSchema.extend({ url: short(2048).min(1), caption: short(300).optional() })).max(ENTRY_LIMITS.photos).default([]),
+  }),
+})
+
 // ---------------------------------------------------------------------------
 // Extraction draft (voice transcript -> structured review, before confirmation)
 // ---------------------------------------------------------------------------

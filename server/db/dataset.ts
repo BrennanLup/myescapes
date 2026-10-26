@@ -13,7 +13,7 @@ import type { Db } from './client'
 import { games, reviews, users, venues, visitParticipants, visitPhotos, visitPuzzles, visits, wishlistItems } from './schema'
 import { filterPuzzleIds } from '../routes/reviews.lib'
 import { applyFacts, recordEdit, replacePuzzles } from '../routes/visits.lib'
-import { citySlug, slugify, uniqueSlug } from './util'
+import { citySlug, safeWebsite, slugify, uniqueSlug } from './util'
 
 const DEFAULT_SCORE = 50
 
@@ -113,6 +113,8 @@ export async function datasetForUser(db: Db, userId: string): Promise<Dataset> {
  */
 export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Promise<Entry> {
   const { room, review } = entry
+  // Only http(s) links reach the public directory (same rule as POST /api/venues and /api/games).
+  const website = safeWebsite(room.website.trim())
   const visitId = await db.transaction(async (txRaw) => {
     const tx = txRaw as unknown as Db
     const venueName = room.company.trim() || room.name.trim()
@@ -129,7 +131,7 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
       venue = (
         await tx
           .insert(venues)
-          .values({ slug, name: venueName, brand: room.company || null, address: room.address, city: room.city, citySlug: cslug, region: '', country: 'ZZ', website: room.website || null, createdBy: userId })
+          .values({ slug, name: venueName, brand: room.company || null, address: room.address, city: room.city, citySlug: cslug, region: '', country: 'ZZ', website, createdBy: userId })
           .returning()
       )[0]
     }
@@ -142,7 +144,7 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
     )[0]
     if (!game) {
       const slug = await uniqueSlug(tx, games, games.slug, slugify(`${room.name} ${venueName} ${room.city}`))
-      game = (await tx.insert(games).values({ venueId: venue.id, slug, name: room.name, genre: room.genre, website: room.website || null, createdBy: userId }).returning())[0]
+      game = (await tx.insert(games).values({ venueId: venue.id, slug, name: room.name, genre: room.genre, website, createdBy: userId }).returning())[0]
     }
 
     const facts = {

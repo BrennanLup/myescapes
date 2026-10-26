@@ -22,6 +22,9 @@ const OverlaySchema = z.object({
 })
 type Overlay = z.infer<typeof OverlaySchema>
 
+/** The overlay keeps at most this many entries (the newest); older demo saves drop off. */
+export const MAX_OVERLAY_ENTRIES = 100
+
 let seedCache: { file: string; data: Dataset } | null = null
 
 export async function loadSeed(file = DEFAULT_SEED_PATH): Promise<Dataset> {
@@ -89,15 +92,22 @@ export class SeedRepository implements Repository {
     }
   }
 
+  /**
+   * The overlay is shared by every signed-out visitor of this (local or test) server, so a voice
+   * transcript is never stored in it, only returned to the caller (/privacy: voice notes and transcripts are visible only to you),
+   * and only the newest MAX_OVERLAY_ENTRIES entries are kept.
+   */
   saveEntry(entry: Entry): Promise<Entry> {
-    const saved = normalizeEntry(entry)
+    const normalized = normalizeEntry(entry)
+    // The caller gets its own transcript back; the shared file never holds it.
+    const saved: Entry = { ...normalized, review: { ...normalized.review, voiceTranscript: '' } }
     return this.serial(async () => {
       const o = await this.readOverlay()
       const others = o.entries.filter((e) => e.review.id !== saved.review.id)
       // Keep the room in sync for earlier overlay entries of the same room.
-      const entries = [...others.map((e) => (e.room.id === saved.room.id ? { ...e, room: saved.room } : e)), saved]
+      const entries = [...others.map((e) => (e.room.id === saved.room.id ? { ...e, room: saved.room } : e)), saved].slice(-MAX_OVERLAY_ENTRIES)
       await this.writeOverlay({ ...o, entries })
-      return saved
+      return normalized
     })
   }
 

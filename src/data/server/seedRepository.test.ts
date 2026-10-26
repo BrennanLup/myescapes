@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Entry } from '@/contracts/types'
 import { FIXTURE_DATASET } from '@/contracts/fixtures'
-import { SeedRepository } from './seedRepository'
+import { MAX_OVERLAY_ENTRIES, SeedRepository } from './seedRepository'
 import { mergeCrew, normalizeEntry, seedRepositoryFor } from './repository'
 
 let dir: string
@@ -59,6 +59,29 @@ describe('SeedRepository', () => {
     expect(d.rooms.filter((r) => r.id === 'room_new')).toHaveLength(1)
     expect(d.rooms.find((r) => r.id === 'room_new')?.name).toBe('Renamed')
     expect(d.reviews.find((r) => r.id === 'rev_new')?.escaped).toBe(false)
+  })
+
+  it('never stores a voice transcript in the shared overlay (privacy: only you see it)', async () => {
+    const repo = new SeedRepository({ dataDir: dir })
+    const e = newEntry()
+    const saved = await repo.saveEntry({ ...e, review: { ...e.review, voiceTranscript: 'my private voice note' } })
+    // The caller still gets its own transcript back.
+    expect(saved.review.voiceTranscript).toBe('my private voice note')
+    const raw = await readFile(path.join(dir, 'store.json'), 'utf8')
+    expect(raw).not.toContain('my private voice note')
+    const other = await new SeedRepository({ dataDir: dir }).getDataset()
+    expect(other.reviews.find((r) => r.id === 'rev_new')?.voiceTranscript).toBe('')
+  })
+
+  it('keeps only the newest entries in the overlay', async () => {
+    const repo = new SeedRepository({ dataDir: dir })
+    const e = newEntry()
+    for (let i = 0; i < MAX_OVERLAY_ENTRIES + 5; i++) {
+      await repo.saveEntry({ room: { ...e.room, id: `room_m${i}` }, review: { ...e.review, id: `rev_m${i}` } })
+    }
+    const stored = JSON.parse(await readFile(path.join(dir, 'store.json'), 'utf8'))
+    expect(stored.entries).toHaveLength(MAX_OVERLAY_ENTRIES)
+    expect(stored.entries[0].review.id).toBe('rev_m5')
   })
 
   it('serializes concurrent saves', async () => {
