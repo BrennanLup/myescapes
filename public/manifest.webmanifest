@@ -1,0 +1,14 @@
+{
+  "name": "My Escapes",
+  "short_name": "My Escapes",
+  "description": "Every escape room you've played, pinned up in your own cozy 3D room.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#2a1f2d",
+  "theme_color": "#2a1f2d",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

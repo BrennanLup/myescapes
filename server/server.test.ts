@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { buildServer, type EscapeServer } from './index'
 import { ServerStatusSchema, HealthSchema } from '../src/contracts/api'
-import { CACHE_IMMUTABLE, CACHE_NONE, cacheControlFor } from './static'
+import { CACHE_IMMUTABLE, CACHE_NONE, STATIC_PAGES, cacheControlFor } from './static'
 import { precompressDist } from './precompress'
 import { startupBanner, resolvePort } from './env'
 
@@ -22,6 +22,7 @@ describe('buildServer with a dist folder', () => {
     writeFileSync(path.join(dir, 'index.html'), INDEX)
     writeFileSync(path.join(dir, 'assets', 'app-abc123.js'), 'console.log(1)')
     writeFileSync(path.join(dir, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>')
+    for (const page of STATIC_PAGES) writeFileSync(path.join(dir, `${page}.html`), `<html><body>${page} page</body></html>`)
     app = await buildServer({ distDir: dir })
   })
   afterAll(async () => {
@@ -52,6 +53,16 @@ describe('buildServer with a dist folder', () => {
     expect(res.headers['content-type']).toMatch(/text\/html/)
     expect(res.headers['cache-control']).toBe(CACHE_NONE)
     expect(res.body).toContain('spa')
+  })
+
+  it('serves the static info pages at clean URLs', async () => {
+    for (const page of STATIC_PAGES) {
+      const res = await app.inject({ method: 'GET', url: `/${page}` })
+      expect(res.statusCode).toBe(200)
+      expect(res.headers['content-type']).toMatch(/text\/html/)
+      expect(res.headers['cache-control']).toBe(CACHE_NONE)
+      expect(res.body).toContain(`${page} page`)
+    }
   })
 
   it('falls back to index.html for client routes', async () => {

@@ -18,6 +18,9 @@ export function cacheControlFor(relPath: string): string {
   return CACHE_SHORT
 }
 
+/** Pages in public/ served at /<name> from <name>.html. */
+export const STATIC_PAGES = ['about', 'privacy', 'terms'] as const
+
 function isApi(url: string) {
   return url === '/api' || url.startsWith('/api/') || url.startsWith('/api?')
 }
@@ -83,6 +86,10 @@ export async function registerStatic(app: FastifyInstance, distDir: string): Pro
 
   const sendIndex = (reply: FastifyReply) => reply.header('cache-control', CACHE_NONE).sendFile('index.html')
   app.get('/', (_req, reply) => sendIndex(reply))
+  // Static info pages (public/*.html), served at clean URLs. Google's OAuth consent screen links to these.
+  for (const page of STATIC_PAGES) {
+    app.get(`/${page}`, (_req, reply) => reply.header('cache-control', CACHE_NONE).sendFile(`${page}.html`))
+  }
   app.setNotFoundHandler((req, reply) => {
     if (!wantsSpa(req)) return notFound(req, reply)
     return sendIndex(reply)

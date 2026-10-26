@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>My Escapes</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a2f48"/>
+      <stop offset="1" stop-color="#2a1f2d"/>
+    </linearGradient>
+    <linearGradient id="door" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6a35c"/>
+      <stop offset="1" stop-color="#d9692a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.92" r="0.6">
+      <stop offset="0" stop-color="#ffcf8a" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ffcf8a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <!-- door frame -->
+  <path d="M132 432V214a124 124 0 0 1 248 0v218z" fill="#c69a63"/>
+  <!-- door -->
+  <path d="M158 432V214a98 98 0 0 1 196 0v218z" fill="url(#door)"/>
+  <!-- panel inset -->
+  <path d="M190 400V222a66 66 0 0 1 132 0v178z" fill="none" stroke="#b9561f" stroke-opacity="0.35" stroke-width="10"/>
+  <!-- keyhole -->
+  <circle cx="256" cy="268" r="30" fill="#2a1f2d"/>
+  <path d="M243 286h26l13 70h-52z" fill="#2a1f2d"/>
+  <!-- threshold -->
+  <rect x="112" y="428" width="288" height="18" rx="9" fill="#e8c9a4"/>
+  <!-- timer LED -->
+  <circle cx="256" cy="72" r="14" fill="#2de2d0"/>
+</svg>
