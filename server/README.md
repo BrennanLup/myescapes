@@ -23,16 +23,20 @@ npm run serve          # just the server (expects dist/ to exist)
 
 | File | What |
 | --- | --- |
-| `index.ts` | `buildServer({ distDir?, logger? })` and the CLI entry (listen, banner, graceful shutdown, port-in-use message) |
+| `index.ts` | `buildServer({ distDir?, logger?, db?, context? })`, `prepareDatabase()` and the CLI entry (migrate, listen, banner, graceful shutdown, port-in-use message) |
+| `context.ts` | `AppContext` handed to every route module: `db()`, `getUser(req)`, `requireUser(req)`, `requireAdmin(req)`, `env`, `now()`, `origin(req)` |
+| `http.ts` | `HttpError`, `defineRoute(app, ctx, ROUTES.x, handler)` (auth level, request validation, response parsing), `notImplemented`, the JSON error handler |
+| `testing.ts` | `buildTestApp({ fixtures })`: the whole server on PGlite with `inject({ as: userId })` |
+| `db/` | Drizzle schema, migrations, client (pg or PGlite), usage caps, Phase 1 mapping, fixtures, test harness |
 | `env.ts` | Loads `.env` quietly (imported first), `appVersion()` from package.json, `resolvePort()`, `startupBanner()` |
 | `static.ts` | Static serving of `dist/`, caching, br/gzip variants, SPA fallback, JSON 404s, "run npm run build" page |
 | `precompress.ts` | `precompressDist(dir)`: writes `.br`/`.gz` siblings for text assets (post-build step and at startup) |
-| `routes/extract.ts`, `routes/sheet.ts` | API routes (owned by other workstreams) |
+| `routes/registry.ts` | The one list of route modules; each workstream owns its module file |
 
 ## Routes and behaviour
 
 - `GET /health` -> `{ ok: true }`
-- `GET /api/status` -> `{ extraction: 'claude' | 'mock', storage: 'google-sheet' | 'seed', version }`
+- `GET /api/status` -> `ServerStatusV2` (`extraction`, `transcription`, `storage: postgres | pglite | none`, `database: ready | migrating | unavailable | none`, `auth`, `version`). `/health` never touches the database.
 - Everything in `routes/*` (`/api/data`, `/api/extract`, ...).
 - Unknown `/api/*` (any method) -> `404 { "error": "not found: ..." }`.
 - `/assets/*` (Vite hashed files): `Cache-Control: public, max-age=31536000, immutable`. A missing asset is a plain 404, never HTML.
@@ -51,9 +55,11 @@ All optional; see `.env.example`.
 | --- | --- |
 | `PORT` | Listen port (default 3000). Host is always `0.0.0.0`. |
 | `ANTHROPIC_API_KEY` (+ `ANTHROPIC_MODEL`) | Real Claude extraction instead of the mock extractor |
-| `GOOGLE_SHEET_ID` + `GOOGLE_SERVICE_ACCOUNT_JSON` | Google Sheet storage instead of the seed/local store |
+| `DATABASE_URL` | Postgres instead of the local PGlite store in `DATA_DIR/pglite` |
+| `MIGRATION_TIMEOUT_MS` | How long start-up waits for migrations before listening anyway (default 30000) |
+| `PG_POOL_MAX` | Postgres pool size (default 10) |
 | `NO_OPEN=1`, `CI` | `npm start` doesn't open a browser |
 
 ## Railway
 
-`railway.json` uses the Railpack builder, installs dependencies itself and builds with `npm run build` (re-running `npm ci` in the build step can fail on the builder's cache mount), starts with `npm run serve`, health-checks `/health` and restarts on failure (up to 5 retries). Railway injects `PORT`; set the API/Sheet variables in the service's Variables tab. `tsx` and `vite` are regular dependencies, so the install step provides everything the build and the server need. Not deployed from here.
+`railway.json` uses the Railpack builder, installs dependencies itself and builds with `npm run build` (re-running `npm ci` in the build step can fail on the builder's cache mount), runs `npm run db:migrate` before each deploy, starts with `npm run serve`, health-checks `/health` and restarts on failure (up to 5 retries). Railway injects `PORT`; `DATABASE_URL` is a reference to the Postgres service. `tsx` and `vite` are regular dependencies, so the install step provides everything the build and the server need. Not deployed from here.

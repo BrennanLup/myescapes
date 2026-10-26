@@ -1,62 +1,32 @@
 # Data layer (workstream 14)
 
-Storage for rooms, reviews, puzzles, wishlist and crew, the `/api/data`, `/api/entries` and `/api/wishlist` routes, and the 12-room seed.
+Board sorting helpers, the 12-room seed and the signed-out seed demo repository. Signed-in users' data lives in Postgres (`server/db`; Phase 1 mapping in `server/db/dataset.ts`). The Google Sheet adapter was removed in Phase 2.
 
 ## Files
 
 | Path | What |
 | --- | --- |
 | `src/data/index.ts` | Client helpers: `roomsForSort(rooms, reviews, key)` (board order + group labels), `groupFor`, `ratingBucket`, `escapeTimeBucket`, `formatEscapeTime` |
-| `src/data/server/repository.ts` | The `Repository` interface (`mode`, `getDataset`, `saveEntry`, `getWishlist`, `putWishlist`), `createRepository()` and shared helpers (`normalizeEntry`, `mergeCrew`, `upsertById`) |
+| `src/data/server/repository.ts` | The `Repository` interface (`mode`, `getDataset`, `saveEntry`, `getWishlist`, `putWishlist`), `seedRepositoryFor(dataDir)` (one shared instance per folder) and shared helpers (`normalizeEntry`, `mergeCrew`, `upsertById`) |
 | `src/data/server/seedRepository.ts` | Seed adapter: `seed/reviews.json` plus a writable overlay |
-| `src/data/server/sheetRepository.ts` | Google Sheet adapter |
-| `src/data/server/sheetsApi.ts` | Small Sheets REST v4 client over `fetch`, plus service-account JWT auth (`google-auth-library`) |
-| `src/data/server/sheetMapping.ts` | Pure row-to-entity mapping in both directions (unit-tested) |
-| `server/routes/sheet.ts` | `sheetRoutes(app, { repository? })` and `storageMode()` |
+| `server/routes/logs.phase1.ts`, `server/routes/wishlist.ts` | `/api/data`, `/api/entries`, `/api/wishlist`: Postgres when signed in, this seed demo when signed out |
 | `seed/reviews.json` | 12 rooms (6 San Francisco, 6 Toronto), 12 reviews, 5 crew, 6 wishlist items |
 | `seed/generate-photos.ts` | Builds the seed photo SVGs in `public/seed/photos/` (`npx tsx seed/generate-photos.ts`) |
 
 Browser code must only import `src/data/index.ts`. The `server/` subfolder uses Node APIs.
 
-## Choosing the storage backend
+## Seed demo storage
 
-- **Seed (default).** The seed file is read-only. Writes go to `<DATA_DIR>/store.json`, where `DATA_DIR` defaults to `.data/` (gitignored, created on first write). The file is an overlay, `{ entries: Entry[], wishlist: WishlistItem[] | null }`, merged over the seed: entries are upserted by room id and review id, and a saved wishlist replaces the seed wishlist. Data survives restarts. Delete `.data/store.json` to reset. Writes are serialized and atomic (written to a temp file, then renamed).
-- **Google Sheet.** Used when both `GOOGLE_SHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON` are set. `GOOGLE_SERVICE_ACCOUNT_JSON` takes either the raw key JSON or a path to the key file. Share the sheet with the service account's `client_email` as an editor. On startup the adapter adds any missing tabs and header rows, then does a test read. If any of that fails (bad key, no access, network), the server logs a `[data] WARNING ... Falling back to seed storage` line and runs in seed mode. It never crashes.
-
-`storageMode()` (shown in `/api/status`) reports the adapter that is actually active.
+The seed file is read-only. Writes from signed-out visitors go to `<DATA_DIR>/store.json` (default `.data/`, gitignored), an overlay `{ entries: Entry[], wishlist: WishlistItem[] | null }` merged over the seed. Writes are serialized and atomic (temp file, then rename).
 
 ## Routes
 
-- `GET /api/data` returns the `Dataset`. `crew` also includes any review crew names that are missing from the crew list.
-- `POST /api/entries` takes an `Entry`. It validates against `EntrySchema` (400 with the list of issues on failure), then upserts the room and review by id. It sets `review.roomId` and each `puzzle.reviewId` to match, and returns the saved entry.
-- `GET /api/wishlist` returns the wishlist. `PUT /api/wishlist` validates against `WishlistPutSchema` and replaces the whole list.
-- Storage errors after startup return 502 `{ error }`.
+Signed out (seed demo):
+- `GET /api/data` returns the `Dataset` (`source: 'seed'`). `crew` also includes any review crew names that are missing from the crew list.
+- `POST /api/entries` takes an `Entry` (400 `invalid` with the issues on failure), upserts the room and review by id, sets `review.roomId` and each `puzzle.reviewId` to match, and returns the saved entry.
+- `GET /api/wishlist` returns the wishlist. `PUT /api/wishlist` replaces the whole list.
 
-## Sheet layout
-
-Each tab has a header row. Columns are matched **by header name**, so you can reorder them or add your own extra columns (the app ignores them). Values are written RAW: numbers and booleans as real values, everything else as text.
-
-| Tab | Columns |
-| --- | --- |
-| `Rooms` | id, name, company, city, genre, address, website, photos |
-| `Reviews` | id, roomId, date, crew, overall, overallComment, puzzles, puzzlesComment, setting, settingComment, storyline, storylineComment, difficulty, difficultyComment, escaped, escapeTimeMinutes, visibleTimer, multiRoom, flashlights, liveActors, toolsUsed, voiceTranscript, photos |
-| `Puzzles` | id, reviewId, description, type, memorable |
-| `Wishlist` | id, name, city, link, addedBy, priority, done |
-| `Crew` | id, name, userId, email |
-
-How nested fields are stored:
-- **Ratings** are flat: a score column (1-100) and a `<key>Comment` column for each rating.
-- **crew and toolsUsed** are JSON arrays (`["Maya","Theo"]`). On read, a plain `Maya, Theo` cell also works.
-- **photos** is a JSON array of `{url, caption}`. On read, one URL per line also works. Inline `data:` photos are dropped if they would go over the 50,000-character limit for a Sheets cell.
-- **Puzzles** are their own rows, linked by `reviewId`.
-
-Reading hand-edited rows is lenient: `TRUE`/`yes`/`1`/`x` count as true, real date cells (serial numbers) and `2024-3-5` become ISO dates, and an unknown genre becomes `other`. Rows that are still invalid (for example a missing score) are skipped, with a warning naming the tab and row.
-
-Writes:
-- Saving an entry upserts its Rooms and Reviews rows by id (the row is updated if the id exists, appended if not).
-- Puzzles that were removed from a re-saved review are cleared.
-- New crew names get a row in Crew.
-- `PUT /api/wishlist` clears the Wishlist tab and rewrites it.
+Signed in, the same routes read and write the user's Postgres rows (`source: 'postgres'`), see `server/db/dataset.ts`.
 
 ## Seed
 
@@ -73,13 +43,4 @@ Room photos go in `room.photos`. Seed `review.photos` are empty.
 `npx vitest run src/data server/routes` covers:
 - the seed contents and the photo files on disk
 - the seed repository: save round trip, upsert, concurrent saves and wishlist, all in a temp `DATA_DIR`
-- falling back to seed mode
 - the routes, through `fastify.inject`
-- sheet mapping round trips for the whole seed, header reordering and lenient cells
-- `SheetRepository` against an in-memory fake of the Sheets API
-
-## Simplifications
-
-- The adapter never ran against a live Google Sheet, because no credentials were available. Its HTTP traffic is covered only by the in-memory fake.
-- The sheet adapter does not fill an empty sheet from the seed. A new sheet starts empty, and the app handles 0 rooms.
-- Every request reads the whole sheet. There is no caching, which is fine for a friend group's dataset.

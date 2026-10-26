@@ -1,5 +1,7 @@
 /**
- * HTTP API contract between the browser and `server/`. All routes are JSON.
+ * Phase 1 HTTP API contract between the browser and `server/`. All routes are JSON.
+ * Phase 2 routes (with auth levels and schemas for every route) live in `routes.ts`;
+ * use `callApi(ROUTES.x, ...)` for new code.
  * The server validates inputs with these schemas; the client validates responses.
  *
  * Owned by the orchestrator.
@@ -15,6 +17,7 @@ import {
   type ReviewDraft,
   type WishlistItem,
 } from './types'
+import { ServerStatusV2Schema, type ServerStatusV2 } from './routes'
 
 export const API = {
   health: '/health',
@@ -35,13 +38,9 @@ export type ExtractRequest = z.infer<typeof ExtractRequestSchema>
 
 export const WishlistPutSchema = z.array(WishlistItemSchema)
 
-/** Which features are real vs mocked. Shown in the settings panel. */
-export const ServerStatusSchema = z.object({
-  extraction: z.enum(['claude', 'mock']),
-  storage: z.enum(['google-sheet', 'seed']),
-  version: z.string(),
-})
-export type ServerStatus = z.infer<typeof ServerStatusSchema>
+/** Which features are real vs mocked. Shown in the settings panel. Phase 2 shape (see routes.ts). */
+export const ServerStatusSchema = ServerStatusV2Schema
+export type ServerStatus = ServerStatusV2
 
 export const HealthSchema = z.object({ ok: z.literal(true) })
 

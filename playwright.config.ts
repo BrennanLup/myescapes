@@ -4,8 +4,8 @@ import path from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
 const PORT = Number(process.env.E2E_PORT ?? 3100)
-// Seed mode writes added entries to DATA_DIR; give every run a throwaway one so
-// e2e never touches the real `.data/` store.
+// The seed demo overlay and the local PGlite database both live in DATA_DIR; give every run a
+// throwaway one so e2e never touches the real `.data/` store.
 const DATA_DIR = process.env.E2E_DATA_DIR ?? mkdtempSync(path.join(tmpdir(), 'myescapes-e2e-'))
 
 export default defineConfig({
@@ -36,8 +36,9 @@ export default defineConfig({
       DATA_DIR,
       // e2e always exercises the offline paths, whatever the local .env says.
       ANTHROPIC_API_KEY: '',
-      GOOGLE_SHEET_ID: '',
-      GOOGLE_SERVICE_ACCOUNT_JSON: '',
+      OPENAI_API_KEY: '',
+      // Always the in-process PGlite database in DATA_DIR, never a real Postgres.
+      DATABASE_URL: '',
     },
     // Reusing a server would also reuse its data dir; opt in explicitly.
     reuseExistingServer: !!process.env.E2E_REUSE_SERVER,

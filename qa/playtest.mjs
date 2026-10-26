@@ -52,7 +52,7 @@ async function startServer() {
   const child = spawn('npm', ['start'], {
     cwd: ROOT,
     // Mock + seed mode: blank the keys in case the shell has them.
-    env: { ...process.env, NO_OPEN: '1', PORT: String(PORT), DATA_DIR: dataDir, ANTHROPIC_API_KEY: '', GOOGLE_SHEET_ID: '', GOOGLE_SERVICE_ACCOUNT_JSON: '' },
+    env: { ...process.env, NO_OPEN: '1', PORT: String(PORT), DATA_DIR: dataDir, ANTHROPIC_API_KEY: '', OPENAI_API_KEY: '', DATABASE_URL: '' },
     detached: true, // own process group, so we can stop npm + node start.mjs + server together
     stdio: ['ignore', 'pipe', 'pipe'],
   })

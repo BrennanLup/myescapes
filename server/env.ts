@@ -44,14 +44,30 @@ export function startupBanner(opts: {
   storage: string
   version: string
   distReady: boolean
+  transcription?: string
+  auth?: string
+  /** Database state line, e.g. "ready" or "unavailable (retrying)". */
+  database?: string
 }): string {
   const features: FeatureLine[] = [
     { name: 'Review extraction', real: opts.extraction === 'claude', mode: opts.extraction, vars: ['ANTHROPIC_API_KEY'] },
     {
       name: 'Storage',
-      real: opts.storage === 'google-sheet',
+      real: opts.storage === 'postgres',
       mode: opts.storage,
-      vars: ['GOOGLE_SHEET_ID', 'GOOGLE_SERVICE_ACCOUNT_JSON'],
+      vars: ['DATABASE_URL'],
+    },
+    {
+      name: 'Voice transcription',
+      real: opts.transcription === 'openai',
+      mode: opts.transcription ?? 'mock',
+      vars: ['OPENAI_API_KEY'],
+    },
+    {
+      name: 'Google sign-in',
+      real: opts.auth === 'google',
+      mode: opts.auth ?? 'disabled',
+      vars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'BETTER_AUTH_SECRET'],
     },
   ]
   const lines = [
@@ -65,6 +81,7 @@ export function startupBanner(opts: {
     const hint = f.real ? `(using ${f.vars.join(' + ')})` : `(set ${f.vars.join(' + ')} in .env to switch to real)`
     lines.push(`  [${tag}] ${f.name}: ${f.mode} ${hint}`)
   }
+  if (opts.database) lines.push(`  Database: ${opts.database}`)
   if (!opts.distReady) {
     lines.push('', '  Note: no dist/ build found. Run `npm run build` (or `npm start`) to build the app.')
   }

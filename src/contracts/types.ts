@@ -150,8 +150,8 @@ export const DatasetSchema = z.object({
   reviews: z.array(ReviewSchema),
   wishlist: z.array(WishlistItemSchema),
   crew: z.array(CrewMemberSchema),
-  /** Which storage backend served the data. */
-  source: z.enum(['google-sheet', 'seed']),
+  /** Which storage served the data: the signed-in user's Postgres rows, or the read-only seed demo. */
+  source: z.enum(['postgres', 'seed']),
 })
 export type Dataset = z.infer<typeof DatasetSchema>
 

@@ -100,7 +100,7 @@ describe('buildServer with a dist folder', () => {
     }
   })
 
-  it('still registers the extract and sheet routes', async () => {
+  it('still registers the extract and Phase 1 data routes', async () => {
     const data = await app.inject({ method: 'GET', url: '/api/data' })
     expect(data.statusCode).toBe(200)
     const bad = await app.inject({ method: 'POST', url: '/api/extract', payload: {} })
@@ -242,7 +242,7 @@ describe('helpers', () => {
       const text = startupBanner({ port: 3000, extraction: 'claude', storage: 'seed', version: '1.0.0', distReady: false })
       expect(text).toContain('[REAL] Review extraction')
       expect(text).toContain('[MOCK] Storage')
-      expect(text).toContain('GOOGLE_SHEET_ID')
+      expect(text).toContain('DATABASE_URL')
       expect(text).toContain('npm run build')
       expect(text).not.toContain('sk-secret-value')
     } finally {

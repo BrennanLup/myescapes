@@ -1,11 +1,7 @@
 /**
- * Server-side storage. One interface, two adapters:
- *  - seed:         seed/reviews.json + a JSON overlay in DATA_DIR (default `.data/`)
- *  - google-sheet: a Google Sheet via the Sheets REST v4 API
- *
- * `createRepository()` picks the Google Sheet when GOOGLE_SHEET_ID and
- * GOOGLE_SERVICE_ACCOUNT_JSON are set and the sheet answers; otherwise (or on
- * any startup error) it logs a warning and falls back to the seed adapter.
+ * Phase 1 repository interface, now used only for the signed-out seed demo
+ * (seed/reviews.json + a JSON overlay in DATA_DIR, default `.data/`).
+ * Signed-in users' data lives in Postgres (server/db). The Google Sheet adapter was removed in Phase 2.
  */
 import type { CrewMember, Dataset, Entry, Review, WishlistItem } from '../../contracts/types'
 import { EntrySchema } from '../../contracts/types'
@@ -60,23 +56,18 @@ export function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
   return next
 }
 
-export async function createRepository(env: NodeJS.ProcessEnv = process.env): Promise<Repository> {
-  const { SeedRepository } = await import('./seedRepository')
-  if (env.GOOGLE_SHEET_ID && env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-    try {
-      const { SheetRepository } = await import('./sheetRepository')
-      const repo = await SheetRepository.connect({
-        sheetId: env.GOOGLE_SHEET_ID,
-        serviceAccountJson: env.GOOGLE_SERVICE_ACCOUNT_JSON,
-      })
-      console.log('[data] Using Google Sheet storage')
-      return repo
-    } catch (err) {
-      console.warn(
-        `[data] WARNING: Google Sheet storage failed to start (${err instanceof Error ? err.message : String(err)}). ` +
-          'Falling back to seed storage (seed/reviews.json + local overlay).',
-      )
-    }
+const seedRepos = new Map<string, Promise<Repository>>()
+
+/**
+ * The shared seed-demo repository for a DATA_DIR. One instance per folder, so every route
+ * writes through the same serialized queue (the overlay is a single file).
+ */
+export function seedRepositoryFor(dataDir: string | undefined = process.env.DATA_DIR): Promise<Repository> {
+  const key = dataDir || ''
+  let repo = seedRepos.get(key)
+  if (!repo) {
+    repo = import('./seedRepository').then(({ SeedRepository }) => new SeedRepository({ dataDir: dataDir || undefined }))
+    seedRepos.set(key, repo)
   }
-  return new SeedRepository({ dataDir: env.DATA_DIR })
+  return repo
 }

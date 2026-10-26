@@ -261,11 +261,11 @@ function SortMenu() {
 /** "Demo mode" badge when extraction is mocked or storage is the seed. */
 function ModeBadge() {
   const { status } = useServerStatus()
+  const seed = useStore((s) => s.dataSource) === 'seed'
   if (!status) return null
   const mockAi = status.extraction === 'mock'
-  const seed = status.storage === 'seed'
   if (!mockAi && !seed) return null
-  const parts = [mockAi ? 'voice notes use a mock extractor (no ANTHROPIC_API_KEY)' : null, seed ? 'entries use built-in seed data, not a Google Sheet' : null].filter(Boolean)
+  const parts = [mockAi ? 'voice notes use a mock extractor (no ANTHROPIC_API_KEY)' : null, seed ? 'the rooms shown are built-in demo data, not your own' : null].filter(Boolean)
   const tip = `Demo mode: ${parts.join('; ')}. Open settings for details.`
   return (
     <button

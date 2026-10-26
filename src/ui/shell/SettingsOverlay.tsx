@@ -206,12 +206,12 @@ function ServerStatusSection() {
             />
             <StatusRow
               name="Storage"
-              real={status.storage === 'google-sheet'}
-              realLabel="Google Sheet"
-              mockLabel="Seed data"
+              real={status.storage === 'postgres'}
+              realLabel="Postgres"
+              mockLabel={status.storage === 'pglite' ? 'Local database' : 'Seed data'}
               howTo={
                 <>
-                  Set <Env>GOOGLE_SHEET_ID</Env> and <Env>GOOGLE_SERVICE_ACCOUNT_JSON</Env> to save to a Google Sheet.
+                  Set <Env>DATABASE_URL</Env> on the server to use Postgres.
                 </>
               }
             />

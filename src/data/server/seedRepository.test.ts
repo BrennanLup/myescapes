@@ -6,7 +6,7 @@ import path from 'node:path'
 import type { Entry } from '@/contracts/types'
 import { FIXTURE_DATASET } from '@/contracts/fixtures'
 import { SeedRepository } from './seedRepository'
-import { createRepository, mergeCrew, normalizeEntry } from './repository'
+import { mergeCrew, normalizeEntry, seedRepositoryFor } from './repository'
 
 let dir: string
 beforeEach(async () => {
@@ -83,9 +83,10 @@ describe('SeedRepository', () => {
 })
 
 describe('repository helpers', () => {
-  it('createRepository falls back to seed when the sheet cannot start', async () => {
-    const repo = await createRepository({ GOOGLE_SHEET_ID: 'x', GOOGLE_SERVICE_ACCOUNT_JSON: '{"nope":1}', DATA_DIR: dir })
-    expect(repo.mode).toBe('seed')
+  it('seedRepositoryFor shares one seed repository per DATA_DIR', async () => {
+    const a = await seedRepositoryFor(dir)
+    expect(a.mode).toBe('seed')
+    expect(await seedRepositoryFor(dir)).toBe(a)
   })
 
   it('normalizeEntry links review to room and puzzles to review', () => {

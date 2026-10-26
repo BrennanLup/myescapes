@@ -1,7 +1,7 @@
 // Serves the Vite build (dist/) with caching and precompressed (br/gzip) variants, plus SPA fallback and JSON 404s for /api.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import fastifyStatic from '@fastify/static'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { precompressDist } from './precompress'
 
@@ -57,7 +57,15 @@ function notFound(req: FastifyRequest, reply: FastifyReply) {
  * Registers static serving for `distDir` and a not-found handler that falls back to index.html
  * for client-side routes. Returns whether a build was found.
  */
-export async function registerStatic(app: FastifyInstance, distDir: string): Promise<boolean> {
+export interface StaticOptions {
+  /**
+   * Extra <head> tags for an HTML page request (SEO, workstream 26). Return null to serve
+   * index.html unchanged. Errors fall back to the plain page.
+   */
+  headTags?: (url: string) => Promise<string | null>
+}
+
+export async function registerStatic(app: FastifyInstance, distDir: string, opts: StaticOptions = {}): Promise<boolean> {
   const ready = existsSync(path.join(distDir, 'index.html'))
   if (!ready) {
     app.setNotFoundHandler((req, reply) => {
@@ -84,15 +92,36 @@ export async function registerStatic(app: FastifyInstance, distDir: string): Pro
     },
   })
 
-  const sendIndex = (reply: FastifyReply) => reply.header('cache-control', CACHE_NONE).sendFile('index.html')
-  app.get('/', (_req, reply) => sendIndex(reply))
+  let indexHtml: string | null = null
+  const plainIndex = (reply: FastifyReply) => reply.header('cache-control', CACHE_NONE).sendFile('index.html')
+  // Callbacks below never return the reply: a reply is thenable, and resolving a promise with it
+  // makes Node call reply.then(), which piles 'close' listeners on the response.
+  const sendIndex = (reply: FastifyReply, url?: string) => {
+    if (!opts.headTags || !url) return plainIndex(reply)
+    void opts
+      .headTags(url)
+      .catch((err: Error) => {
+        console.error(`[seo] head tags failed for ${url.split('?')[0]}: ${err.message}`)
+        return null
+      })
+      .then((tags) => {
+        if (!tags) {
+          plainIndex(reply)
+          return
+        }
+        indexHtml ??= readFileSync(path.join(distDir, 'index.html'), 'utf8')
+        reply.header('cache-control', CACHE_NONE).type('text/html; charset=utf-8').send(indexHtml.replace('</head>', `${tags}</head>`))
+      })
+    return reply
+  }
+  app.get('/', (req, reply) => sendIndex(reply, req.url))
   // Static info pages (public/*.html), served at clean URLs. Google's OAuth consent screen links to these.
   for (const page of STATIC_PAGES) {
     app.get(`/${page}`, (_req, reply) => reply.header('cache-control', CACHE_NONE).sendFile(`${page}.html`))
   }
   app.setNotFoundHandler((req, reply) => {
     if (!wantsSpa(req)) return notFound(req, reply)
-    return sendIndex(reply)
+    return sendIndex(reply, req.url)
   })
   return true
 }

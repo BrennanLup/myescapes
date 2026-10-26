@@ -15,7 +15,7 @@ Loaded from Google Fonts under the SIL Open Font License 1.1:
 - JetBrains Mono (JetBrains)
 
 ## Libraries
-three.js, React Three Fiber, drei, postprocessing / @react-three/postprocessing (pmndrs), React, Zustand, Zod, Tailwind CSS, Vite, Fastify, the Anthropic TypeScript SDK and google-auth-library, all under their respective open-source licenses (MIT / Apache-2.0).
+three.js, React Three Fiber, drei, postprocessing / @react-three/postprocessing (pmndrs), React, Zustand, Zod, Tailwind CSS, Vite, Fastify, the Anthropic TypeScript SDK, the OpenAI SDK, Drizzle ORM, node-postgres, PGlite, Better Auth, @fastify/cookie, @fastify/multipart, @fastify/rate-limit, idb-keyval, qrcode and hyparquet, all under their respective open-source licenses (MIT / Apache-2.0; PGlite is Apache-2.0 / PostgreSQL License).
 
 ## Sample data
 The 12 sample escape rooms, companies, addresses and reviews in `seed/reviews.json` are fictional.

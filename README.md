@@ -50,23 +50,19 @@ Everything is optional. Copy `.env.example` to `.env` and fill in what you want.
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | Voice notes use the offline rule-based mock extractor. | Transcripts are turned into reviews by Claude, server-side. If a call fails, the app falls back to the mock extractor and the confirm screen says so. |
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | The Claude model used for extraction. |
-| `GOOGLE_SHEET_ID` | Seed mode: `seed/reviews.json` plus your own entries in `DATA_DIR`. | Rooms, reviews, puzzles, wish list and crew live in that Google Sheet (needs `GOOGLE_SERVICE_ACCOUNT_JSON` too). |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | (as above) | The service-account key, either the raw JSON or a path to the key file. |
+| `DATABASE_URL` | An in-process Postgres (PGlite) stored in `DATA_DIR/pglite`. | Postgres (Railway). Migrations run on every start. |
+| `OPENAI_API_KEY` | Voice recordings aren't transcribed server-side (type or use live captions). | Server-side transcription of recordings. |
+| `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `BETTER_AUTH_SECRET` | Google sign-in is off. | "Continue with Google". |
+| `PUBLIC_URL` | Links (invites) use the request's host. | The public origin for absolute links, e.g. `https://bubbly-hope-production.up.railway.app`. |
+| `CAP_TRANSCRIBE_SECONDS_PER_USER`, `CAP_EXTRACT_CALLS_PER_USER`, `CAP_TRANSCRIBE_SECONDS_GLOBAL`, `CAP_EXTRACT_CALLS_GLOBAL` | 1200 s, 30 calls, 21600 s, 1000 calls per UTC day. | Daily spending caps. |
 | `PORT` | `3000` | Port the server listens on. |
-| `DATA_DIR` | `.data/` in the repo (gitignored) | Where seed mode writes new entries and wish-list changes. |
+| `DATA_DIR` | `.data/` in the repo (gitignored) | Where the local database and the signed-out demo's entries live. |
 
-If the Sheet can't be reached at startup (bad key, no access, no network), the server logs a warning and runs in seed mode instead of crashing.
+If the database can't be reached or migrated at startup, the server still starts: `/health`, the static pages and the signed-out demo keep working, database routes answer 503, and it retries every 30 seconds.
 
-### Google Sheet setup
+### Database
 
-1. Create a Google Cloud project and enable the **Google Sheets API**.
-2. Create a **service account** (IAM & Admin > Service Accounts) and add a JSON key. Download it.
-3. Create an empty Google Sheet. Copy its id from the URL: `https://docs.google.com/spreadsheets/d/<THIS PART>/edit`.
-4. Share the sheet with the service account's `client_email` (from the key file) as an **Editor**.
-5. In `.env`, set `GOOGLE_SHEET_ID=<the id>` and `GOOGLE_SERVICE_ACCOUNT_JSON=./path/to/key.json` (or paste the JSON on one line).
-6. Restart. On startup the app creates the `Rooms`, `Reviews`, `Puzzles`, `Wishlist` and `Crew` tabs with header rows if they are missing. Columns are matched by header name, so you can reorder them or add your own. The full column layout is in [`src/data/README.md`](src/data/README.md).
-
-The sheet starts empty. Add rooms through the app, or paste rows by hand.
+Phase 2 stores everything in PostgreSQL through Drizzle ORM (`server/db`). Locally, with no `DATABASE_URL`, the server runs PGlite, a WebAssembly Postgres, in `DATA_DIR/pglite`, so nothing needs installing. `npm run db:migrate` applies migrations, `npm run db:seed` adds the 12 invented demo rooms to a local directory, and `npm run db:generate` writes a new migration after a schema change. The Google Sheet storage from Phase 1 has been removed.
 
 ## Scripts
 
@@ -80,18 +76,21 @@ The sheet starts empty. Add rooms through the app, or paste rows by hand.
 | `npm run test:e2e` | End-to-end tests (Playwright, desktop 1440x900 and mobile 390x844). Builds the app and serves it on `E2E_PORT` (default 3100) with a throwaway `DATA_DIR`, so your data is never touched. Needs a Playwright Chromium (`npx playwright install chromium` once). |
 | `npm run lint` | ESLint. |
 | `npm run typecheck` | TypeScript, no emit. |
+| `npm run db:migrate` / `db:seed` / `db:generate` | Apply migrations, seed the local demo directory, generate a migration from `server/db/schema.ts`. |
 | `npm run check` | Typecheck, lint and unit tests. |
 
 ## Project structure
 
 ```
 server/                 Fastify server: static app, /health, /api/status
+  db/                   Drizzle schema, migrations, PGlite test harness, fixtures
+  auth/                 Google sign-in (Better Auth)
   extract/              Claude extractor, mock extractor, prompt
-  routes/               /api/extract, /api/data, /api/entries, /api/wishlist
+  routes/               One module per workstream, listed in routes/registry.ts
 src/
   contracts/            Shared types (zod), API client, scene layout, events, style tokens
   state/                Zustand store and the event-bus bridge
-  data/                 Storage: seed repository, Google Sheet repository, mapping
+  data/                 Board sorting helpers and the signed-out seed demo repository
   world/                The 3D room
     room/ lighting/ materials/    Shell, light rig and post, procedural materials
     board/ string/                Bulletin board with polaroids, red string
@@ -115,5 +114,5 @@ The repo includes `railway.json`. It has not been deployed from here.
 
 1. Create a Railway project from this GitHub repo.
 2. Railway installs dependencies, runs `npm run build` and starts with `npm run serve`, health-checking `/health`. It sets `PORT` itself.
-3. Add any variables you want in the service's **Variables** tab (`ANTHROPIC_API_KEY`, `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` as raw JSON).
-4. Seed mode writes to the container's disk, which Railway resets on every deploy. Use the Google Sheet for data that should last, or mount a volume and point `DATA_DIR` at it.
+3. Add a PostgreSQL service and reference its `DATABASE_URL` from the app service. Set the other variables in the service's **Variables** tab.
+4. `railway.json` runs `npm run db:migrate` as the pre-deploy command, and the server migrates again on start (a no-op when up to date).

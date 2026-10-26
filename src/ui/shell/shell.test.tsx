@@ -10,7 +10,7 @@ import { resetShellForTests } from './shellStore'
 
 beforeEach(() => {
   resetShellForTests()
-  vi.spyOn(apiClient, 'getStatus').mockResolvedValue({ extraction: 'mock', storage: 'seed', version: '0.1.0' })
+  vi.spyOn(apiClient, 'getStatus').mockResolvedValue({ extraction: 'mock', transcription: 'mock', storage: 'none', database: 'none', auth: 'disabled', version: '0.1.0' })
   useStore.setState({ settings: { ...DEFAULT_SETTINGS }, sort: 'city', overlay: null, worldReady: false, dataStatus: 'idle', isTouch: false })
 })
 afterEach(() => {
@@ -35,7 +35,7 @@ describe('SettingsOverlay', () => {
     // server status section
     expect(await screen.findByText('Mock extractor')).toBeTruthy()
     expect(screen.getByText('ANTHROPIC_API_KEY')).toBeTruthy()
-    expect(screen.getByText('GOOGLE_SERVICE_ACCOUNT_JSON')).toBeTruthy()
+    expect(screen.getByText('DATABASE_URL')).toBeTruthy()
   })
 
   it('emits overlay:close on Escape and on close', () => {
