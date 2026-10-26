@@ -5,6 +5,7 @@
 import * as THREE from 'three'
 import { FONTS, GENRE_COLORS, PALETTE, UI } from '@/contracts/style'
 import type { Genre, Review, Room } from '@/contracts/types'
+import type { CrewSticker } from '@/state/crew'
 import { seededRandom } from './layout'
 
 /** Logical canvas size of a polaroid (drawn at any resolution via scale). */
@@ -462,10 +463,124 @@ export function drawGenreIllustration(ctx: Ctx, genre: Genre, seed: string, x: n
 export interface PolaroidData {
   room: Room
   review: Review | undefined
+  /** Crew of the latest visit, drawn as avatar stickers on the photo's bottom-right corner. */
+  crew?: readonly CrewSticker[]
+}
+
+// ---------------------------------------------------------------------------
+// Crew avatar stickers (workstream 37)
+// ---------------------------------------------------------------------------
+
+/** At most this many stickers; a fuller crew shows the first three and a "+N" sticker. */
+export const MAX_STICKERS = 4
+export const STICKER_R = 19
+
+export interface StickerSlot {
+  x: number
+  y: number
+  r: number
+  /** Sticker index in the crew, or -1 for the "+N" overflow sticker. */
+  index: number
+  rot: number
+  /** Overflow count for the "+N" sticker. */
+  more: number
+}
+
+/** Where each sticker goes on the 256x300 polaroid: a slightly overlapping row, right to left. */
+export function stickerSlots(count: number, seed = ''): StickerSlot[] {
+  if (count <= 0) return []
+  const shown = count > MAX_STICKERS ? MAX_STICKERS - 1 : count
+  const total = count > MAX_STICKERS ? MAX_STICKERS : count
+  const rnd = seededRandom('stickers:' + seed)
+  const out: StickerSlot[] = []
+  const right = PHOTO.x + PHOTO.w - STICKER_R - 4
+  const y = PHOTO.y + PHOTO.h - STICKER_R + 6
+  const step = STICKER_R * 1.55
+  for (let i = 0; i < total; i++) {
+    const overflow = i === shown
+    out.push({
+      x: right - i * step,
+      y: y + (rnd() - 0.5) * 4,
+      r: STICKER_R,
+      index: overflow ? -1 : i,
+      rot: (rnd() - 0.5) * 0.4,
+      more: overflow ? count - shown : 0,
+    })
+  }
+  return out
+}
+
+/** Draws crew stickers: the avatar picture when loaded, else coloured initials. */
+export function drawCrewStickers(
+  ctx: CanvasRenderingContext2D,
+  crew: readonly CrewSticker[],
+  avatars: ReadonlyMap<string, HTMLImageElement> = new Map(),
+  seed = '',
+) {
+  const slots = stickerSlots(crew.length, seed)
+  // Paint left to right so the rightmost sticker sits on top.
+  for (const slot of [...slots].reverse()) {
+    const st = slot.index >= 0 ? crew[slot.index] : null
+    ctx.save()
+    ctx.translate(slot.x, slot.y)
+    ctx.rotate(slot.rot)
+    ctx.globalAlpha = st?.pending ? 0.6 : 1
+    // shadow + white die-cut border
+    ctx.fillStyle = 'rgba(40,20,10,0.28)'
+    ctx.beginPath()
+    ctx.arc(1.5, 2.5, slot.r + 3, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#fffdf8'
+    ctx.beginPath()
+    ctx.arc(0, 0, slot.r + 3, 0, Math.PI * 2)
+    ctx.fill()
+    const img = st?.image ? avatars.get(st.image) : undefined
+    ctx.beginPath()
+    ctx.arc(0, 0, slot.r, 0, Math.PI * 2)
+    if (img && img.naturalWidth > 0) {
+      ctx.save()
+      ctx.clip()
+      const sc = Math.max((slot.r * 2) / img.naturalWidth, (slot.r * 2) / img.naturalHeight)
+      const iw = img.naturalWidth * sc
+      const ih = img.naturalHeight * sc
+      try {
+        ctx.drawImage(img, -iw / 2, -ih / 2, iw, ih)
+      } catch {
+        ctx.fillStyle = st?.color ?? UI.accent
+        ctx.fill()
+      }
+      ctx.restore()
+    } else {
+      ctx.fillStyle = st ? st.color : '#3b2a26'
+      ctx.fill()
+      ctx.fillStyle = '#ffffff'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      const text = st ? st.initials : `+${slot.more}`
+      fitFont(ctx, text, '700', FONTS.display, 20, 10, slot.r * 1.6)
+      ctx.fillText(text, 0, 1.5)
+    }
+    if (st?.pending) {
+      ctx.globalAlpha = 1
+      ctx.strokeStyle = '#9a8a80'
+      ctx.lineWidth = 2
+      ctx.setLineDash([4, 3])
+      ctx.beginPath()
+      ctx.arc(0, 0, slot.r + 1.5, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.setLineDash([])
+    }
+    ctx.restore()
+  }
 }
 
 /** Draws a full polaroid onto `canvas` (any resolution with the 256:300 aspect). */
-export function drawPolaroid(canvas: HTMLCanvasElement, { room, review }: PolaroidData, img: HTMLImageElement | null) {
+export function drawPolaroid(
+  canvas: HTMLCanvasElement,
+  { room, review, crew }: PolaroidData,
+  img: HTMLImageElement | null,
+  avatars?: ReadonlyMap<string, HTMLImageElement>,
+) {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   ctx.setTransform(canvas.width / POLAROID_W, 0, 0, canvas.height / POLAROID_H, 0, 0)
@@ -504,6 +619,7 @@ export function drawPolaroid(canvas: HTMLCanvasElement, { room, review }: Polaro
   ctx.strokeStyle = 'rgba(60,40,30,0.35)'
   ctx.lineWidth = 1.5
   ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1)
+  if (crew?.length) drawCrewStickers(ctx, crew, avatars, review?.id ?? room.id)
 
   // caption
   const ink = '#2f2340'

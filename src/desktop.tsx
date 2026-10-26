@@ -6,12 +6,13 @@
 import { App } from './App'
 import { installBridge } from './state/bridge'
 import { installTestHooks } from './contracts/testing'
-import { useStore } from './state/store'
+import { installRoomSync } from './state/sync'
 import { bus } from './contracts/events'
 
 installBridge()
 installTestHooks()
-void useStore.getState().loadData()
+// Loads the room (the signed-in user's data, or the seed demo) and keeps it fresh.
+installRoomSync()
 
 // First user gesture unlocks audio etc.
 const gesture = () => {

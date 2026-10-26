@@ -8,11 +8,12 @@
 - `index.tsx`: the R3F component, the animation loop, the sort tabs and the store/runtime publishing.
 
 ## Behaviour
-- **Grouping** follows `store.sort`:
+- **Grouping** follows `store.boardSort` (the Phase 1 `sort`, or `'crew'`):
   - city, brand (company) and genre: alphabetical, with "Unknown" last.
   - date: by year, oldest first, with "Undated" last.
   - rating: 90+, 80-89, 70-79, <70, then Unrated.
   - escapeTime: Under 45 min, 45-54 min, 55+ min, Didn't escape, then Unknown.
+  - crew (workstream 37): "With Mia", "With Mia & Bob", "With Mia, Bob & 2 more", most rooms first, "Solo" last. Uses `store.crewIndex` (src/state/crew.ts).
 - **Order within a group:**
   - city, brand, genre and date: chronological.
   - rating: highest score first.
@@ -33,9 +34,10 @@
   - When `hoveredId === 'photo:<id>'`, the photo lifts toward the viewer, scales up about 14% and straightens.
 - **Interaction:**
   - Each photo carries `interactable({ id: 'photo:<id>', kind: 'photo', label: 'Read review: <name>', event: review:open })`.
-  - Six paper tabs along the top edge use `interactable({ id: 'sort:<key>', kind: 'sort', label: 'Sort by <Label>', maxDistance: 7 })`. The board listens for `bus.on('interact')` and calls `setSort` when one is clicked.
+  - Seven paper tabs along the top edge (the six Phase 1 sorts in their original places, then Crew; key 7 also picks Crew) use `interactable({ id: 'sort:<key>', kind: 'sort', label: 'Sort by <Label>', maxDistance: 7 })`. The board listens for `bus.on('interact')` and calls `setSort` when one is clicked.
   - The active tab is highlighted orange.
-- **Extras:** a "Sort by:" sticky note, an "N rooms escaped!" counter note, an empty-state note when there are no rooms, and one AABB collider for the board.
+- **Crew stickers:** up to four round avatar stickers on each photo's bottom-right corner (`drawCrewStickers`, `stickerSlots`): the friend's picture (`avatars.ts`, CORS, no referrer) or coloured initials, pending tags faded, "+N" for bigger crews.
+- **Extras:** a "Sort by:" sticky note, an "N rooms escaped!" counter note, an empty-state note when there are no rooms (signed in: "Your board is empty! Log your first escape at the desk or from your phone."), and one AABB collider for the board.
 
 ## Simplifications
 - When a sort changes, the group label cards pop in fresh instead of flying.

@@ -6,6 +6,7 @@
  * `rooms` are ignored (dangling data).
  */
 import { PUZZLE_TYPES, type Genre, type Puzzle, type PuzzleType, type Review, type Room } from '@/contracts/types'
+import { buildCrewIndex, rankTeammates, type CrewIndex, type Teammate } from '@/state/crew'
 
 export type WrapYear = number | 'all'
 
@@ -43,6 +44,13 @@ export interface WrapStats {
   crewMvp: { name: string; count: number } | null
   /** Crew members with attendance, most first. */
   crew: Array<{ name: string; count: number }>
+  /**
+   * "Your #1 teammate": the person you played with most (not yourself), with rooms together
+   * and the escape rate on those rooms. Uses account identities and pictures when known.
+   */
+  topTeammate: Teammate | null
+  /** Every teammate, most rooms together first. */
+  teammates: Teammate[]
   /** Longest run of consecutive escapes in date order. */
   longestEscapeStreak: number
   /** First / last visit date in the period (ISO), or null. */
@@ -81,7 +89,7 @@ function countBy<K>(items: K[]): Map<K, number> {
   return m
 }
 
-export function computeWrap(rooms: Room[], reviews: Review[], year: WrapYear): WrapStats {
+export function computeWrap(rooms: Room[], reviews: Review[], year: WrapYear, crewIndex?: CrewIndex): WrapStats {
   const roomById = new Map(rooms.map((r) => [r.id, r]))
   const visits: WrapVisit[] = []
   for (const review of reviews) {
@@ -165,6 +173,12 @@ export function computeWrap(rooms: Room[], reviews: Review[], year: WrapYear): W
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 
+  const visitReviews = visits.map((v) => v.review)
+  // Reviews the index doesn't know (e.g. the demo, or one just saved) use their crew names.
+  const missing = visitReviews.filter((r) => !crewIndex?.[r.id])
+  const index = { ...buildCrewIndex(missing), ...(crewIndex ?? {}) }
+  const teammates = rankTeammates(visitReviews, index)
+
   return {
     year,
     roomsDone,
@@ -182,6 +196,8 @@ export function computeWrap(rooms: Room[], reviews: Review[], year: WrapYear): W
     mostMemorablePuzzle,
     crewMvp: crew[0] ?? null,
     crew,
+    topTeammate: teammates[0] ?? null,
+    teammates,
     longestEscapeStreak,
     firstDate: visits[0]?.review.date ?? null,
     lastDate: visits[visits.length - 1]?.review.date ?? null,
