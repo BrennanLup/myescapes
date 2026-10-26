@@ -11,7 +11,7 @@ import { ReviewOverlay } from './ui/review'
 import { RecordOverlay } from './ui/record'
 import { ConfirmOverlay } from './ui/confirm'
 import { WishlistOverlay } from './world/wishlist'
-import { GateOverlay, useGateAutoOpen } from './gate'
+import { DailyOverlay } from './daily/ui/overlay'
 import { WrapOverlay } from './ui/wrap'
 import { LoadingScreen, Hud, SettingsOverlay } from './ui/shell'
 import { Reticle } from './interaction'
@@ -35,7 +35,8 @@ function Overlays() {
     case 'wrap':
       return <WrapOverlay />
     case 'gate':
-      return <GateOverlay />
+      // The door is Escape of the Day now (workstream 22): optional, never blocks entry.
+      return <DailyOverlay />
     case 'settings':
       return <SettingsOverlay />
   }
@@ -43,7 +44,6 @@ function Overlays() {
 
 export function App() {
   const quality = useStore((s) => s.settings.quality)
-  useGateAutoOpen()
   return (
     <div className="fixed inset-0 overflow-hidden bg-[var(--color-night)] select-none">
       <Canvas
