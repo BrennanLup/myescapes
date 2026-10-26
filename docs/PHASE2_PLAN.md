@@ -55,7 +55,7 @@ A Google Maps listing is a business (for example "Starlight Escapes, 12 Main St"
 - `venues`: business locations from the directory (name, brand, address, city, region, country, lat/lng, website, phone, slug, source ids, google place id).
 - `games`: individual rooms inside a venue (name, genre, players, duration, slug). Mostly created by users the first time someone logs that room.
 - `logs`: a user's play-through of a game (date, crew, ratings, puzzles, escaped, time, features, tools, transcript, photos, visibility).
-- Plus: `users`, `sessions`, `log_puzzles`, `log_photos`, `log_crew`, `wishlist_items`, `daily_puzzles`, `daily_results`, `reports`.
+- Plus: `users`, `sessions`, `wishlist_items`, `daily_puzzles`, `daily_results`, `reports`, and the friends and visits tables below. "Logs" are split into shared visits and personal reviews (see Friends and shared visits).
 
 Public pages:
 - `/games/:slug` shows the game, its venue, aggregate scores, puzzle highlights, and every public review with its author.
@@ -63,6 +63,83 @@ Public pages:
 - `/cities/:slug` lists the venues in a city.
 
 Logs are public by default, as you asked, with a per-log "keep private" switch. Users can report a review, and an admin can hide it.
+
+### Friends and shared visits
+
+The goal: you and your girlfriend do most rooms together and some apart. Each of you should see every room you played in your own room. When you played together, it should be logged once, but each of you keeps your own opinion.
+
+#### Core idea: a visit is shared, a review is personal
+A play-through splits into two parts:
+
+- **Visit** (shared): the facts that are the same for everyone in the room. These are the game, the date, whether you escaped, the escape time, the features (visible timer, multi-room, flashlights, live actors), the tools, the puzzles and the photos. Logged once.
+- **Review** (personal, one per person per visit): your scores from 1 to 100, your comments, your voice note and transcript, and which puzzles were memorable to you. Each person writes their own, and each person sets its visibility.
+
+This means:
+- A room you did together appears once on the public game page, with two reviews and a "played together" link between them.
+- Shared facts count once, for example the venue's escape rate.
+- Scores aren't double-counted: public averages count only reviews where the person entered their own scores.
+
+#### Friends
+- **Mutual friendships.** You send a request, they accept. Either side can unfriend or block. Only friends can tag you on a visit, which stops strangers from spamming your room.
+- **Adding a friend**, three ways:
+  1. **Invite link** (best for a partner). "Invite Mia" makes a link you text her. When she opens it and signs in with Google, you become friends automatically. Any guest names you already used for her can be claimed in one tap (see "Claiming guest names" below).
+  2. Search by **@handle** or exact email address. There's no browsable user directory, which keeps people private.
+  3. A **QR code** on your profile, for adding friends in person after a game.
+- **Auto-accept per friend** (off by default). "Always add Brennan's visits to my room" means tags from that friend land straight in your room without a confirmation step. For a couple, you'd each turn this on for the other once.
+
+#### Tagging people when you log
+- The crew field on the log form suggests friends first, ordered by how often you play together, so your girlfriend is always the first chip. It also accepts plain names for people without accounts ("guests").
+- **Crews (saved groups):** "Me + Mia" or "Work crew" can be tagged in one tap. These are a later addition; the frequency-ordered chips cover the common case first.
+- **Tagged friend with auto-accept on:** the visit is added to her room straight away, and she gets a notice: "Brennan logged The Lost Observatory with you".
+- **Tagged friend without auto-accept:** she sees an inbox item ("Brennan says you played The Lost Observatory together on Oct 12") with **Add to my room** or **That wasn't me**. Until she accepts, she shows on the visit as pending, by name only.
+- **Her review after accepting:** empty, with **Add my take** (her own voice note or quick sliders) and **Copy Brennan's scores** (copied scores are marked as copies and left out of public averages until she edits them). She can skip it entirely. The visit is still in her room, showing as "no review yet".
+
+#### Claiming guest names (backfilling history)
+Your Phase 1 logs and any logs you make before she joins will list her as the plain name "Mia". When she accepts your invite link:
+- She sees "Brennan has 23 visits with a guest named Mia. Is that you?" and claims them all, or picks some.
+- Each claimed visit is linked to her account, using the same accept flow as tagging.
+
+#### Logging the same room separately
+If two friends log the same game on the same date (or within a day), the second person sees "Looks like Mia already logged this on Oct 12. Join her visit?" Joining merges into one visit: the shared facts are kept, conflicting facts are shown side by side for her to pick, and both reviews are kept.
+
+#### Who can do what
+These are enforced in the API and covered by tests. The security review checks this list.
+
+| Action | Who |
+| --- | --- |
+| See a visit | Its accepted participants. Anyone else only through a public review on it |
+| Edit shared facts (date, escaped, time, features, puzzles) | Any accepted participant. Edits are recorded ("edited by Mia") |
+| Add photos to a visit | Any accepted participant. Only the uploader can remove their own |
+| Write or edit a review | Only its author |
+| Tag someone with an account | Only their accepted friends |
+| Remove yourself from a visit | Any participant. Your review is removed, and the visit stays for the others |
+| Delete a visit | Its creator, and only when no one else has accepted it. Otherwise the creator just leaves it |
+
+- **Review visibility:** public (the default you asked for), friends only, or private. A visit with only private reviews never appears publicly.
+- **Unfriending** keeps past shared visits for both of you, but stops new tags. **Deleting an account** removes that person's reviews and turns their tags into plain names.
+
+#### How friends show up in the product
+- **3D room:** every polaroid shows small avatar stickers for the crew. There's a new board sort, **Crew** ("With Mia", "Solo", "With the work crew"), so rooms done together cluster under one string.
+- **Mobile:** the home screen shows "2 visits to confirm" above the log button. The rooms table has a crew column and a "with Mia / without Mia" filter.
+- **Year wrap:** "Your #1 teammate: Mia, 23 rooms together, 87% escape rate".
+- **Escape of the Day:** a friends leaderboard for today and streak comparisons.
+- **Later:** visiting a friend's 3D room read-only ("Visit Mia's room").
+
+#### Data model
+| Table | Holds |
+| --- | --- |
+| `friendships` | user_a, user_b, status (pending, accepted, blocked), requested_by, auto-accept flag for each direction |
+| `invites` | code, inviter, optional guest name to claim, expiry, used_by |
+| `visits` | game, date, created_by, the shared facts |
+| `visit_participants` | visit, user (or a guest name), status (owner, accepted, pending, declined), added_by. Each user appears at most once per visit |
+| `reviews` | visit, author, scores and comments, transcript, memorable puzzles, visibility, copied-scores flag. One per author per visit |
+| `visit_puzzles`, `visit_photos`, `visit_edits` | shared puzzles, photos with their uploader, the edit history |
+| `notifications` | user, type, payload, read_at. Powers the inbox and the badge. Email can come later |
+
+This replaces the single `logs` table from the earlier draft.
+
+#### Morning-test addition
+Before bed you send an invite link to your girlfriend. In the morning she signs in, claims "Mia" on your existing logs, and sees them in her own room. When you log a new room from your phone and tag her, it shows up in both rooms.
 
 ### Mobile app
 - Phones get a separate light route, `/m` (an automatic redirect on phones, plus a "View on desktop" escape hatch). It is code-split so the phone never downloads three.js.
@@ -86,7 +163,7 @@ Logs are public by default, as you asked, with a per-log "keep private" switch. 
 ### Voice transcription
 The Claude API does not take audio, so transcription needs a speech-to-text provider. I recommend OpenAI's transcription API: one key, fractions of a cent per minute, and reliable on iPhone recordings. Claude then turns the transcript into the structured review, as in Phase 1.
 
-## Workstreams for the overnight build (about 30 agents in worktrees, then integration and review)
+## Workstreams for the overnight build (about 38 agents in worktrees, then integration and review)
 
 | # | Workstream | Owns |
 | --- | --- | --- |
@@ -120,6 +197,14 @@ The Claude API does not take audio, so transcription needs a speech-to-text prov
 | 28 | Data migration: import Phase 1 seed and `.data` logs into your account | `scripts/migrate-phase1` |
 | 29 | End-to-end tests: the morning test on desktop + mobile | `e2e/` |
 | 30 | Docs: README, DECISIONS, env vars, runbook | docs |
+| 31 | Friends API: requests, accept, block, auto-accept, invite links | `server/routes/friends*` |
+| 32 | Visits and participants API: tagging, accept or decline, leave, shared-fact edits with history | `server/routes/visits*` |
+| 33 | Reviews API: one per author, visibility, copied-score flag, public aggregates | `server/routes/reviews*` |
+| 34 | Guest-name claiming and same-room merge detection | `server/routes/claims*` |
+| 35 | Friends UI: invite link, QR, search, inbox, notifications badge | `src/social` |
+| 36 | Crew tagging in the log flow (friend chips by frequency, guests) | `src/mobile/log/crew` |
+| 37 | Crew in the 3D room: avatar stickers, Crew sort, wrap teammate card | `src/world/board`, `src/ui/wrap` |
+| 38 | Permission test suite: every rule in "Who can do what" as an API test | `server/authz.test.ts` |
 
 After the workstreams finish:
 - **Integration:** one agent merges and wires everything.
