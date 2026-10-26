@@ -19,11 +19,9 @@ import type { Db } from '../db/client'
 import { cities, games, sources, venues } from '../db/schema'
 import { citySlug, googleMapsUrl, haversineKm, isUniqueViolation, slugify, uniqueSlug } from '../db/util'
 import { defineRoute, httpError } from '../http'
+import { gameAggregate, publicReviewPage, puzzleHighlights, wantsSpoilers } from './reviews.lib'
 import {
   attributionFor,
-  gameAggregate,
-  gamePuzzleHighlights,
-  gameReviewPage,
   gamesAtVenue,
   hasTrgm,
   matchDirectory,
@@ -368,7 +366,7 @@ export async function directoryRoutes(app: FastifyInstance, ctx: AppContext) {
     }
   })
 
-  defineRoute(app, ctx, ROUTES.gamePage, async ({ params, user }) => {
+  defineRoute(app, ctx, ROUTES.gamePage, async ({ params, user, req }) => {
     const db = ctx.db()
     const g = (await db.select().from(games).where(eq(games.slug, params.slug)).limit(1))[0]
     if (!g || g.status === 'hidden') throw httpError('not_found', 'No such game.')
@@ -376,9 +374,11 @@ export async function directoryRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!venue || venue.status === 'hidden') throw httpError('not_found', 'No such game.')
     const placeId = (await db.select({ p: venues.googlePlaceId }).from(venues).where(eq(venues.id, g.venueId)).limit(1))[0]?.p ?? null
     const [aggregate, puzzles, reviews, attribution] = await Promise.all([
+      // One visibility, spoiler and copied-score rule for the game page and GET /api/games/:slug/reviews
+      // (reviews.lib.ts), so the first page's nextCursor continues on the paged endpoint.
       gameAggregate(db, g.id),
-      gamePuzzleHighlights(db, g.id),
-      gameReviewPage(db, g.id, user?.id ?? null),
+      puzzleHighlights(db, g.id, { reveal: wantsSpoilers(req.query) }),
+      publicReviewPage(db, g.id, user?.id ?? null, { revealSpoilers: wantsSpoilers(req.query) }),
       attributionFor(db, [
         { type: 'game', ids: [g.id] },
         { type: 'venue', ids: [g.venueId] },

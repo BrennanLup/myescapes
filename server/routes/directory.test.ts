@@ -6,7 +6,8 @@ import { ROUTES } from '../../src/contracts/routes'
 import { ApiErrorSchema } from '../../src/contracts/errors'
 import { games, reviews, sources, venues } from '../db/schema'
 import { buildTestApp, type TestApp } from '../testing'
-import { decodeCursor, encodeCursor, likeEscape, setTrgmForTests } from './directory.queries'
+import { likeEscape, setTrgmForTests } from './directory.queries'
+import { decodeCursor, encodeCursor } from './reviews.lib'
 import { safeWebsite, splitPatch } from './directory'
 
 let t: TestApp
@@ -192,7 +193,13 @@ describe('game page', () => {
   })
 
   it('shows puzzle highlights as spoilers, most memorable first', async () => {
-    const page = GamePageSchema.parse((await get(`/api/games/${t.fx.gameSlugs.observatory}`)).body)
+    // Spoiler text is blanked server-side until the caller asks for it (?spoilers=1, reviews.lib).
+    const hidden = GamePageSchema.parse((await get(`/api/games/${t.fx.gameSlugs.observatory}`)).body)
+    expect(hidden.puzzles.map((p) => [p.description, p.notes, p.memorableCount, p.spoiler])).toEqual([
+      ['', '', 1, true],
+      ['', '', 0, true],
+    ])
+    const page = GamePageSchema.parse((await get(`/api/games/${t.fx.gameSlugs.observatory}?spoilers=1`)).body)
     expect(page.puzzles.map((p) => [p.description, p.memorableCount, p.spoiler])).toEqual([
       ['Set the telescope clock to 4:35', 1, true],
       ['Match the constellations to the keypad', 0, true],
@@ -247,9 +254,11 @@ describe('game page', () => {
   })
 
   it('round-trips review page cursors', () => {
-    expect(decodeCursor(encodeCursor(40))).toBe(40)
-    expect(decodeCursor('garbage')).toBe(0)
-    expect(decodeCursor(null)).toBe(0)
+    // The game page and GET /api/games/:slug/reviews share reviews.lib's keyset cursor.
+    const ts = '2026-10-12 10:00:00.123+00'
+    expect(decodeCursor(encodeCursor(ts, 'rev_x'))).toEqual({ ts, id: 'rev_x' })
+    expect(decodeCursor('garbage')).toBeNull()
+    expect(decodeCursor(undefined)).toBeNull()
   })
 })
 

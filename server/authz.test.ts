@@ -6,9 +6,10 @@
  *
  * Covered here: photos (add / see / remove), public visibility of a visit through its photos,
  * moderation (report and admin-only hide), and cross-user isolation of /api/data, /api/entries,
- * /api/wishlist and /api/me/usage. Rules whose routes are still 501 stubs on main (visits,
- * reviews, friends, tagging, leave, delete, account deletion) are added here by the bundles that
- * build those routes, or by the integrator.
+ * /api/wishlist and /api/me/usage, and the refusal side of the social rules (see a visit, edit,
+ * delete, tag, write/see a review, no emails in people search). Rules whose routes are still 501
+ * stubs on main (account deletion) are added here by the bundles that build those routes, or by
+ * the integrator.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
@@ -229,6 +230,64 @@ describe('cross-user access: /api/me/usage', () => {
     } finally {
       await t.db.delete(usageCounters).where(and(eq(usageCounters.subject, U().alice), eq(usageCounters.day, day)))
     }
+  })
+})
+
+describe('who can do what: visits, reviews, tagging, friends (31-34)', () => {
+  // Only refused requests here, so the shared fixture state stays as loaded. The full rules,
+  // including the accepted paths, are in server/routes/{visits,reviews,friends,claims}.test.ts.
+  const call = (method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, as?: string, payload?: object) =>
+    t.inject({ method, url, as, ...(payload ? { payload } : {}) })
+  const R = () => t.fx.reviews
+
+  it('see a visit: owner, accepted or pending; everyone else (admins too) gets 404', async () => {
+    expect((await call('GET', `/api/visits/${V().together}`, U().alice)).statusCode).toBe(200)
+    expect((await call('GET', `/api/visits/${V().together}`, U().bob)).statusCode).toBe(200)
+    expect((await call('GET', `/api/visits/${V().pending}`, U().bob)).statusCode).toBe(200)
+    for (const who of [U().carol, U().mia, U().eve, U().admin]) {
+      expect((await call('GET', `/api/visits/${V().together}`, who)).statusCode, who).toBe(404)
+    }
+  })
+
+  it('edit shared facts: accepted participants only (pending 403, outsiders 404)', async () => {
+    expect((await call('PATCH', `/api/visits/${V().pending}`, U().bob, { facts: { escaped: false } })).statusCode).toBe(403)
+    expect((await call('PATCH', `/api/visits/${V().together}`, U().carol, { facts: { escaped: false } })).statusCode).toBe(404)
+  })
+
+  it('delete a visit: creator only, and not once another account holder accepted (leave instead)', async () => {
+    expect((await call('DELETE', `/api/visits/${V().together}`, U().alice)).statusCode).toBe(409)
+    expect((await call('DELETE', `/api/visits/${V().together}`, U().bob)).statusCode).toBe(403)
+    expect((await call('DELETE', `/api/visits/${V().together}`, U().carol)).statusCode).toBe(404)
+  })
+
+  it('tag people: only my accepted friends (strangers, pending requests and blocked people get 403)', async () => {
+    for (const who of [U().carol, U().dave, U().eve]) {
+      expect((await call('POST', `/api/visits/${V().together}/participants`, U().alice, { crew: [{ userId: who }] })).statusCode, who).toBe(403)
+    }
+  })
+
+  it('write a review: owner or accepted only; a review is changed only by its author', async () => {
+    const body = { ratings: { overall: { score: 50 }, puzzles: { score: 50 }, setting: { score: 50 }, storyline: { score: 50 }, difficulty: { score: 50 } } }
+    expect((await call('PUT', `/api/visits/${V().pending}/review`, U().bob, body)).statusCode).toBe(403)
+    expect((await call('PUT', `/api/visits/${V().together}/review`, U().carol, body)).statusCode).toBe(404)
+    expect((await call('PATCH', `/api/reviews/${R().aliceTogether}`, U().bob, { visibility: 'private' })).statusCode).toBe(403)
+  })
+
+  it('review visibility: private is author-only, friends-only needs an accepted friend, transcripts go only to the author', async () => {
+    expect((await call('GET', `/api/reviews/${R().aliceSolo}`, U().bob)).statusCode).toBe(404)
+    expect((await call('GET', `/api/reviews/${R().bobTogether}`, U().carol)).statusCode).toBe(404)
+    expect((await call('GET', `/api/reviews/${R().bobTogether}`)).statusCode).toBe(404)
+    const asFriend = await call('GET', `/api/reviews/${R().bobTogether}`, U().alice)
+    expect(asFriend.statusCode).toBe(200)
+    expect(asFriend.json().transcript).toBeNull()
+    expect(asFriend.body).not.toContain('Bob private transcript')
+    expect((await call('GET', `/api/reviews/${R().aliceTogether}`)).json().transcript).toBeNull()
+  })
+
+  it('people search and friend lists never show an email', async () => {
+    const res = await call('GET', '/api/users/search?q=bob@example.com', U().alice)
+    expect(res.body).not.toContain('@example.com')
+    expect((await call('GET', '/api/friends', U().alice)).body).not.toContain('@example.com')
   })
 })
 

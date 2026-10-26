@@ -3,7 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { ROUTES, ROUTE_LIST, ServerStatusV2Schema } from '../../src/contracts/routes'
 import { ApiErrorSchema } from '../../src/contracts/errors'
 import { DatasetSchema } from '../../src/contracts/types'
+import Fastify from 'fastify'
 import { createContext } from '../context'
+import { installErrorHandler, notImplemented } from '../http'
 import { buildServer } from '../index'
 import { buildTestApp, type TestApp } from '../testing'
 import { ROUTE_MODULES } from './registry'
@@ -33,9 +35,15 @@ describe('route registry', () => {
   })
 
   it('stubs answer 501 not_implemented with an ApiError body', async () => {
-    const res = await t.inject({ method: 'GET', url: '/api/friends', as: t.fx.users.alice })
+    // A standalone app, so the check doesn't depend on which workstream routes are still stubs.
+    const stubApp = Fastify()
+    installErrorHandler(stubApp)
+    const stubCtx = createContext({ resolveUser: async () => ({ id: 'u', email: 'u@example.com', name: 'U', handle: 'u', displayName: 'U', image: null, isAdmin: false, onboarded: true }) })
+    notImplemented(stubApp, stubCtx, [ROUTES.friends])
+    const res = await stubApp.inject({ method: 'GET', url: '/api/friends' })
     expect(res.statusCode).toBe(501)
     expect(ApiErrorSchema.parse(res.json()).code).toBe('not_implemented')
+    await stubApp.close()
   })
 
   it('validates bodies against the contract (400 invalid with details)', async () => {
