@@ -1,20 +1,13 @@
 /**
  * Client auth (workstream 3): session state, Google sign-in, sign-out, handle onboarding.
- * STUB: always signed out. Keep these export names.
+ *
+ *   const session = useSession()            // loading | signed-out | signed-in (with Me)
+ *   await signInWithGoogle('/')             // full-page redirect to Google
+ *   await signOut()
+ *   needsOnboarding(session)                // signed in without a display name + @handle
+ *   <OnboardingGate>{app}</OnboardingGate>  // shows the name/handle step first when needed
  */
-import type { Me } from '../contracts/models'
-
-export type SessionState = { status: 'loading'; user: null } | { status: 'signed-out'; user: null } | { status: 'signed-in'; user: Me }
-
-export function useSession(): SessionState {
-  return { status: 'signed-out', user: null }
-}
-
-/** Starts Google sign-in (Better Auth `/api/auth/sign-in/social`), returning to `callbackURL`. */
-export async function signInWithGoogle(_callbackURL = '/'): Promise<void> {
-  throw new Error('Sign-in is not built yet (workstream 3).')
-}
-
-export async function signOut(): Promise<void> {
-  /* stub */
-}
+export { checkHandle, deleteAccount, EXPORT_URL, needsOnboarding, signInWithGoogle, signOut, updateProfile } from './api'
+export { getSessionState, refreshSession, setSessionUser, useSession, type SessionState } from './session'
+export { localHandleProblem, normaliseHandle, suggestHandle } from './handles'
+export { Onboarding, OnboardingGate } from './Onboarding'
