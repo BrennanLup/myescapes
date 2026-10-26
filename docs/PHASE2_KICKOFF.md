@@ -5,7 +5,12 @@ Read this file first, then `docs/PHASE2_PLAN.md` (the full plan), `README.md`, `
 ## Where things stand
 - Phase 1 is complete on `main` in `BrennanLup/myescapes`: a cozy first-person 3D escape-room world (Vite + React + R3F, Fastify server, Zod contracts, seed/Sheet storage, mock or Claude extraction, daily gate, Playwright QA harness in `qa/playtest.mjs`).
 - Push to `main` only. GitHub push access works.
-- Railway project: service public domain `https://bubbly-hope-production.up.railway.app`. The last Railway build failed, and the cause was never seen. Two likely causes were fixed since (Node engines range, no double `npm ci`). **The first job is to make the deploy green.**
+- Railway project: service public domain `https://bubbly-hope-production.up.railway.app`. **The deploy is green** (verified 2026-10-26 04:20 UTC; `/health` returns `{"ok":true}`). Railway deploys every push to `main`.
+- The `railway` CLI can't be installed (github.com downloads are blocked), so use Railway's GraphQL API at `https://backboard.railway.com/graphql/v2` with the header `Project-Access-Token: $RAILWAY_TOKEN`. Project `7340f6fa-9c30-494c-8fd9-07df91729f16`, environment `0b520879-ab8e-44ef-ab61-2a3d155f29dd`, services `bubbly-hope` (`863cb423-b5f3-44fa-a1d7-a14ab52fbee1`) and `Postgres` (`e377487d-9ae6-4fb7-b55d-2cf576d8e7b5`).
+- **Railway Variables are all set by the owner** (verified by name): `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `BETTER_AUTH_SECRET`, `DATABASE_URL` (reference to Postgres), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OPENAI_API_KEY`. `GOOGLE_MAPS_API_KEY` is not set (optional). Do not write secrets to Railway yourself; if a new variable is needed, add it to the morning report.
+- In this session, `ANTHROPIC_API_KEY` and `GOOGLE_MAPS_API_KEY` are not set, so local tests use mock extraction. The live deploy uses real Claude.
+- Network (checked 2026-10-26): Hugging Face (Foursquare OS Places dataset), Anthropic, OpenAI, npm and Railway are reachable. `overpass-api.de` drops connections most of the time; treat the OSM importer as best-effort.
+- `/about`, `/privacy` and `/terms` are live and linked from the Google consent screen. Keep them working, and honour every commitment in `/privacy` (see the plan's "Additions" section).
 - Google OAuth client is created in Google Cloud project `myescapes`. The consent screen is in **Testing** mode with the owner as a test user. Redirect URIs: `https://bubbly-hope-production.up.railway.app/api/auth/callback/google` and `http://localhost:3000/api/auth/callback/google`.
 
 ## Credentials (never print values; check names only)
@@ -14,10 +19,13 @@ Read this file first, then `docs/PHASE2_PLAN.md` (the full plan), `README.md`, `
 - Postgres: the owner was asked to add a Railway PostgreSQL service. Wire `DATABASE_URL` as a Railway reference variable to it. If it does not exist, try `railway add --database postgres`; if that is not permitted, stop and ask.
 - Generate `BETTER_AUTH_SECRET` (or the session secret) yourself and set it in Railway.
 
+## Additions
+Read the plan's "Additions approved 2026-10-26" section: the cut order if time runs short, and the extra requirements folded into existing workstreams.
+
 ## Preflight (do this before any building; report results to the owner and stop if anything blocks the morning test)
 1. Env var names present (as above). Watch for typos such as `OOGLE_CLIENT_ID`.
 2. Network reachability: `backboard.railway.com`, `api.anthropic.com`, `api.openai.com`, `overpass-api.de`, `places.googleapis.com`, `bubbly-hope-production.up.railway.app`, and the Foursquare Open Source Places download host. Use `curl -sS "$HTTPS_PROXY/__agentproxy/status"` to see policy denials, and name any blocked host to the owner.
-3. `railway status`, `railway logs --build` for the last failed build: diagnose it, fix it, push, and confirm `/health` on the live URL.
+3. Confirm the latest Railway deployment is `SUCCESS` (via the GraphQL API) and `/health` on the live URL returns ok.
 
 ## Decisions already made by the owner (confirmed 2026-10-26)
 - Google sign-in with per-user spaces. PostgreSQL replaces Google Sheets entirely (remove the Sheet adapter).

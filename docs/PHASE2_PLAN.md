@@ -212,6 +212,28 @@ After the workstreams finish:
 - **QA loop:** fix-up agents run until clean.
 - **Deploy and confirm:** deploy to Railway, run a smoke test against the live URL, and check `/health`.
 
+## Additions approved 2026-10-26 (part of the overnight run)
+
+### Priority order: what to cut if the night runs long
+The morning-test path comes first. If time is short, cut in this order, starting at the top: 26 SEO and Open Graph images, 9 Google place-ID linker, 17 city pages (keep venue pages), 25 moderation UI (keep the report button and the table), the QR code in 35, crews (saved groups) and the Crew sort in 37, and 7 the OpenStreetMap importer if `overpass-api.de` stays unreachable. Never cut: 1–4, 6, 8, 10–16, 18–23, 27–29, 31–34, 36, 38, or the additions below.
+
+### Folded into existing workstreams
+- **Save recordings on the phone when an upload fails** (14). Keep the recorded audio in IndexedDB until the server confirms the transcript, show "1 recording waiting to upload", and retry when the connection returns. Basements have weak signal.
+- **Spoilers** (16, 18, 33). Puzzle details and per-puzzle notes are hidden behind a "Show spoilers" reveal by default on public pages. A review's comments can be marked as containing spoilers, which blurs them until revealed.
+- **Choosing a public name** (3, 13, 19). After the first sign-in, a short onboarding step asks for a display name and a unique @handle, prefilled from Google but editable, before any review can be public. Public pages show the handle and display name, never the email.
+- **Spending caps** (10, 11). Per-user daily limits on transcription (for example 20 minutes) and extraction (for example 30 calls), plus a global daily ceiling set by environment variables. Over the limit, the app falls back to typing and mock extraction with a friendly message.
+- **Privacy-policy commitments** (the live `/privacy` page promises these, so they are required): raw voice audio is deleted once its transcript is saved; signed-in users can delete their account from a settings screen (reviews, photos, voice notes and friendships removed, tags turned into plain names); users can download their data as JSON; email is never shown publicly. Add the settings screen to 35 and the API to 4.
+- **Escape of the Day time zones** (23). Store each result against the server's record of the user's day (time zone fixed at first play each day), so changing the device clock can't game streaks.
+- **Static pages stay.** `/about`, `/privacy` and `/terms` (public/*.html, served by `server/static.ts`) are linked from the Google consent screen and must keep working. Link them from the landing page and the mobile settings screen.
+- **Add to home screen** (13). `public/manifest.webmanifest` and the icons exist; make `/m` the manifest `start_url` on phones and check it installs.
+
+### Before public launch (not tonight)
+- OpenStreetMap licence: OSM is ODbL (share-alike). Use OSM to find and cross-check venues, but keep stored facts tied to Foursquare and user contributions. The licensing review agent should confirm this tonight; the full fix can follow.
+- Merging duplicate user-created games: an admin merge tool and a "did you mean" check on game creation.
+- Railway Postgres backups, error tracking (for example Sentry) and an uptime check on `/health`.
+- Email or push notifications for pending tags.
+- A "Want to play" button on public game pages that adds to the wish list.
+
 ## Risks and open questions
 - **Directory coverage.** Foursquare and OSM will not have every venue, and some entries will be closed or duplicates. User logs fill the gaps. Coverage is reported per region after the import.
 - **Bulk dataset download.** The Foursquare dataset is large. The importer streams and filters to the escape room category, and the host it downloads from must be on the network allowlist.
