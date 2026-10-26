@@ -19,13 +19,13 @@ Read this file first, then `docs/PHASE2_PLAN.md` (the full plan), `README.md`, `
 2. Network reachability: `backboard.railway.com`, `api.anthropic.com`, `api.openai.com`, `overpass-api.de`, `places.googleapis.com`, `bubbly-hope-production.up.railway.app`, and the Foursquare Open Source Places download host. Use `curl -sS "$HTTPS_PROXY/__agentproxy/status"` to see policy denials, and name any blocked host to the owner.
 3. `railway status`, `railway logs --build` for the last failed build: diagnose it, fix it, push, and confirm `/health` on the live URL.
 
-## Decisions already made by the owner
+## Decisions already made by the owner (confirmed 2026-10-26)
 - Google sign-in with per-user spaces. PostgreSQL replaces Google Sheets entirely (remove the Sheet adapter).
 - Mobile opens a light, logging-first app (no 3D): a big "Log an escape room" button plus a table of past rooms.
 - A public directory of escape rooms with a public page per game, where everyone's reviews show. Reviews are **public by default** with a per-review "keep private" switch, plus a "friends only" level.
 - Directory sources: **Foursquare Open Source Places + OpenStreetMap + user contributions**, with Google Places used only to store `place_id`s for "Open in Google Maps" links. **Do not scrape Google Maps** (it breaks Google's terms, and Places data other than IDs cannot be stored). Start with the US and Canada, then major cities in Europe, Asia and Australia.
 - The daily gate becomes **Escape of the Day**: Wordle-style, the same puzzle for everyone, share grid, streaks, never blocks entry.
-- Friends and shared visits exactly as in the plan's "Friends and shared visits" section, with these defaults: auto-accept tags is **off by default** and turned on per friend; **any accepted participant can edit shared facts**, with edit history; a joining friend's review **starts empty**, with a "copy their scores" button (copied scores are excluded from public averages until edited).
+- Friends and shared visits exactly as in the plan's "Friends and shared visits" section, with these defaults: auto-accept tags is **off by default** and turned on per friend; **any accepted participant can edit shared facts**, with edit history; a joining friend's review **starts as a copy of the logger's scores and comments**, which they can edit (owner's choice). Copied scores stay flagged as copies and are excluded from public averages until the friend changes at least one score.
 - The owner does most rooms with his girlfriend. Her name is not recorded here: do not assume one. The invite-link plus guest-claim flow handles linking her.
 
 ## How to work (the owner's rules)

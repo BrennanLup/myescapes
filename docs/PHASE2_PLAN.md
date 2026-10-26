@@ -1,6 +1,6 @@
 # Phase 2 plan: accounts, a real database, mobile logging, a public directory, Escape of the Day
 
-Status: draft for approval. Nothing here is built yet.
+Status: approved 2026-10-26 (directory from Foursquare + OSM; reviews public by default with friends-only and private options; tag auto-accept off with a per-friend toggle; a joining friend's review starts as an editable copy, and any participant can edit shared facts). Nothing here is built yet.
 
 ## The morning test (definition of done for the overnight run)
 
@@ -92,7 +92,7 @@ This means:
 - **Crews (saved groups):** "Me + Mia" or "Work crew" can be tagged in one tap. These are a later addition; the frequency-ordered chips cover the common case first.
 - **Tagged friend with auto-accept on:** the visit is added to her room straight away, and she gets a notice: "Brennan logged The Lost Observatory with you".
 - **Tagged friend without auto-accept:** she sees an inbox item ("Brennan says you played The Lost Observatory together on Oct 12") with **Add to my room** or **That wasn't me**. Until she accepts, she shows on the visit as pending, by name only.
-- **Her review after accepting:** empty, with **Add my take** (her own voice note or quick sliders) and **Copy Brennan's scores** (copied scores are marked as copies and left out of public averages until she edits them). She can skip it entirely. The visit is still in her room, showing as "no review yet".
+- **Her review after accepting** starts as a copy of your scores and comments (owner's decision). She can tweak any of it, or replace it with her own voice note. Until she changes at least one score, it is marked as a copy and left out of public averages, so one opinion isn't counted twice.
 
 #### Claiming guest names (backfilling history)
 Your Phase 1 logs and any logs you make before she joins will list her as the plain name "Mia". When she accepts your invite link:
