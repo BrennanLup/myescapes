@@ -1,38 +1,34 @@
-// Owned by workstream 12: Extraction API.
+/**
+ * POST /api/extract: transcript -> ReviewDraft with directory hints (extraction v2).
+ * Owned by workstream 11. The logic lives in server/extract/service.ts.
+ *
+ * Auth is optional (the Phase 1 3D room still drafts reviews when signed out). Over a spending
+ * cap the answer is still 200: a mock draft plus a friendly `notice` (contract: fallback mock).
+ */
 import type { FastifyInstance } from 'fastify'
-import { API, ExtractRequestSchema } from '../../src/contracts/api'
-import type { ReviewDraft } from '../../src/contracts/types'
-import { anthropicClientFactory, claudeExtract, type ClientFactory } from '../extract/claude'
-import { mockExtract } from '../extract/mock'
+import { ROUTES } from '../../src/contracts/routes'
+import type { AppContext } from '../context'
+import { defineRoute, httpError } from '../http'
+import { extractV2, extractionMode as modeFromEnv, type ExtractDeps } from '../extract/service'
 
-export function extractionMode(): 'claude' | 'mock' {
-  return process.env.ANTHROPIC_API_KEY ? 'claude' : 'mock'
+export function extractionMode(env: NodeJS.ProcessEnv = process.env): 'claude' | 'mock' {
+  return modeFromEnv(env)
 }
 
-export interface ExtractRoutesOptions {
-  /** Inject a client (tests). When given, the Claude path runs regardless of the env key. */
-  clientFactory?: ClientFactory
-  /** Clock override for date resolution (tests). */
-  now?: () => Date
-  /** Warning sink (defaults to console.warn). Messages never include the API key. */
-  log?: (msg: string) => void
-}
+export type ExtractRoutesOptions = ExtractDeps
 
-export async function extractRoutes(app: FastifyInstance, opts: ExtractRoutesOptions = {}) {
-  app.post(API.extract, async (req, reply) => {
-    const body = ExtractRequestSchema.safeParse(req.body)
-    if (!body.success) {
-      const tooLong = body.error.issues.some((i) => i.code === 'too_big')
-      return reply.code(400).send({ error: tooLong ? 'transcript too long (max 50000 characters)' : 'transcript required' })
-    }
-    const transcript = body.data.transcript
-    if (!transcript.trim()) return reply.code(400).send({ error: 'transcript required' })
-    const now = opts.now?.() ?? new Date()
+/** Per-IP burst limit on top of the daily caps. */
+export const EXTRACT_RATE_LIMIT = { max: 20, timeWindow: '1 minute' }
 
-    const useClaude = Boolean(opts.clientFactory) || extractionMode() === 'claude'
-    if (!useClaude) return mockExtract(transcript, { now }) satisfies ReviewDraft
-
-    const factory = opts.clientFactory ?? anthropicClientFactory
-    return (await claudeExtract(transcript, { client: factory(), now, log: opts.log })) satisfies ReviewDraft
-  })
+export async function extractRoutes(app: FastifyInstance, ctx: AppContext, opts: ExtractRoutesOptions = {}) {
+  defineRoute(
+    app,
+    ctx,
+    ROUTES.extract,
+    async ({ body, user }) => {
+      if (!body.transcript.trim()) throw httpError('invalid', 'Transcript required.')
+      return extractV2({ transcript: body.transcript, lat: body.lat, lng: body.lng, user, ctx, deps: opts })
+    },
+    { config: { rateLimit: EXTRACT_RATE_LIMIT } },
+  )
 }
