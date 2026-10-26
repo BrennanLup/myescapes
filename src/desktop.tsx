@@ -4,6 +4,7 @@
  * belongs to workstream 20 (src/world, src/state).
  */
 import { App } from './App'
+import { OnboardingGate } from './auth'
 import { installBridge } from './state/bridge'
 import { installTestHooks } from './contracts/testing'
 import { useStore } from './state/store'
@@ -22,6 +23,11 @@ const gesture = () => {
 window.addEventListener('pointerdown', gesture)
 window.addEventListener('keydown', gesture)
 
+/** Signed-in users without a display name and @handle see the onboarding step first (workstream 3). */
 export function DesktopApp() {
-  return <App />
+  return (
+    <OnboardingGate>
+      <App />
+    </OnboardingGate>
+  )
 }
