@@ -73,7 +73,9 @@ export async function buildTestApp(opts: BuildTestAppOptions = {}): Promise<Test
   const ctx = createContext({
     dbState: { status: 'ready', handle: testDb.handle, error: null },
     resolveUser,
-    env: { ...process.env, NODE_ENV: 'test', DATA_DIR: dataDir, ...opts.env },
+    // DIRECTORY_SEED=off: tests that set NODE_ENV=production must not start the background
+    // directory seed load (it would compete with the test's queries). Tests can opt back in.
+    env: { ...process.env, NODE_ENV: 'test', DIRECTORY_SEED: 'off', DATA_DIR: dataDir, ...opts.env },
     now: opts.now,
   })
   const app = await buildServer({ context: ctx, distDir: path.join(dataDir, 'no-dist') })
