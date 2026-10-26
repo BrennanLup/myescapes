@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { SLOW, solveGate, storeState } from './helpers'
+import { SLOW, roomUrl, solveGate, storeState } from './helpers'
 
 test('the daily gate opens once, then not again the same day', async ({ page }) => {
-  await page.goto('/')
+  await page.goto(roomUrl())
   await solveGate(page)
   const today = await page.evaluate(() => {
     const d = new Date()

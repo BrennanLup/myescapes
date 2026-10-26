@@ -9,9 +9,19 @@ type Vec3 = [number, number, number]
 /** Generous budget for anything that waits on the 3D world. */
 export const SLOW = 90_000
 
+/**
+ * `/` with the "View on desktop" choice (`desktop=1`) added, so phone emulation (the mobile project)
+ * opens the 3D room instead of being redirected to `/m`. Desktop browsers ignore it.
+ */
+export function roomUrl(query = '') {
+  const q = new URLSearchParams(query.replace(/^\?/, ''))
+  q.set('desktop', '1')
+  return '/?' + q.toString()
+}
+
 /** Load the app and wait until the world is entered and the board has laid out its pins. */
 export async function openApp(page: Page, query = '?gate=off') {
-  await page.goto('/' + query)
+  await page.goto(roomUrl(query))
   await page.waitForFunction(
     () => {
       const s = window.__ESCAPE__?.store.getState()
