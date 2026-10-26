@@ -52,6 +52,7 @@ Everything is optional. Copy `.env.example` to `.env` and fill in what you want.
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | The Claude model used for extraction. |
 | `DATABASE_URL` | An in-process Postgres (PGlite) stored in `DATA_DIR/pglite`. | Postgres (Railway). Migrations run on every start. |
 | `OPENAI_API_KEY` | Voice recordings aren't transcribed server-side (type or use live captions). | Server-side transcription of recordings. |
+| `OPENAI_TRANSCRIBE_MODEL` | `gpt-4o-transcribe` | The OpenAI model used for transcription. |
 | `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` + `BETTER_AUTH_SECRET` | Google sign-in is off. | "Continue with Google". |
 | `PUBLIC_URL` | Links (invites) use the request's host. | The public origin for absolute links, e.g. `https://bubbly-hope-production.up.railway.app`. |
 | `CAP_TRANSCRIBE_SECONDS_PER_USER`, `CAP_EXTRACT_CALLS_PER_USER`, `CAP_TRANSCRIBE_SECONDS_GLOBAL`, `CAP_EXTRACT_CALLS_GLOBAL` | 1200 s, 30 calls, 21600 s, 1000 calls per UTC day. | Daily spending caps. |

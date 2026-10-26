@@ -37,7 +37,7 @@ export const ROUTE_MODULES: readonly RouteModule[] = [
   { ws: 4, name: 'wish list', file: 'server/routes/wishlist.ts', register: wishlistRoutes },
   { ws: 5, name: 'directory', file: 'server/routes/directory.ts', register: directoryRoutes },
   { ws: 10, name: 'transcription', file: 'server/routes/transcribe.ts', register: transcribeRoutes },
-  { ws: 11, name: 'extraction', file: 'server/routes/extract.ts', register: (app) => extractRoutes(app) },
+  { ws: 11, name: 'extraction', file: 'server/routes/extract.ts', register: (app, ctx) => extractRoutes(app, ctx) },
   { ws: 23, name: 'escape of the day', file: 'server/routes/daily.ts', register: dailyRoutes },
   { ws: 24, name: 'photos', file: 'server/routes/photos.ts', register: photosRoutes },
   { ws: 25, name: 'moderation', file: 'server/routes/admin.ts', register: adminRoutes },
