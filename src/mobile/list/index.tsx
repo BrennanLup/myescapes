@@ -89,8 +89,8 @@ export function RoomsTable({ onOpen, refreshKey = 0 }: { onOpen(visitId: string)
           type="search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search rooms, venues, cities, crew"
-          aria-label="Search your rooms"
+          placeholder="Search my rooms"
+          aria-label="Search your rooms by name, venue, city or crew"
           data-testid="rooms-search"
           className="min-h-11 min-w-0 flex-1 rounded-full bg-white px-4 text-base ring-1 ring-panel-edge outline-none focus:ring-2 focus:ring-accent"
         />

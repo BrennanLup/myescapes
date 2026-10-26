@@ -64,6 +64,20 @@ describe('MobileApp', () => {
     expect(document.querySelector('link[rel="manifest"]')?.getAttribute('href')).toBe('/manifest-mobile.webmanifest')
   })
 
+  it('signed out after a failed Google sign-in: says so on the sign-in screen', async () => {
+    window.history.replaceState(null, '', '/m?signin=failed&error=state_mismatch')
+    render(<MobileApp rest="/" />)
+    expect(screen.getByTestId('mobile-signin').textContent).toMatch(/Sign-in didn't work/)
+    cleanup()
+    window.history.replaceState(null, '', '/m?signin=failed&error=access_denied')
+    render(<MobileApp rest="/" />)
+    expect(screen.getByRole('alert').textContent).toMatch(/cancelled/)
+    cleanup()
+    window.history.replaceState(null, '', '/m')
+    render(<MobileApp rest="/" />)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('not onboarded: asks for a display name and @handle first', async () => {
     session.current = { status: 'signed-in', user: { ...ME, handle: null, displayName: 'Alice Smith', onboarded: false } }
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

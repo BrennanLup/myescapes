@@ -8,6 +8,7 @@
  *   <OnboardingGate>{app}</OnboardingGate>  // shows the name/handle step first when needed
  */
 export { checkHandle, clearLocalAccountData, deleteAccount, EXPORT_URL, needsOnboarding, signInWithGoogle, signOut, updateProfile } from './api'
+export { signInErrorMessage, signInErrorURL } from './errors'
 export { getSessionState, refreshSession, setSessionUser, useSession, type SessionState } from './session'
 export { localHandleProblem, normaliseHandle, suggestHandle } from './handles'
 export { Onboarding, OnboardingGate } from './Onboarding'

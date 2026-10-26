@@ -12,6 +12,7 @@ import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react'
 import type { RouteProps } from '../../router'
 import { navigate } from '../../router'
 import { setSessionUser, signInWithGoogle, useSession } from '../../auth'
+import { signInErrorMessage } from '../../auth/errors'
 import { ROUTES, callApi } from '../../contracts/routes'
 import { ApiCallError } from '../../contracts/errors'
 import { DisplayNameSchema, HandleSchema, RESERVED_HANDLES, type Me } from '../../contracts/models'
@@ -40,15 +41,7 @@ export function wantsDemo(search: string): boolean {
   return new URLSearchParams(search).has('demo')
 }
 
-const SIGN_IN_ERRORS: Record<string, string> = {
-  access_denied: 'Sign-in was cancelled. You can try again whenever you like.',
-  default: "Sign-in didn't work. Please try again.",
-}
-
-export function signInErrorMessage(code: string | null): string | null {
-  if (!code) return null
-  return SIGN_IN_ERRORS[code] ?? SIGN_IN_ERRORS.default
-}
+export { signInErrorMessage }
 
 const ONBOARD_SKIP_KEY = 'myescapes:onboarding-skipped'
 

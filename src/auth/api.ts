@@ -4,6 +4,7 @@
 import type { Me } from '../contracts/models'
 import { callApi, ROUTES } from '../contracts/routes'
 import { clearRecordingQueue } from '../mobile/log/queue'
+import { signInErrorURL } from './errors'
 import { setSessionUser, type SessionState } from './session'
 
 /**
@@ -29,7 +30,7 @@ export async function signInWithGoogle(callbackURL = '/', fetchImpl: typeof fetc
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ provider: 'google', callbackURL, errorCallbackURL: '/welcome?signin=failed' }),
+    body: JSON.stringify({ provider: 'google', callbackURL, errorCallbackURL: signInErrorURL(callbackURL) }),
   })
   if (!res.ok) throw new Error(res.status === 404 ? 'Sign-in is not set up on this server yet.' : 'Could not start sign-in. Please try again.')
   const body = (await res.json()) as { url?: string }

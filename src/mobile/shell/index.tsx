@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { setSessionUser, signInWithGoogle, signOut, useSession } from '../../auth'
+import { signInErrorMessage } from '../../auth/errors'
 import type { Me } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
 import { DailyCard } from '../../daily/ui'
@@ -189,8 +190,16 @@ function Home({ fetch: fetchImpl, meId }: { fetch?: typeof fetch; meId: string }
   )
 }
 
+/** `?signin=failed&error=...` after a failed Google sign-in (Better Auth's error redirect). */
+function signInFailure(): string | null {
+  if (typeof window === 'undefined') return null
+  const q = new URLSearchParams(window.location.search)
+  if (!q.has('error') && q.get('signin') !== 'failed') return null
+  return signInErrorMessage(q.get('error') ?? 'default')
+}
+
 function MobileSignIn() {
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(signInFailure)
   return (
     <section data-testid="mobile-signin" className="space-y-5 py-8 text-center">
       <img src="/icons/icon-512.png" alt="" className="mx-auto h-24 w-24 rounded-3xl" />

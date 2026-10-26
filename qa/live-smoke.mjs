@@ -142,8 +142,39 @@ await step('unknown game page shows not found', async () => {
   check('unknown game page shows not found', /not found|couldn.t find|no such/i.test(text), text.slice(0, 80).replace(/\s+/g, ' '))
 })
 
+await step('server status: real Claude, OpenAI, Google sign-in, Postgres ready', async () => {
+  const st = await (await fetch(`${BASE}/api/status`)).json()
+  const ok = st.extraction === 'claude' && st.transcription === 'openai' && st.auth === 'google' && st.storage === 'postgres' && st.database === 'ready'
+  check('server status: real Claude, OpenAI, Google sign-in, Postgres ready', ok, JSON.stringify(st))
+})
+
+await step('directory seed loaded (sitemap venues = seed manifest)', async () => {
+  const { readFileSync } = await import('node:fs')
+  const manifest = JSON.parse(readFileSync(path.join(ROOT, 'seed', 'directory', 'manifest.json'), 'utf8'))
+  const expected = manifest.regions.reduce((n, r) => n + r.venues, 0)
+  const xml = await (await fetch(`${BASE}/sitemap.xml`)).text()
+  const venues = (xml.match(/<loc>[^<]*\/venues\//g) ?? []).length
+  check('directory seed loaded (sitemap venues = seed manifest)', venues >= expected, `${venues} venues listed, seed has ${expected} in ${manifest.regions.length} regions`)
+})
+
+await step('phone: a failed Google sign-in is explained on /m', async () => {
+  await pp.goto(`${BASE}/?error=state_mismatch`)
+  await pp.waitForURL(/\/m\?/, { timeout: 30_000 })
+  await pp.getByTestId('mobile-signin').waitFor({ timeout: 30_000 })
+  const text = await pp.getByTestId('mobile-signin').innerText()
+  check('phone: a failed Google sign-in is explained on /m', /didn.t work|cancelled/i.test(text), pp.url())
+})
+
+await step('unknown invite link explains itself', async () => {
+  await pp.goto(`${BASE}/invite/qa-no-such-invite`)
+  await pp.getByTestId('invite-page').waitFor({ timeout: 30_000 })
+  await pp.waitForTimeout(1500)
+  const text = await pp.getByTestId('invite-page').innerText()
+  check('unknown invite link explains itself', /doesn.t exist|no longer works|expired/i.test(text), text.slice(0, 80).replace(/\s+/g, ' '))
+})
+
 await browser.close()
-const known = errors.filter((e) => !e.includes('no-such-game-qa'))
+const known = errors.filter((e) => !e.includes('no-such-game-qa') && !e.includes('qa-no-such-invite'))
 check('no page errors', known.length === 0, known.slice(0, 5).join(' | '))
 const failed = results.filter((r) => !r.ok)
 console.log(`\n${results.length - failed.length}/${results.length} passed`)

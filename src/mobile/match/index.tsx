@@ -8,6 +8,7 @@ import { ApiCallError } from '../../contracts/errors'
 import { GENRES, type Genre } from '../../contracts/types'
 import type { GameMatch, GameSummary, VenueMatch, VenueSummary } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
+import { placeLine } from '../../public/shared/format'
 import {
   bestGame,
   gameToSummary,
@@ -188,7 +189,7 @@ export function VenueGameMatcher({ hints, onPick, onCancel, fetch: fetchImpl }: 
                   <span>
                     <span className="block font-semibold">{venue.name}</span>
                     <span className="block text-sm text-ink-soft">
-                      {[venue.address, venue.city].filter(Boolean).join(', ')} · {venue.gameCount} room{venue.gameCount === 1 ? '' : 's'}
+                      {placeLine(venue.address, venue.city)} · {venue.gameCount} room{venue.gameCount === 1 ? '' : 's'}
                     </span>
                   </span>
                   <span aria-hidden className="text-ink-soft">

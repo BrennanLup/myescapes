@@ -18,7 +18,7 @@
  * Navigation: `navigate('/games/x')`, `<Link to="/daily">`, `useRoute()`.
  */
 import { lazy, Suspense, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type LazyExoticComponent, type MouseEvent, type ReactNode } from 'react'
-import { shouldRedirectToMobile } from './mobile/shell/device'
+import { mobileRedirectURL, shouldRedirectToMobile } from './mobile/shell/device'
 
 export interface RouteProps {
   params: Record<string, string>
@@ -133,7 +133,8 @@ function PageFallback() {
 export function Router() {
   const pathname = usePathname()
   if (pathname === '/' && typeof window !== 'undefined' && shouldRedirectToMobile(window.location, window.navigator)) {
-    queueMicrotask(() => navigate('/m', { replace: true }))
+    const target = mobileRedirectURL(window.location.search)
+    queueMicrotask(() => navigate(target, { replace: true }))
     return <PageFallback />
   }
   const { entry, props } = resolveRoute(pathname)

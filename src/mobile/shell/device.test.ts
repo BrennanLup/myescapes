@@ -58,3 +58,13 @@ describe('device redirect', () => {
     expect(document.querySelectorAll('link[rel="manifest"]')).toHaveLength(0)
   })
 })
+
+describe('mobileRedirectURL', () => {
+  it('sends phones to /m and keeps a Google sign-in failure so /m can show it', async () => {
+    const { mobileRedirectURL } = await import('./device')
+    expect(mobileRedirectURL('')).toBe('/m')
+    expect(mobileRedirectURL('?demo=1')).toBe('/m')
+    expect(mobileRedirectURL('?error=state_mismatch')).toBe('/m?signin=failed&error=state_mismatch')
+    expect(mobileRedirectURL('?error=a%26b%3Dc')).toBe('/m?signin=failed&error=a%26b%3Dc')
+  })
+})

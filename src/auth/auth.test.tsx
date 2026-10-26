@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 import type { Me } from '../contracts/models'
 import { IDBFactory } from 'fake-indexeddb'
 import { countAllRecordings, enqueueRecording, resetQueueStoreForTests } from '../mobile/log/queue'
-import { deleteAccount, localHandleProblem, needsOnboarding, Onboarding, OnboardingGate, refreshSession, signInWithGoogle, signOut, suggestHandle, useSession } from './index'
+import { deleteAccount, localHandleProblem, needsOnboarding, Onboarding, OnboardingGate, refreshSession, signInErrorURL, signInWithGoogle, signOut, suggestHandle, useSession } from './index'
 import { resetSessionForTests } from './session'
 
 const me = (over: Partial<Me> = {}): Me => ({
@@ -82,8 +82,16 @@ describe('session', () => {
     await signInWithGoogle('/m')
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('/api/auth/sign-in/social')
-    expect(JSON.parse(init.body)).toMatchObject({ provider: 'google', callbackURL: '/m' })
+    expect(JSON.parse(init.body)).toMatchObject({ provider: 'google', callbackURL: '/m', errorCallbackURL: '/m?signin=failed' })
     expect(assign).toHaveBeenCalledWith('https://accounts.google.com/o/oauth2/v2/auth?x=1')
+  })
+
+  it('a failed sign-in returns to the phone app, or to /welcome keeping where the visitor was heading', () => {
+    expect(signInErrorURL('/m')).toBe('/m?signin=failed')
+    expect(signInErrorURL('/m/log')).toBe('/m?signin=failed')
+    expect(signInErrorURL('/')).toBe('/welcome?signin=failed')
+    expect(signInErrorURL('/invite/AbC')).toBe('/welcome?signin=failed&next=%2Finvite%2FAbC')
+    expect(signInErrorURL('/mia')).toBe('/welcome?signin=failed&next=%2Fmia')
   })
 
   it('signOut deletes the recording queue on this device, even if the request fails', async () => {

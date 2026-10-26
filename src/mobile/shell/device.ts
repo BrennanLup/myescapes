@@ -70,6 +70,15 @@ export function shouldRedirectToMobile(
   return matchMedia ? isPhone(navigator, matchMedia) : isPhone(navigator)
 }
 
+/**
+ * Where the phone redirect sends `/`: `/m`, keeping a sign-in failure (`?error=` from Better Auth,
+ * for example `state_mismatch`) so the phone's sign-in screen can say what happened.
+ */
+export function mobileRedirectURL(search: string): string {
+  const error = new URLSearchParams(search ?? '').get('error')
+  return error ? `/m?signin=failed&error=${encodeURIComponent(error.slice(0, 64))}` : '/m'
+}
+
 /** Where "View on desktop" goes: the 3D room, remembering the choice. */
 export const DESKTOP_URL = '/?desktop=1'
 

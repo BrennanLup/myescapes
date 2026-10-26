@@ -176,6 +176,24 @@ describe('Google configuration', () => {
     }
   })
 
+  it('accepts every errorCallbackURL the client sends (phone app, /welcome with next)', async () => {
+    const { signInErrorURL } = await import('../../src/auth/errors')
+    const t = await buildTestApp({ resolveUser, env: { GOOGLE_CLIENT_ID: 'cid', GOOGLE_CLIENT_SECRET: 's', BETTER_AUTH_SECRET: 'y'.repeat(40), PUBLIC_URL: 'https://escapes.example.com' } })
+    try {
+      for (const callbackURL of ['/', '/m', '/invite/AbC_12-x', '/games/the-vault']) {
+        const res = await t.inject({
+          method: 'POST',
+          url: '/api/auth/sign-in/social',
+          headers: { 'content-type': 'application/json', origin: 'https://escapes.example.com' },
+          payload: JSON.stringify({ provider: 'google', callbackURL, errorCallbackURL: signInErrorURL(callbackURL) }),
+        })
+        expect(res.statusCode, callbackURL).toBe(200)
+      }
+    } finally {
+      await t.close()
+    }
+  })
+
   it('rejects an open-redirect callbackURL', async () => {
     const t = await buildTestApp({ resolveUser, env: { GOOGLE_CLIENT_ID: 'cid', GOOGLE_CLIENT_SECRET: 's', BETTER_AUTH_SECRET: 'y'.repeat(40), PUBLIC_URL: 'https://escapes.example.com' } })
     try {

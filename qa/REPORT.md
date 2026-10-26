@@ -138,3 +138,17 @@ No new functional defects. Cosmetic notes:
 - **N5. Repo hygiene:** fix rounds committed 17 full-resolution, unquantized PNGs (`qa/screenshots/fix-*.png`, `fixA-*`, `fixc-*`, 0.6-1.3 MB each, about 16 MB). Consider quantizing or dropping them.
 
 **Round 2 verdict: all steps pass at both viewports, and all 12 actionable round-1 defects are fixed.**
+
+## Phase 2 QA round 3 (2026-10-26)
+
+Live: `node qa/live-smoke.mjs` (signed-out morning path, plus server status, directory seed count from the sitemap, a failed sign-in on the phone, an unknown invite) and `node qa/live-daily.mjs` (plays Escape of the Day to the end, signed out, on a laptop and a phone; nothing is written on the server). Local: `qa/local-morning.mjs` against a NODE_ENV=test server (test login, mock transcription and extraction), plus the full Vitest and Playwright suites.
+
+### Defects found and fixed
+| # | Defect | Fix |
+| --- | --- | --- |
+| R3-1 | **A failed Google sign-in was silent on phones.** Better Auth sends state errors (`state_mismatch`, for example when the consent screen sat longer than the 5-minute state cookie, or Google returned to another browser) to `/?error=...`; the phone redirect to `/m` dropped the query, so the sign-in screen gave no hint. Failures from an invite link went to `/welcome` and lost the invite. | The redirect keeps the code (`/m?signin=failed&error=...`) and `/m` shows the message; `signInWithGoogle` sends failures to `/m?signin=failed` for the phone app, else `/welcome?signin=failed&next=<destination>`. Tests: device, shell, auth client, and a server test that Better Auth accepts each error URL. |
+| R3-2 | The matcher's venue line repeated the city ("77 Ledger Lane, San Francisco, CA, San Francisco"). | Uses `placeLine`, with a test. |
+| R3-3 | Cosmetic: the phone's rooms search placeholder was cut off at 390 px. | "Search my rooms"; the label still names what it searches. |
+
+### Not verifiable without a real Google account
+Real Google sign-in, the onboarding step on the live site, live transcription (OpenAI) and extraction (Claude), saving a log, the live public game page with a review, invites and tags between two real accounts. No live game page exists yet (the directory only has venues until someone logs a room). All of these pass locally with the test login (e2e/morning.spec.ts on both projects).

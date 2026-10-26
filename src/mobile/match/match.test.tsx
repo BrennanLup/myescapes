@@ -66,6 +66,14 @@ describe('VenueGameMatcher', () => {
     expect(onPick).toHaveBeenCalledWith({ venue: VENUE, game: GAME })
   })
 
+  it('a venue line never repeats the city its address already names', async () => {
+    const full = { ...VENUE, address: '77 Ledger Lane, San Francisco, CA' }
+    const fetchMock = vi.fn(async (url: string) => (url.startsWith('/api/directory/match') ? json({ venues: [{ venue: full, score: 0.9 }, { venue: { ...VENUE, id: 'ven_b' }, score: 0.5 }], games: [] }) : json({ error: 'nope' }, 404)))
+    render(<VenueGameMatcher hints={HINTS} onPick={vi.fn()} fetch={fetchMock as unknown as typeof fetch} />)
+    expect((await screen.findByTestId('match-venue-ven_starlight')).textContent).toContain('77 Ledger Lane, San Francisco, CA · 2 rooms')
+    expect(screen.getByTestId('match-venue-ven_b').textContent).toContain('1420 Valencia St, San Francisco · 2 rooms')
+  })
+
   it('loads the venue when a matched game\'s venue was not in the list', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.startsWith('/api/directory/match')) return json({ venues: [], games: [{ game: GAME, score: 0.6 }] })
