@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { ApiErrorSchema } from '../../src/contracts/errors'
 import { ReportSchema } from '../../src/contracts/models'
 import { adminEmails, isAdminEmail } from '../context'
-import { games, reports, reviews, venues, visitPhotos } from '../db/schema'
+import { games, reports, reviews, users, venues, visitPhotos } from '../db/schema'
 import { buildTestApp, type TestApp } from '../testing'
 
 let t: TestApp
@@ -37,6 +37,19 @@ describe('admin emails', () => {
     const bob = await queue(U().bob)
     expect(bob.statusCode).toBe(403)
     expect(ApiErrorSchema.parse(bob.json()).code).toBe('forbidden')
+  })
+
+  it('an ADMIN_EMAILS user whose email is not verified is not an admin', async () => {
+    await t.db.update(users).set({ emailVerified: false }).where(eq(users.id, U().carol))
+    try {
+      const res = await queue(U().carol)
+      expect(res.statusCode).toBe(403)
+      expect(ApiErrorSchema.parse(res.json()).code).toBe('forbidden')
+      expect((await hide(U().carol, { targetType: 'review', targetId: R().carol, hidden: true })).statusCode).toBe(403)
+    } finally {
+      await t.db.update(users).set({ emailVerified: true }).where(eq(users.id, U().carol))
+    }
+    expect((await queue(U().carol)).statusCode).toBe(200)
   })
 })
 

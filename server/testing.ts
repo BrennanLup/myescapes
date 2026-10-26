@@ -29,6 +29,7 @@ export async function sessionUserById(db: Db, id: string): Promise<SessionUser |
   return {
     id: u.id,
     email: u.email,
+    emailVerified: u.emailVerified,
     name: u.name,
     handle: u.handle,
     displayName: u.displayName,

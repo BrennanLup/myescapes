@@ -205,6 +205,24 @@ describe('Google configuration', () => {
     }
   })
 
+  it('refuses to create a user whose email the provider did not verify', async () => {
+    const t = await buildTestApp({ fixtures: true, resolveUser })
+    try {
+      const { createAuth } = await import('./config')
+      const actx = await createAuth(t.db, t.ctx.env).$context
+      const account = { providerId: 'google', accountId: 'g-unverified', scope: 'openid email profile' }
+      await expect(
+        actx.internalAdapter.createOAuthUser({ email: 'Unverified@Example.com', name: 'Mallory', emailVerified: false, image: null }, account),
+      ).rejects.toThrow()
+      expect(await t.db.select().from(users).where(eq(users.email, 'unverified@example.com'))).toHaveLength(0)
+      expect(await t.db.select().from(accounts).where(eq(accounts.accountId, 'g-unverified'))).toHaveLength(0)
+      const ok = await actx.internalAdapter.createOAuthUser({ email: 'verified@example.com', name: 'Vera', emailVerified: true, image: null }, { ...account, accountId: 'g-verified' })
+      expect(ok.user).toMatchObject({ email: 'verified@example.com', emailVerified: true })
+    } finally {
+      await t.close()
+    }
+  })
+
   it('base URL and secure cookies', () => {
     expect(authBaseUrl({ PUBLIC_URL: 'https://a.example/' })).toBe('https://a.example')
     expect(authBaseUrl({ RAILWAY_PUBLIC_DOMAIN: 'bubbly-hope-production.up.railway.app' })).toBe('https://bubbly-hope-production.up.railway.app')

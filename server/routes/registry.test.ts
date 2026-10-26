@@ -38,7 +38,7 @@ describe('route registry', () => {
     // A standalone app, so the check doesn't depend on which workstream routes are still stubs.
     const stubApp = Fastify()
     installErrorHandler(stubApp)
-    const stubCtx = createContext({ resolveUser: async () => ({ id: 'u', email: 'u@example.com', name: 'U', handle: 'u', displayName: 'U', image: null, isAdmin: false, onboarded: true }) })
+    const stubCtx = createContext({ resolveUser: async () => ({ id: 'u', email: 'u@example.com', emailVerified: true, name: 'U', handle: 'u', displayName: 'U', image: null, isAdmin: false, onboarded: true }) })
     notImplemented(stubApp, stubCtx, [ROUTES.friends])
     const res = await stubApp.inject({ method: 'GET', url: '/api/friends' })
     expect(res.statusCode).toBe(501)
@@ -89,7 +89,7 @@ describe('without a database', () => {
   it('keeps /health, static pages and the seed demo up; DB routes answer 503', async () => {
     const app = await buildServer({
       distDir: '/nonexistent-dist',
-      context: createContext({ dbState: { status: 'unavailable', handle: null, error: 'down' }, resolveUser: async () => ({ id: 'u', email: 'u@example.com', name: 'U', handle: 'u', displayName: 'U', image: null, isAdmin: false, onboarded: true }) }),
+      context: createContext({ dbState: { status: 'unavailable', handle: null, error: 'down' }, resolveUser: async () => ({ id: 'u', email: 'u@example.com', emailVerified: true, name: 'U', handle: 'u', displayName: 'U', image: null, isAdmin: false, onboarded: true }) }),
     })
     try {
       expect((await app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200)

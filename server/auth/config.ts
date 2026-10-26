@@ -143,6 +143,11 @@ export function authOptions(db: Db, env: NodeJS.ProcessEnv) {
     session: { expiresIn: SESSION_EXPIRES_IN, updateAge: SESSION_UPDATE_AGE },
     account: { accountLinking: { enabled: false } },
     databaseHooks: {
+      user: {
+        // Refuse sign-ups whose provider did not verify the email (Google's email_verified=false):
+        // the email is not proven to be theirs. Better Auth then ends the sign-in with "unable to create user".
+        create: { before: async (data: Record<string, unknown>) => (data.emailVerified === true ? { data } : false) },
+      },
       account: {
         create: { before: async (data: Record<string, unknown>) => ({ data: stripTokens(data) }) },
         update: { before: async (data: Record<string, unknown>) => ({ data: stripTokens(data) }) },

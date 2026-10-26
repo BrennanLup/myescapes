@@ -98,6 +98,7 @@ export function sessionUserFromRow(u: typeof users.$inferSelect): SessionUser {
   return {
     id: u.id,
     email: u.email,
+    emailVerified: u.emailVerified,
     name: u.name,
     handle: u.handle,
     displayName: u.displayName,

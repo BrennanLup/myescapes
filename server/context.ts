@@ -10,6 +10,8 @@ import { HttpError } from './http'
 export interface SessionUser {
   id: string
   email: string
+  /** users.email_verified. ADMIN_EMAILS grants admin only when this is true. */
+  emailVerified: boolean
   name: string
   handle: string | null
   displayName: string | null
@@ -21,7 +23,8 @@ export interface SessionUser {
 
 /**
  * Admins by email: `ADMIN_EMAILS` is a comma- or space-separated list (case-insensitive). A user whose
- * email is listed is an admin even when `users.is_admin` is false (added by workstream 25).
+ * email is listed and verified (`users.email_verified`) is an admin even when `users.is_admin` is false
+ * (added by workstream 25). An unverified email never grants admin.
  */
 export function adminEmails(env: NodeJS.ProcessEnv = process.env): Set<string> {
   return new Set(
@@ -95,7 +98,7 @@ export function createContext(opts: CreateContextOptions = {}): AppContext {
     getUser(req) {
       let p = cache.get(req)
       if (!p) {
-        p = resolveUser(req, ctx).then((u) => (u && !u.isAdmin && isAdminEmail(u.email, env) ? { ...u, isAdmin: true } : u))
+        p = resolveUser(req, ctx).then((u) => (u && !u.isAdmin && u.emailVerified === true && isAdminEmail(u.email, env) ? { ...u, isAdmin: true } : u))
         cache.set(req, p)
       }
       return p
