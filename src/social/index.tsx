@@ -366,8 +366,22 @@ function FriendRow({ friend, onChanged }: { friend: Friend; onChanged(): void })
 // Inbox
 // ---------------------------------------------------------------------------
 
+/**
+ * The current items plus the ones answered in this view, so an answered tag or claim keeps showing
+ * its "Added to your room" / "Claimed" line after the reload drops it from the pending list.
+ */
+export function withAnswered<T>(current: readonly T[], answered: readonly T[], key: (t: T) => string): T[] {
+  const have = new Set(current.map(key))
+  return [...answered.filter((t) => !have.has(key(t))), ...current]
+}
+
+const tagKey = (t: PendingTag) => t.participantId
+const claimKey = (c: GuestClaim) => `${c.inviter.id}:${c.guestName}`
+
 export function Inbox({ onOpenVisit, onChanged }: { onOpenVisit?(visitId: string): void; onChanged?(): void }) {
   const load = useLoad((signal) => loadInbox({ signal }), [])
+  const [answeredTags, setAnsweredTags] = useState<PendingTag[]>([])
+  const [answeredClaims, setAnsweredClaims] = useState<GuestClaim[]>([])
   const changed = () => {
     load.reload()
     onChanged?.()
@@ -375,7 +389,9 @@ export function Inbox({ onOpenVisit, onChanged }: { onOpenVisit?(visitId: string
   if (load.status === 'loading') return <div data-testid="inbox"><Loading /></div>
   if (load.status === 'error') return <div data-testid="inbox"><ErrorLine error={load.error} /></div>
   const { tags, claims, notifications } = load.data
-  const nothing = tags.ok && !tags.data.length && claims.ok && !claims.data.length && notifications.ok && !notifications.data.items.length
+  const tagItems = tags.ok ? withAnswered(tags.data, answeredTags, tagKey) : []
+  const claimItems = claims.ok ? withAnswered(claims.data, answeredClaims, claimKey) : []
+  const nothing = tags.ok && !tagItems.length && claims.ok && !claimItems.length && notifications.ok && !notifications.data.items.length
   const allSignedOut = !tags.ok && isUnauthorized(tags.error) && !notifications.ok && isUnauthorized(notifications.error)
   return (
     <div data-testid="inbox" className="space-y-3">
@@ -385,9 +401,28 @@ export function Inbox({ onOpenVisit, onChanged }: { onOpenVisit?(visitId: string
         <>
           {nothing && <p className="text-sm text-ink-soft" data-testid="inbox-empty">Nothing new. Visits friends tag you on show up here.</p>}
           <SectionError s={tags} />
-          {tags.ok && tags.data.map((t) => <PendingTagItem key={t.participantId} tag={t} onChanged={changed} onOpenVisit={onOpenVisit} />)}
+          {tagItems.map((t) => (
+            <PendingTagItem
+              key={tagKey(t)}
+              tag={t}
+              onChanged={() => {
+                setAnsweredTags((a) => (a.some((x) => tagKey(x) === tagKey(t)) ? a : [...a, t]))
+                changed()
+              }}
+              onOpenVisit={onOpenVisit}
+            />
+          ))}
           <SectionError s={claims} />
-          {claims.ok && claims.data.map((c) => <ClaimItem key={c.inviter.id + c.guestName} claim={c} onChanged={changed} />)}
+          {claimItems.map((c) => (
+            <ClaimItem
+              key={claimKey(c)}
+              claim={c}
+              onChanged={() => {
+                setAnsweredClaims((a) => (a.some((x) => claimKey(x) === claimKey(c)) ? a : [...a, c]))
+                changed()
+              }}
+            />
+          ))}
           <SectionError s={notifications} />
           {notifications.ok && notifications.data.items.length > 0 && <NotificationList items={notifications.data.items} unread={notifications.data.unread} onChanged={changed} onOpenVisit={onOpenVisit} />}
         </>

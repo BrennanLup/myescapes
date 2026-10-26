@@ -74,7 +74,7 @@ Phase 2 stores everything in PostgreSQL through Drizzle ORM (`server/db`). Local
 | `npm run build` | Production build into `dist/`. |
 | `npm run serve` | Start the server only (expects `dist/`). |
 | `npm test` | Unit and component tests (Vitest). |
-| `npm run test:e2e` | End-to-end tests (Playwright, desktop 1440x900 and mobile 390x844). Builds the app and serves it on `E2E_PORT` (default 3100) with a throwaway `DATA_DIR`, so your data is never touched. Needs a Playwright Chromium (`npx playwright install chromium` once). |
+| `npm run test:e2e` | End-to-end tests (Playwright, desktop 1440x900 and mobile 390x844), including the full morning test (`e2e/morning.spec.ts`). Builds the app and serves it on `E2E_PORT` (default 3100) under `NODE_ENV=test` (test-only login, mock transcription and extraction) with a throwaway `DATA_DIR`, so your data is never touched. Set `E2E_DATABASE_URL` to a local Postgres database whose name contains `e2e` to run against real Postgres (it is dropped and recreated each run); otherwise PGlite. Needs a Playwright Chromium (`npx playwright install chromium` once). |
 | `npm run lint` | ESLint. |
 | `npm run typecheck` | TypeScript, no emit. |
 | `npm run db:migrate` / `db:seed` / `db:generate` | Apply migrations, seed the local demo directory, generate a migration from `server/db/schema.ts`. |

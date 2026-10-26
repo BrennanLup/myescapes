@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { SLOW, aimAt, roomUrl, fillMissingConfirmFields, playerPosition, storeState, waitHover, waitOverlay } from './helpers'
+import { watchErrors } from './support/morning'
 
 // Board geometry (see src/world/board/index.tsx): sort tabs sit along the top of the cork.
 const BOARD = { x: 0, y: 2.05, faceZ: -7.98 + 0.072 }
@@ -10,11 +11,9 @@ test.describe('full loop', () => {
   test.skip(({ isMobile }) => isMobile, 'keyboard-driven loop; mobile has its own spec')
 
   test('enter -> walk -> review -> sort -> record -> confirm -> pin -> wish list -> wrap', async ({ page, request }) => {
+    // Page errors, console errors and failed API calls (the signed-out session probe's 401 is expected).
     const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-    page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text())
-    })
+    watchErrors(page, errors)
 
     // 1. Loading screen, then straight into the room (Escape of the Day never blocks entry).
     await page.goto(roomUrl(), { waitUntil: 'domcontentloaded' })

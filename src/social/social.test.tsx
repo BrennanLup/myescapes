@@ -201,6 +201,35 @@ describe('Inbox', () => {
     expect(api.calls('respondToTag')[0]).toMatchObject({ params: { id: 'vis_tag' }, body: { accept: true } })
   })
 
+  it('keeps the answered tag and claim on screen after the reload drops them from the pending lists', async () => {
+    let tagAnswered = false
+    let claimed = false
+    serve({
+      pendingTags: () => ({ tags: tagAnswered ? [] : [pendingTag()] }),
+      claims: () => ({ claims: claimed ? [] : [claim()] }),
+      notifications: () => ({ items: [], unread: 0, nextCursor: null }),
+      respondToTag: () => {
+        tagAnswered = true
+        return { visit: null, status: 'accepted' }
+      },
+      claim: () => {
+        claimed = true
+        return { claimed: 2 }
+      },
+    })
+    render(<Inbox />)
+    fireEvent.click(within(await screen.findByTestId('inbox-tag')).getByTestId('inbox-tag-accept'))
+    expect((await screen.findByTestId('inbox-tag-done')).textContent).toContain('Added to your room')
+    await waitFor(() => expect(screen.getByTestId('inbox-claim')).toBeTruthy())
+    fireEvent.click(within(screen.getByTestId('inbox-claim')).getByTestId('inbox-claim-all'))
+    expect((await screen.findByTestId('inbox-claim-done')).textContent).toContain('Claimed 2 visits')
+    // Both reloads have landed with empty lists, and the confirmations are still there.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.getByTestId('inbox-tag-done').textContent).toContain('Added to your room')
+    expect(screen.getByTestId('inbox-claim-done').textContent).toContain('Claimed 2 visits')
+    expect(screen.queryByTestId('inbox-empty')).toBeNull()
+  })
+
   it('declines a pending tag', async () => {
     const api = serve({ pendingTags: () => ({ tags: [pendingTag()] }), claims: () => ({ claims: [] }), notifications: () => ({ items: [], unread: 0, nextCursor: null }), respondToTag: () => ({ visit: null, status: 'declined' }) })
     render(<Inbox />)

@@ -138,8 +138,10 @@ export function findCompany(text: string, exclude: (string | null)[] = []): stri
     for (const m of text.matchAll(re)) {
       const name = cleanTitle(m[1])
       if (!name) continue
-      const first = name.split(/\s+/)[0]
-      if (NOT_PLACES.has(first) || /^\d/.test(name)) continue
+      const words = name.split(/\s+/)
+      // "The Puzzle Foundry" is a company; a bare "The" or a month or weekday is not.
+      const leadingArticle = words.length > 1 && /^(?:The|A|An)$/.test(words[0])
+      if ((NOT_PLACES.has(words[0]) && !leadingArticle) || /^\d/.test(name)) continue
       if (bad.some((b) => b === name.toLowerCase() || b.startsWith(name.toLowerCase()))) continue
       if (KNOWN_CITIES.some((c) => c.toLowerCase() === name.toLowerCase())) continue
       return name

@@ -135,6 +135,14 @@ describe('mockExtract: negations and scales', () => {
     expect(d.review.ratings.storyline.score).toBe(80)
     expect(d.review.puzzles).toEqual([{ description: 'My favourite was a riddle on the sarcophagus.', type: 'logic', memorable: true }])
   })
+
+  it('keeps a company name that starts with "The" (and so keeps its puzzle word out of the puzzles)', () => {
+    const d = mockExtract('Last week we did a room called Subject Zero by The Puzzle Foundry in Toronto. The first puzzle was a combination lock with a four digit code.')
+    expect(d.room).toMatchObject({ name: 'Subject Zero', company: 'The Puzzle Foundry', city: 'Toronto' })
+    expect(d.review.puzzles.map((p) => p.description)).toEqual(['The first puzzle was a combination lock with a four digit code.'])
+    // A bare article or a weekday after "by" is still not a company.
+    expect(mockExtract('We did a room called Moonbase by Saturday in Toronto.').room.company).toBeNull()
+  })
 })
 
 describe('mockExtract: sparse transcript', () => {
