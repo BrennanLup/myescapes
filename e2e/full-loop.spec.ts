@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { SLOW, aimAt, fillMissingConfirmFields, playerPosition, solveGate, storeState, waitHover, waitOverlay } from './helpers'
+import { SLOW, aimAt, roomUrl, fillMissingConfirmFields, playerPosition, solveGate, storeState, waitHover, waitOverlay } from './helpers'
 
 // Board geometry (see src/world/board/index.tsx): sort tabs sit along the top of the cork.
 const BOARD = { x: 0, y: 2.05, faceZ: -7.98 + 0.072 }
@@ -17,7 +17,7 @@ test.describe('full loop', () => {
     })
 
     // 1. Loading screen, then the daily gate opens on its own.
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await page.goto(roomUrl(), { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('loading-screen')).toBeAttached({ timeout: SLOW })
     await solveGate(page)
     await expect(page.getByTestId('loading-screen')).toHaveCount(0)

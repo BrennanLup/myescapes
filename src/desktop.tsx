@@ -4,7 +4,6 @@
  * belongs to workstream 20 (src/world, src/state).
  */
 import { App } from './App'
-import { OnboardingGate } from './auth'
 import { installBridge } from './state/bridge'
 import { installTestHooks } from './contracts/testing'
 import { useStore } from './state/store'
@@ -23,11 +22,11 @@ const gesture = () => {
 window.addEventListener('pointerdown', gesture)
 window.addEventListener('keydown', gesture)
 
-/** Signed-in users without a display name and @handle see the onboarding step first (workstream 3). */
+/**
+ * The room itself. The `/` gate (`Home` in src/public/landing, workstream 19) decides who gets here:
+ * signed-out visitors only with `?demo=1`, signed-in users after the display name + @handle step
+ * (which they may postpone with "Later"; the API keeps their reviews off public pages until then).
+ */
 export function DesktopApp() {
-  return (
-    <OnboardingGate>
-      <App />
-    </OnboardingGate>
-  )
+  return <App />
 }

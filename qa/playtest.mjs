@@ -463,7 +463,7 @@ async function runViewport(browser, vp) {
       encodings.push({ path: u.pathname, status: r.status(), encoding: h['content-encoding'] ?? null, length: h['content-length'] ?? null, vary: h['vary'] ?? null })
     }
     page.on('response', onResp)
-    await page.goto(BASE + '/', { waitUntil: 'commit', timeout: SLOW })
+    await page.goto(BASE + '/?demo=1', { waitUntil: 'commit', timeout: SLOW })
     await page.waitForSelector('[data-testid=loading-screen]', { state: 'attached', timeout: SLOW }).catch(() => {})
     await H.shot('loading')
     // Ready = world built + loading screen gone. The gate may already be up.
@@ -602,7 +602,7 @@ async function runViewport(browser, vp) {
 
   // Perf: fps + draw calls at spawn, per quality preset (debug readout too).
   await step('1b-perf', async ({ check, details }) => {
-    await page.goto(BASE + '/?debug=1', { waitUntil: 'commit' })
+    await page.goto(BASE + '/?demo=1&debug=1', { waitUntil: 'commit' })
     await page.waitForFunction(() => {
       const s = window.__ESCAPE__?.store.getState()
       return s && s.worldReady && s.boardPins.length > 0 && !document.querySelector('[data-testid=loading-screen]')
@@ -1144,7 +1144,7 @@ async function runViewport(browser, vp) {
     const p2 = await ctx2.newPage()
     attachCollectors(p2, bag)
     try {
-      await p2.goto(BASE + '/', { waitUntil: 'commit' })
+      await p2.goto(BASE + '/?demo=1', { waitUntil: 'commit' })
       await p2.getByTestId('gate-overlay').waitFor({ state: 'visible', timeout: 240_000 })
       details.kind = await gateKind(p2)
       details.miss1 = await missGate(p2)
@@ -1197,7 +1197,7 @@ async function runViewport(browser, vp) {
     details.kinds = {}
     try {
       for (const [i, k] of ['lock', 'cipher', 'sequence', 'search', 'recall'].entries()) {
-        await p3.goto(`${BASE}/?gate=force&gateType=${k}`, { waitUntil: 'commit' })
+        await p3.goto(`${BASE}/?demo=1&gate=force&gateType=${k}`, { waitUntil: 'commit' })
         await p3.getByTestId('gate-overlay').waitFor({ state: 'visible', timeout: 240_000 })
         await sleep(1200)
         const kind = await gateKind(p3)

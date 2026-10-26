@@ -9,7 +9,7 @@ test('app shell loads with a canvas and healthy server', async ({ page, request 
   await page.waitForFunction(() => !!window.__ESCAPE__)
 })
 
-test('phones opening / get the light mobile app; desktops stay on the 3D room', async ({ page, isMobile }) => {
+test('phones opening / get the light mobile app; signed-out desktops get the landing page', async ({ page, isMobile }) => {
   const scripts: string[] = []
   page.on('request', (r) => {
     if (r.resourceType() === 'script') scripts.push(new URL(r.url()).pathname)
@@ -20,14 +20,22 @@ test('phones opening / get the light mobile app; desktops stay on the 3D room', 
     await expect(page.getByTestId('mobile-app')).toBeVisible()
     await expect(page.locator('a[href="/privacy"]')).toBeVisible()
     expect(scripts.filter((s) => /desktop/i.test(s))).toEqual([])
-    // "View on desktop" is remembered: / now opens the room on this phone.
+    // "View on desktop" is remembered: / now opens the desktop site (signed out: the landing page).
     await page.getByTestId('view-on-desktop').click()
-    await expect(page.locator('canvas').first()).toBeVisible()
+    await expect(page.getByTestId('landing-page')).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe('/')
     expect(await page.evaluate(() => localStorage.getItem('myescapes:view'))).toBe('desktop')
   } else {
-    await expect(page.locator('canvas').first()).toBeVisible()
+    // Signed out, / is the landing page with Google sign-in and the legal links, without three.js.
+    await expect(page.getByTestId('landing-page')).toBeVisible()
+    await expect(page.getByTestId('google-sign-in')).toBeVisible()
+    for (const href of ['/about', '/privacy', '/terms']) await expect(page.locator(`a[href="${href}"]`).first()).toBeVisible()
     expect(new URL(page.url()).pathname).toBe('/')
+    expect(scripts.filter((s) => /desktop/i.test(s))).toEqual([])
   }
+  // The demo room stays reachable while signed out.
+  await page.goto(roomUrl())
+  await expect(page.locator('canvas').first()).toBeVisible()
 })
 
 test('with ?gate=off the room opens straight away with the seed data', async ({ page }) => {

@@ -11,11 +11,13 @@ export const SLOW = 90_000
 
 /**
  * `/` with the "View on desktop" choice (`desktop=1`) added, so phone emulation (the mobile project)
- * opens the 3D room instead of being redirected to `/m`. Desktop browsers ignore it.
+ * opens the 3D room instead of being redirected to `/m`. Desktop browsers ignore it. `demo=1` opens
+ * the demo room for these signed-out browsers (signed out, `/` is the landing page).
  */
 export function roomUrl(query = '') {
   const q = new URLSearchParams(query.replace(/^\?/, ''))
   q.set('desktop', '1')
+  q.set('demo', '1')
   return '/?' + q.toString()
 }
 
