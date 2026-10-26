@@ -108,13 +108,16 @@ describe('guest-name claims', () => {
 
 describe('same-room merge detection', () => {
   it('offers a friend\'s visit of the same game within a day, with conflicting facts', async () => {
+    // Nothing is offered until I've logged the room myself (no probing friends' visits).
+    expect((await k.api(U.mia, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-13`)).body.candidates).toEqual([])
+    await k.api(U.mia, 'POST', '/api/visits', { gameId: FX.games.observatory, facts: { ...facts('2026-10-13'), escapeTimeMinutes: 52, toolsUsed: ['keypads'] } })
     const r = await k.api(U.mia, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-13`)
     expect(r.status).toBe(200)
     const c = r.body.candidates.map((x: unknown) => MergeCandidateSchema.parse(x))
     // vis_together (Alice is Mia's friend). Carol's visit the same day is not a friend's.
     expect(c.map((x: { visitId: string }) => x.visitId)).toEqual([V.together])
     expect(c[0]).toMatchObject({ loggedBy: { id: U.alice }, conflicts: ['date'], facts: { date: '2026-10-12', escaped: true } })
-    expect((await k.api(U.mia, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-14`)).body.candidates).toEqual([])
+    expect((await k.api(U.mia, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-15`)).body.candidates).toEqual([])
     // Visits I'm already on are not offered.
     expect((await k.api(U.alice, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-12`)).body.candidates).toEqual([])
     expect((await k.api(U.carol, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-12`)).body.candidates).toEqual([])
@@ -127,14 +130,18 @@ describe('same-room merge detection', () => {
     expect(c[0].conflicts.sort()).toEqual(['escapeTimeMinutes', 'escaped'])
   })
 
-  it('join without a log of my own: a copied review, the logger hears about it', async () => {
-    const r = await k.api(U.mia, 'POST', `/api/visits/${V.together}/join`, {})
+  it('join without a tag or a log of my own is refused: friends can\'t add themselves to a visit', async () => {
+    expect((await k.api(U.mia, 'POST', `/api/visits/${V.together}/join`, {})).status).toBe(404)
+    expect(await k.t.db.select().from(visitParticipants).where(and(eq(visitParticipants.visitId, V.together), eq(visitParticipants.userId, U.mia)))).toHaveLength(0)
+  })
+
+  it('merging my log: the logger hears about it, and joining again is harmless', async () => {
+    const mine = await k.api(U.mia, 'POST', '/api/visits', { gameId: FX.games.observatory, facts: facts('2026-10-12') })
+    const r = await k.api(U.mia, 'POST', `/api/visits/${V.together}/join`, { fromVisitId: mine.body.id })
     expect(r.status).toBe(200)
     const d = VisitDetailSchema.parse(r.body)
     expect(d.myStatus).toBe('accepted')
-    expect(d.reviews.find((x) => x.author.id === U.mia)).toMatchObject({ scoresCopied: true, copiedFromReviewId: FX.reviews.aliceTogether })
     expect((await k.api(U.alice, 'GET', '/api/notifications')).body.items[0]).toMatchObject({ type: 'tag_accepted', text: 'Mia joined your visit to The Lost Observatory on Oct 12' })
-    // Joining again is harmless.
     expect((await k.api(U.mia, 'POST', `/api/visits/${V.together}/join`, {})).status).toBe(200)
   })
 

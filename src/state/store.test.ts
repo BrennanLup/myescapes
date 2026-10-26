@@ -166,6 +166,36 @@ describe('store: the 3D room on the signed-in user data', () => {
   })
 })
 
+describe('store: signed-out demo in production (server refuses writes with 401)', () => {
+  beforeEach(() => {
+    useStore.setState(initial, true)
+    localStorage.clear()
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => (String(input).startsWith('/api/data') ? json({ ...FIXTURE_DATASET, source: 'seed' }) : json({ error: 'Sign in to save.' }, 401))))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('keeps a new entry and the wish list on this page only', async () => {
+    await useStore.getState().loadData()
+    const entry: Entry = { room: { ...FIXTURE_DATASET.rooms[0], id: 'room_demo', name: 'Demo Room' }, review: { ...FIXTURE_DATASET.reviews[0], id: 'rev_demo', roomId: 'room_demo' } }
+    await expect(useStore.getState().addEntry(entry)).resolves.toEqual(entry)
+    expect(useStore.getState().rooms.some((r) => r.id === 'room_demo')).toBe(true)
+    const items = [{ id: 'w1', name: 'Local wish', city: '', link: '', addedBy: '', priority: 1, done: false }]
+    await useStore.getState().setWishlist(items)
+    expect(useStore.getState().wishlist).toEqual(items)
+  })
+
+  it('a signed-in 401 (session expired) still fails loudly', async () => {
+    useStore.setState({ dataSource: 'postgres' })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const entry: Entry = { room: FIXTURE_DATASET.rooms[0], review: FIXTURE_DATASET.reviews[0] }
+    await expect(useStore.getState().addEntry(entry)).rejects.toThrow('Sign in to save.')
+  })
+})
+
 describe('store: board sort', () => {
   beforeEach(() => useStore.setState(initial, true))
 

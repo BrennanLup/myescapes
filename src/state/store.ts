@@ -3,7 +3,7 @@
  * Owned by the orchestrator; workstreams read it and call its actions.
  */
 import { create } from 'zustand'
-import { apiClient } from '@/contracts/api'
+import { apiClient, apiErrorStatus } from '@/contracts/api'
 import { bus } from '@/contracts/events'
 import type { LogRow } from '@/contracts/models'
 import { callApi, ROUTES } from '@/contracts/routes'
@@ -217,7 +217,11 @@ export const useStore = create<AppState>()((set, get) => ({
     return next
   },
   async addEntry(entry) {
-    const saved = await apiClient.saveEntry(entry)
+    const saved = await apiClient.saveEntry(entry).catch((err: unknown) => {
+      // Signed-out demo in production is read-only on the server: keep the entry on this page.
+      if (get().dataSource !== 'postgres' && apiErrorStatus(err) === 401) return entry
+      throw err
+    })
     set((s) => {
       const reviews = [...s.reviews.filter((r) => r.id !== saved.review.id), saved.review]
       return {
@@ -238,6 +242,8 @@ export const useStore = create<AppState>()((set, get) => ({
     try {
       set({ wishlist: await apiClient.putWishlist(items) })
     } catch (err) {
+      // Signed-out demo in production: the list stays on this page only.
+      if (get().dataSource !== 'postgres' && apiErrorStatus(err) === 401) return
       console.error('[store] wishlist save failed', err)
       set({ wishlist: prev })
       throw err

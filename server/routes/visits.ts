@@ -126,6 +126,8 @@ export async function visitsRoutes(app: FastifyInstance, ctx: AppContext) {
       const { visit, me } = await visitForViewer(tx, params.id, user.id)
       await tx.delete(reviews).where(and(eq(reviews.visitId, visit.id), eq(reviews.authorId, user.id)))
       await tx.delete(visitParticipants).where(eq(visitParticipants.id, me.id))
+      // A creator who left is no longer its creator: no delete rights, no Phase 1 saves onto it.
+      if (visit.createdBy === user.id) await tx.update(visits).set({ createdBy: null }).where(eq(visits.id, visit.id))
       // The visit stays for the others; once no account holder is left on it, nobody could see it.
       const left = await tx
         .select({ id: visitParticipants.id })

@@ -7,20 +7,22 @@
  * Covered here: photos (add / see / remove), public visibility of a visit through its photos,
  * moderation (report and admin-only hide), and cross-user isolation of /api/data, /api/entries,
  * /api/wishlist and /api/me/usage, and the refusal side of the social rules (see a visit, edit,
- * delete, tag, write/see a review, no emails in people search). Rules whose routes are still 501
- * stubs on main (account deletion) are added here by the bundles that build those routes, or by
- * the integrator.
+ * delete, tag, write/see a review, no emails in people search). The last suites cover the accepted
+ * paths (leave, recorded edits, delete, unfriend, account deletion), the self-service join, claim and
+ * merge-candidate rules, Phase 1 saves onto shared or left visits, and the read-only signed-out demo
+ * in production, each from fresh fixtures.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { and, eq } from 'drizzle-orm'
 import { ROUTE_LIST } from '../src/contracts/routes'
 import { FIXTURE_DATASET } from '../src/contracts/fixtures'
 import { PhotoV2Schema } from '../src/contracts/models'
 import { DatasetSchema, type Entry } from '../src/contracts/types'
-import { TINY_PNG } from './db/fixtures'
-import { reviews, usageCounters, users, visitParticipants, visitPhotos, visits, wishlistItems } from './db/schema'
+import { FX, pair, TINY_PNG } from './db/fixtures'
+import { friendships, reviews, usageCounters, users, visitParticipants, visitPhotos, visitPuzzles, visits, wishlistItems } from './db/schema'
 import { utcDay } from './db/usage'
 import { multipart } from './routes/photos.testutil'
+import { facts, socialKit, U as FU, type Kit } from './routes/visits.testkit'
 import { buildTestApp, type TestApp } from './testing'
 
 let t: TestApp
@@ -291,13 +293,194 @@ describe('who can do what: visits, reviews, tagging, friends (31-34)', () => {
   })
 })
 
-describe('account deletion (database level, until DELETE /api/me lands)', () => {
-  it('a deleted uploader\'s photos go with them', async () => {
+describe('account deletion (last: it changes the shared fixture state)', () => {
+  it('DELETE /api/me: a deleted uploader\'s photos go with them', async () => {
     const { id } = PhotoV2Schema.parse((await upload(V().copy, U().mia)).json())
-    // Account deletion turns tags into plain names first (schema: visit_participants_who_ck).
-    await t.db.update(visitParticipants).set({ guestName: 'Mia' }).where(eq(visitParticipants.userId, U().mia))
-    await t.db.delete(users).where(eq(users.id, U().mia))
+    expect((await t.inject({ method: 'DELETE', url: '/api/me', as: U().mia, payload: { confirm: 'DELETE' } })).statusCode).toBe(200)
+    expect(await t.db.select().from(users).where(eq(users.id, U().mia))).toHaveLength(0)
     expect(await t.db.select().from(visitPhotos).where(eq(visitPhotos.id, id))).toHaveLength(0)
     expect((await getPhoto(id, U().alice)).statusCode).toBe(404)
+  })
+})
+
+/**
+ * Rules whose accepted paths change data, and the join / claim / merge holes found in review.
+ * Each test starts from freshly loaded fixtures (its own PGlite app).
+ */
+describe('who can do what: accepted paths and self-service joins (fresh fixtures per test)', () => {
+  let k: Kit
+  beforeAll(async () => {
+    k = await socialKit()
+  })
+  afterAll(async () => {
+    await k?.close()
+  })
+  beforeEach(async () => {
+    await k.reset()
+  })
+  const FV = FX.visits
+  const onVisit = async (visitId: string, userId: string) =>
+    (await k.t.db.select().from(visitParticipants).where(and(eq(visitParticipants.visitId, visitId), eq(visitParticipants.userId, userId)))).length > 0
+  const befriend = async (x: string, y: string) => {
+    const p = pair(x, y)
+    await k.t.db.insert(friendships).values({ userA: p.userA, userB: p.userB, status: 'accepted', requestedBy: x, acceptedAt: new Date() })
+  }
+  const logVisit = async (as: string, gameId: string, date: string) => {
+    const r = await k.api(as, 'POST', '/api/visits', { gameId, facts: facts(date) })
+    expect(r.status).toBe(201)
+    return r.body.id as string
+  }
+
+  it('join: a friend who was not tagged cannot add themselves to a solo or private visit', async () => {
+    expect((await k.api(FU.bob, 'POST', `/api/visits/${FV.solo}/join`, {})).status).toBe(404)
+    // Even with a log of the same room the same day: alice's only review there is private.
+    const bobs = await logVisit(FU.bob, FX.games.vault, '2026-09-01')
+    expect((await k.api(FU.bob, 'POST', `/api/visits/${FV.solo}/join`, { fromVisitId: bobs })).status).toBe(404)
+    expect(await onVisit(FV.solo, FU.bob)).toBe(false)
+    // ...and the visit is never offered as a merge candidate.
+    expect((await k.api(FU.bob, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.vault}&date=2026-09-01`)).body.candidates).toEqual([])
+    // Alice can still delete her own solo visit.
+    expect((await k.api(FU.alice, 'DELETE', `/api/visits/${FV.solo}`)).status).toBe(200)
+  })
+
+  it('join: a friend of a member (not of the creator) and a blocked user are refused', async () => {
+    await befriend(FU.bob, FU.carol)
+    // carol has her own log of the Observatory on the same day (vis_carol).
+    expect((await k.api(FU.carol, 'POST', `/api/visits/${FV.together}/join`, {})).status).toBe(404)
+    expect((await k.api(FU.carol, 'POST', `/api/visits/${FV.together}/join`, { fromVisitId: FV.carol })).status).toBe(404)
+    expect((await k.api(FU.carol, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-12`)).body.candidates).toEqual([])
+    const eves = await logVisit(FU.eve, FX.games.observatory, '2026-10-12')
+    expect((await k.api(FU.eve, 'POST', `/api/visits/${FV.together}/join`, { fromVisitId: eves })).status).toBe(404)
+    expect(await onVisit(FV.together, FU.carol)).toBe(false)
+    expect(await onVisit(FV.together, FU.eve)).toBe(false)
+  })
+
+  it('merge candidates: only with my own log of the room, only visits a friend created', async () => {
+    expect((await k.api(FU.mia, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-12`)).body.candidates).toEqual([])
+    await logVisit(FU.mia, FX.games.observatory, '2026-10-12')
+    const c = (await k.api(FU.mia, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-12`)).body.candidates
+    expect(c.map((x: { visitId: string }) => x.visitId)).toEqual([FV.together])
+    // bob accepted onto carol's visit does not expose carol's visit to bob's friends.
+    await k.t.db.insert(visitParticipants).values({ visitId: FV.carol, userId: FU.bob, status: 'accepted', addedBy: FU.carol })
+    const ids = (await k.api(FU.alice, 'GET', `/api/visits/merge-candidates?gameId=${FX.games.observatory}&date=2026-10-13`)).body.candidates
+    expect(ids).toEqual([]) // alice is on vis_together already; vis_carol is not a friend's log
+  })
+
+  it('claim: a friend cannot claim a guest name that is not theirs', async () => {
+    const r = await k.api(FU.bob, 'POST', '/api/claims', { inviterId: FU.alice, guestName: 'Mia' })
+    expect(r.status).toBe(404)
+    const p = await k.t.db.select().from(visitParticipants).where(eq(visitParticipants.id, FX.participants.guestMia))
+    expect(p[0]).toMatchObject({ userId: null, guestName: 'Mia' })
+    expect(await onVisit(FV.guest, FU.bob)).toBe(false)
+  })
+
+  it('claim: a friend\'s guest name on a stranger\'s visit does not open that visit', async () => {
+    // alice is on carol's visit and added a guest "Mia" there; mia is alice's friend, not carol's.
+    await k.t.db.insert(visitParticipants).values([
+      { visitId: FV.carol, userId: FU.alice, status: 'accepted', addedBy: FU.carol },
+      { visitId: FV.carol, guestName: 'Mia', status: 'accepted', addedBy: FU.alice },
+    ])
+    const r = await k.api(FU.mia, 'POST', '/api/claims', { inviterId: FU.alice, guestName: 'Mia' })
+    expect(r.body).toEqual({ claimed: 1 }) // vis_guest only
+    expect(await onVisit(FV.guest, FU.mia)).toBe(true)
+    expect(await onVisit(FV.carol, FU.mia)).toBe(false)
+    expect((await k.api(FU.mia, 'GET', '/api/claims')).body.claims).toEqual([])
+  })
+
+  it('/api/entries: a creator who left can no longer change the visit or add a review to it', async () => {
+    const alice = DatasetSchema.parse((await k.api(FU.alice, 'GET', '/api/data')).body)
+    const rv = alice.reviews.find((r) => r.id === FV.together)!
+    const room = alice.rooms.find((r) => r.id === rv.roomId)!
+    expect((await k.api(FU.alice, 'POST', `/api/visits/${FV.together}/leave`)).status).toBe(200)
+    const before = (await k.t.db.select().from(visits).where(eq(visits.id, FV.together)))[0]
+    expect(before.createdBy).toBeNull()
+    const res = await k.api(FU.alice, 'POST', '/api/entries', { room, review: { ...rv, date: '2020-02-02', escaped: false, crew: [], puzzles: [] } })
+    expect(res.status).toBe(200)
+    expect(res.body.review.id).not.toBe(FV.together)
+    const after = (await k.t.db.select().from(visits).where(eq(visits.id, FV.together)))[0]
+    expect(after).toMatchObject({ date: before.date, escaped: before.escaped })
+    expect(await k.t.db.select().from(visitPuzzles).where(eq(visitPuzzles.visitId, FV.together))).toHaveLength(2)
+    expect(await k.t.db.select().from(reviews).where(and(eq(reviews.visitId, FV.together), eq(reviews.authorId, FU.alice)))).toHaveLength(0)
+    const d = (await k.api(FU.bob, 'GET', `/api/visits/${FV.together}`)).body
+    expect(d.reviews.map((r: { author: { id: string } }) => r.author.id)).toEqual([FU.bob])
+  })
+
+  it('/api/entries on a shared visit: facts and puzzles are recorded edits, other people\'s guests stay', async () => {
+    await k.api(FU.alice, 'POST', `/api/visits/${FV.together}/participants`, { crew: [{ guestName: 'Sam' }] })
+    const bob = DatasetSchema.parse((await k.api(FU.bob, 'GET', '/api/data')).body)
+    const rv = bob.reviews.find((r) => r.id === FV.together)!
+    const room = bob.rooms.find((r) => r.id === rv.roomId)!
+    const res = await k.api(FU.bob, 'POST', '/api/entries', { room, review: { ...rv, escapeTimeMinutes: 58, crew: [], puzzles: rv.puzzles.slice(0, 1) } })
+    expect(res.status).toBe(200)
+    expect(res.body.review.id).toBe(FV.together)
+    const d = (await k.api(FU.alice, 'GET', `/api/visits/${FV.together}`)).body
+    expect(d.facts.escapeTimeMinutes).toBe(58)
+    expect(d.participants.some((p: { guestName: string | null }) => p.guestName === 'Sam')).toBe(true)
+    // The kept puzzle keeps its id, so alice's memorable pick still points at it.
+    expect(d.puzzles.map((p: { id: string }) => p.id)).toEqual([FX.puzzles.clock])
+    expect(d.reviews.find((r: { author: { id: string } }) => r.author.id === FU.alice).memorablePuzzleIds).toEqual([FX.puzzles.clock])
+    const edits = (await k.api(FU.alice, 'GET', `/api/visits/${FV.together}/edits`)).body.edits
+    expect(edits[0]).toMatchObject({ editor: { id: FU.bob }, changes: { escapeTimeMinutes: { from: 52, to: 58 } } })
+    expect(Object.keys(edits[0].changes)).toContain('puzzles')
+  })
+
+  it('edit shared facts: an accepted edit is recorded and visible in the history', async () => {
+    expect((await k.api(FU.bob, 'PATCH', `/api/visits/${FV.together}`, { facts: { escaped: false } })).status).toBe(200)
+    const edits = (await k.api(FU.alice, 'GET', `/api/visits/${FV.together}/edits`)).body.edits
+    expect(edits[0]).toMatchObject({ editor: { id: FU.bob }, changes: { escaped: { from: true, to: false } } })
+  })
+
+  it('remove yourself from a visit: my review goes, the visit stays for the others', async () => {
+    expect((await k.api(FU.bob, 'POST', `/api/visits/${FV.together}/leave`)).status).toBe(200)
+    expect(await k.t.db.select().from(reviews).where(eq(reviews.id, FX.reviews.bobTogether))).toHaveLength(0)
+    expect((await k.api(FU.bob, 'GET', `/api/visits/${FV.together}`)).status).toBe(404)
+    const d = (await k.api(FU.alice, 'GET', `/api/visits/${FV.together}`)).body
+    expect(d.participants.map((p: { user: { id: string } | null }) => p.user?.id)).toEqual([FU.alice])
+  })
+
+  it('delete a visit: the creator can when nobody else accepted', async () => {
+    expect((await k.api(FU.alice, 'DELETE', `/api/visits/${FV.solo}`)).status).toBe(200)
+    expect(await k.t.db.select().from(visits).where(eq(visits.id, FV.solo))).toHaveLength(0)
+    expect((await k.api(FU.alice, 'GET', `/api/visits/${FV.solo}`)).status).toBe(404)
+  })
+
+  it('unfriending keeps past shared visits but stops new tags', async () => {
+    expect((await k.api(FU.alice, 'DELETE', `/api/friends/${FU.bob}`)).status).toBe(200)
+    expect((await k.api(FU.bob, 'GET', `/api/visits/${FV.together}`)).status).toBe(200)
+    expect((await k.api(FU.alice, 'GET', `/api/visits/${FV.together}`)).status).toBe(200)
+    expect((await k.api(FU.alice, 'POST', `/api/visits/${FV.solo}/participants`, { crew: [{ userId: FU.bob }] })).status).toBe(403)
+  })
+
+  it('deleting an account removes reviews and transcripts and turns tags into plain names', async () => {
+    expect((await k.api(FU.bob, 'DELETE', '/api/me', { confirm: 'DELETE' })).status).toBe(200)
+    expect(await k.t.db.select().from(reviews).where(eq(reviews.authorId, FU.bob))).toHaveLength(0)
+    const d = await k.api(FU.alice, 'GET', `/api/visits/${FV.together}`)
+    expect(JSON.stringify(d.body)).not.toContain('Bob private transcript')
+    expect(d.body.participants).toEqual(expect.arrayContaining([expect.objectContaining({ user: null, guestName: 'Bob' })]))
+    expect(d.body.reviews.map((r: { author: { id: string } }) => r.author.id)).toEqual([FU.alice])
+  })
+})
+
+describe('signed-out demo writes in production', () => {
+  let p: TestApp
+  beforeAll(async () => {
+    p = await buildTestApp({ env: { NODE_ENV: 'production' } })
+  })
+  afterAll(async () => {
+    await p?.close()
+  })
+
+  it('POST /api/entries and PUT /api/wishlist are refused and change nothing other visitors read', async () => {
+    const dataBefore = (await p.inject({ method: 'GET', url: '/api/data' })).body
+    const wishBefore = (await p.inject({ method: 'GET', url: '/api/wishlist' })).body
+    const fx = FIXTURE_DATASET
+    const entry: Entry = { room: fx.rooms[0], review: { ...fx.reviews[0], id: 'rev_anon', voiceTranscript: 'anonymous secret note', crew: ['Private Friend'] } }
+    expect((await p.inject({ method: 'POST', url: '/api/entries', payload: entry })).statusCode).toBe(401)
+    const item = { id: 'wsh_anon', name: 'Defaced', city: 'Nowhere', link: '', addedBy: '', priority: 1, done: false }
+    expect((await p.inject({ method: 'PUT', url: '/api/wishlist', payload: [item] })).statusCode).toBe(401)
+    const dataAfter = (await p.inject({ method: 'GET', url: '/api/data' })).body
+    expect(dataAfter).toBe(dataBefore)
+    expect(dataAfter).not.toContain('anonymous secret note')
+    expect((await p.inject({ method: 'GET', url: '/api/wishlist' })).body).toBe(wishBefore)
   })
 })

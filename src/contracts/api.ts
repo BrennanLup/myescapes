@@ -55,9 +55,15 @@ async function json<T>(res: Response, schema: z.ZodType<T>): Promise<T> {
     } catch {
       /* ignore */
     }
-    throw new Error(msg)
+    throw Object.assign(new Error(msg), { status: res.status })
   }
   return schema.parse(await res.json())
+}
+
+/** HTTP status of an error thrown by `apiClient` (undefined for network or parse errors). */
+export function apiErrorStatus(err: unknown): number | undefined {
+  const s = (err as { status?: unknown } | null)?.status
+  return typeof s === 'number' ? s : undefined
 }
 
 /** Thin typed client used by every workstream. */

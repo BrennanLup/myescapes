@@ -7,10 +7,12 @@
  * Mapping: Room = a game (+ its venue), Review = one visit + my review on it.
  * Room.id = game id, Review.id = visit id.
  */
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { GENRES, type CrewMember, type Dataset, type Entry, type Genre, type Puzzle, type PuzzleType, type Review, type Room, type WishlistItem } from '../../src/contracts/types'
 import type { Db } from './client'
 import { games, reviews, users, venues, visitParticipants, visitPhotos, visitPuzzles, visits, wishlistItems } from './schema'
+import { filterPuzzleIds } from '../routes/reviews.lib'
+import { applyFacts, recordEdit, replacePuzzles } from '../routes/visits.lib'
 import { citySlug, slugify, uniqueSlug } from './util'
 
 const DEFAULT_SCORE = 50
@@ -154,37 +156,74 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
       liveActors: review.liveActors,
       toolsUsed: review.toolsUsed,
     }
+    // The visit to update: one I'm still on (owner or accepted). By visit id (what datasetForUser
+    // hands out), or by my own Phase 1 legacy id. A creator who left is not on it any more.
     const existing = (
       await tx
-        .select({ id: visits.id })
+        .select({ visit: visits })
         .from(visits)
-        .where(and(eq(visits.createdBy, userId), sql`(${visits.legacyId} = ${review.id} or ${visits.id} = ${review.id})`))
+        .innerJoin(visitParticipants, and(eq(visitParticipants.visitId, visits.id), eq(visitParticipants.userId, userId)))
+        .where(
+          and(
+            inArray(visitParticipants.status, ['owner', 'accepted']),
+            sql`(${visits.id} = ${review.id} or (${visits.createdBy} = ${userId} and ${visits.legacyId} = ${review.id}))`,
+          ),
+        )
         .limit(1)
-    )[0]
+    )[0]?.visit
     let id: string
+    let shared = false
     if (existing) {
       id = existing.id
-      await tx.update(visits).set(facts).where(eq(visits.id, id))
+      const others = await tx
+        .select({ id: visitParticipants.id })
+        .from(visitParticipants)
+        .where(and(eq(visitParticipants.visitId, id), ne(visitParticipants.userId, userId), inArray(visitParticipants.status, ['owner', 'accepted'])))
+        .limit(1)
+      shared = others.length > 0
+      // Shared facts go through the same path as PATCH /api/visits/:id (recorded as my edit).
+      const { gameId: _g, ...rest } = facts
+      const changes = await applyFacts(tx, existing, rest)
+      // Moving a shared visit to another game would change it for the others too: only when it's mine alone.
+      if (existing.gameId !== game.id && !shared) await tx.update(visits).set({ gameId: game.id }).where(eq(visits.id, id))
+      // Phase 1 puzzles carry no notes: keep the stored ones.
+      const notes = new Map((await tx.select({ id: visitPuzzles.id, notes: visitPuzzles.notes }).from(visitPuzzles).where(eq(visitPuzzles.visitId, id))).map((x) => [x.id, x.notes]))
+      const p = await replacePuzzles(tx, id, review.puzzles.map((x) => ({ id: x.id, description: x.description, type: x.type, notes: notes.get(x.id) ?? '' })), userId)
+      if (p.changed) changes.puzzles = { from: p.before, to: p.after }
+      if (shared) {
+        // Memorable ids on the others' reviews that point at removed puzzles are dropped.
+        const rows = await tx.select({ id: reviews.id, ids: reviews.memorablePuzzleIds }).from(reviews).where(and(eq(reviews.visitId, id), ne(reviews.authorId, userId)))
+        for (const r of rows) {
+          const kept = await filterPuzzleIds(tx, id, r.ids)
+          if (kept.length !== r.ids.length) await tx.update(reviews).set({ memorablePuzzleIds: kept }).where(eq(reviews.id, r.id))
+        }
+        if (Object.keys(changes).length) {
+          await recordEdit(tx, id, userId, changes)
+          await tx.update(visits).set({ updatedAt: new Date() }).where(eq(visits.id, id))
+        }
+      }
     } else {
       id = (await tx.insert(visits).values({ ...facts, createdBy: userId, legacyId: review.id }).returning({ id: visits.id }))[0].id
       await tx.insert(visitParticipants).values({ visitId: id, userId, status: 'owner', addedBy: userId })
+      if (review.puzzles.length) {
+        await tx.insert(visitPuzzles).values(review.puzzles.map((p, position) => ({ visitId: id, position, description: p.description, type: p.type, createdBy: userId })))
+      }
     }
 
-    // Guests: replace the plain-name participants with the entry's crew.
-    await tx.delete(visitParticipants).where(and(eq(visitParticipants.visitId, id), sql`${visitParticipants.userId} is null`))
+    // Guests: replace the plain-name participants I added with the entry's crew. Names other
+    // people added stay.
+    await tx.delete(visitParticipants).where(and(eq(visitParticipants.visitId, id), isNull(visitParticipants.userId), eq(visitParticipants.addedBy, userId)))
+    const kept = new Set(
+      (await tx.select({ n: visitParticipants.guestName }).from(visitParticipants).where(and(eq(visitParticipants.visitId, id), isNull(visitParticipants.userId)))).map((r) => (r.n ?? '').trim().toLowerCase()),
+    )
     const me = (await tx.select({ name: users.name, displayName: users.displayName }).from(users).where(eq(users.id, userId)))[0]
     const myNames = new Set([me?.name, me?.displayName].filter(Boolean).map((n) => n!.toLowerCase()))
-    const guests = [...new Set(review.crew.map((c) => c.trim()).filter((c) => c && !myNames.has(c.toLowerCase())))]
+    const guests = [...new Set(review.crew.map((c) => c.trim()).filter((c) => c && !myNames.has(c.toLowerCase()) && !kept.has(c.toLowerCase())))]
     if (guests.length) await tx.insert(visitParticipants).values(guests.map((guestName, i) => ({ visitId: id, guestName, status: 'accepted' as const, addedBy: userId, createdAt: new Date(Date.now() + i) })))
 
-    await tx.delete(visitPuzzles).where(eq(visitPuzzles.visitId, id))
-    const inserted = review.puzzles.length
-      ? await tx
-          .insert(visitPuzzles)
-          .values(review.puzzles.map((p, position) => ({ visitId: id, position, description: p.description, type: p.type, createdBy: userId })))
-          .returning({ id: visitPuzzles.id })
-      : []
-    const memorable = review.puzzles.flatMap((p, i) => (p.memorable && inserted[i] ? [inserted[i].id] : []))
+    // Stored puzzles in entry order (position = index), for my memorable picks.
+    const stored = await tx.select({ id: visitPuzzles.id }).from(visitPuzzles).where(eq(visitPuzzles.visitId, id)).orderBy(asc(visitPuzzles.position), asc(visitPuzzles.createdAt))
+    const memorable = review.puzzles.flatMap((p, i) => (p.memorable && stored[i] ? [stored[i].id] : []))
 
     const rv = {
       overallScore: review.ratings.overall.score,

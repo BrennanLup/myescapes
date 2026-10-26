@@ -5,12 +5,14 @@
  * Claiming: "Brennan has 23 visits with a guest named Mia. Is that you?" A claim links a friend's
  * guest-name participant rows to my account with the same accept flow as tagging (status
  * accepted, my review starts as a flagged copy of the friend's). Only accepted friends' guest
- * names can be claimed. `GET /api/claims` suggests names that are likely me: the guest name on an
- * invite I accepted first, then guest names equal to my display name, Google name or first name.
+ * names, only on visits an accepted friend created, and only names that are mine: the guest name
+ * on an invite from that friend I accepted, or my display name, Google name or first name (both
+ * `GET /api/claims` and `POST /api/claims` ask for this evidence).
  *
- * Merging: if a friend logged the same game within a day of my date, `GET /api/visits/merge-candidates`
- * offers their visit, and `POST /api/visits/:id/join` adds me to it. With `fromVisitId` my separate
- * log is folded in: my review (and, when I created that log, its crew, photos and new puzzles)
+ * Merging: if I logged a game and an accepted friend created a visit of the same game within a
+ * day (and their review on it is not private), `GET /api/visits/merge-candidates` offers it, and
+ * `POST /api/visits/:id/join` with `fromVisitId` adds me to it. Without `fromVisitId`, join only
+ * answers my own pending tag. My separate log is folded in: my review (and, when I created that log, its crew, photos and new puzzles)
  * move over, `resolve` picks the conflicting facts (recorded as my edit), both reviews are kept,
  * and the duplicate visit is removed.
  */
@@ -23,7 +25,7 @@ import type { Db } from '../db/client'
 import { invites, reviews, users, visitParticipants, visitPhotos, visitPuzzles, visits } from '../db/schema'
 import { defineRoute, HttpError } from '../http'
 import { friendIds, notify, publicUsers, type NotifyInput } from './friends.lib'
-import { copyReviewFor, gameSummaries, upsertReview } from './reviews.lib'
+import { authorInfo, copyReviewFor, gameSummaries, reviewVisibleTo, upsertReview } from './reviews.lib'
 import {
   applyFacts,
   diffFacts,
@@ -63,9 +65,13 @@ export function namesForUser(u: { name: string; displayName: string | null }): S
   return out
 }
 
-/** Guest rows from `inviterIds` that `me` could claim (not on visits I'm already on). */
-async function claimableRows(db: Db, me: string, inviterIds: string[], guestName?: string) {
-  if (!inviterIds.length) return []
+/**
+ * Guest rows from `inviterIds` that `me` could claim (not on visits I'm already on). Only on visits
+ * created by one of `creatorIds` (my accepted friends): a friend's guest name on a stranger's visit
+ * must not let me into that stranger's visit.
+ */
+async function claimableRows(db: Db, me: string, inviterIds: string[], creatorIds: string[], guestName?: string) {
+  if (!inviterIds.length || !creatorIds.length) return []
   const mine = db.select({ id: visitParticipants.visitId }).from(visitParticipants).where(eq(visitParticipants.userId, me))
   return db
     .select({ participantId: visitParticipants.id, guestName: visitParticipants.guestName, addedBy: visitParticipants.addedBy, visit: visits })
@@ -77,10 +83,25 @@ async function claimableRows(db: Db, me: string, inviterIds: string[], guestName
         inArray(visitParticipants.addedBy, inviterIds),
         ne(visitParticipants.status, 'declined'),
         notInArray(visitParticipants.visitId, mine),
+        inArray(visits.createdBy, creatorIds),
         guestName ? sql`lower(trim(${visitParticipants.guestName})) = lower(trim(${guestName}))` : undefined,
       ),
     )
     .orderBy(asc(visits.date), asc(visitParticipants.id))
+}
+
+/** Whether `me` may claim `guestName` from `inviterId`: an invite I accepted for it, or my own name. */
+async function mayClaimName(db: Db, me: string, inviterId: string, guestName: string): Promise<boolean> {
+  const name = guestName.trim().toLowerCase()
+  if (!name) return false
+  const u = (await db.select({ name: users.name, displayName: users.displayName }).from(users).where(eq(users.id, me)))[0]
+  if (u && namesForUser(u).has(name)) return true
+  const inv = await db
+    .select({ code: invites.code })
+    .from(invites)
+    .where(and(eq(invites.usedBy, me), eq(invites.inviterId, inviterId), sql`lower(trim(${invites.guestName})) = ${name}`))
+    .limit(1)
+  return inv.length > 0
 }
 
 export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -96,7 +117,7 @@ export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
       .where(and(eq(invites.usedBy, user.id), sql`${invites.guestName} is not null`))
     const invited = new Set(fromInvites.map((i) => `${i.inviterId}\u0000${i.guestName!.trim().toLowerCase()}`))
 
-    const rows = await claimableRows(db, user.id, friends)
+    const rows = await claimableRows(db, user.id, friends, friends)
     const groups = new Map<string, { inviterId: string; guestName: string; fromInvite: boolean; visits: typeof rows }>()
     for (const r of rows) {
       const name = r.guestName?.trim()
@@ -129,8 +150,11 @@ export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
     const db = ctx.db()
     const friends = await friendIds(db, user.id)
     if (!friends.has(body.inviterId)) throw new HttpError('not_found', 'No guest names to claim from this person.')
+    // The same evidence `GET /api/claims` asks for: an invite from this person for that guest name
+    // that I accepted, or a guest name that is my own name. Otherwise any friend could claim anyone.
+    if (!(await mayClaimName(db, user.id, body.inviterId, body.guestName))) throw new HttpError('not_found', 'No guest names to claim from this person.')
     const claimed = await inTx(db, async (tx) => {
-      let rows = await claimableRows(tx, user.id, [body.inviterId], body.guestName)
+      let rows = await claimableRows(tx, user.id, [body.inviterId], [...friends], body.guestName)
       if (body.participantIds) {
         const pick = new Set(body.participantIds)
         rows = rows.filter((r) => pick.has(r.participantId))
@@ -166,19 +190,8 @@ export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
     const friends = [...(await friendIds(db, user.id))]
     if (!friends.length) return { candidates: [] }
     const near = and(eq(visits.gameId, query.gameId), sql`${visits.date} between ${addDays(query.date, -1)} and ${addDays(query.date, 1)}`)
-    const mine = db.select({ id: visitParticipants.visitId }).from(visitParticipants).where(eq(visitParticipants.userId, user.id))
-    const withFriend = db
-      .select({ id: visitParticipants.visitId })
-      .from(visitParticipants)
-      .where(and(inArray(visitParticipants.userId, friends), inArray(visitParticipants.status, MEMBER_STATUSES)))
-    const rows = await db
-      .select()
-      .from(visits)
-      .where(and(near, inArray(visits.id, withFriend), notInArray(visits.id, mine)))
-      .orderBy(asc(visits.date), asc(visits.createdAt))
-    if (!rows.length) return { candidates: [] }
-
-    // My own log of the same room (if any) is the "draft" the conflicts are measured against.
+    // Only the merge case: I logged this game within a day myself. My log is also the "draft" the
+    // conflicts are measured against. Without one, nothing is offered (no probing friends' visits).
     const own = (
       await db
         .select({ visit: visits })
@@ -188,30 +201,31 @@ export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
         .orderBy(asc(visits.createdAt))
         .limit(1)
     )[0]?.visit
-    const members = await db
-      .select({ visitId: visitParticipants.visitId, userId: visitParticipants.userId })
-      .from(visitParticipants)
-      .where(and(inArray(visitParticipants.visitId, rows.map((r) => r.id)), inArray(visitParticipants.userId, friends), inArray(visitParticipants.status, MEMBER_STATUSES)))
-      .orderBy(asc(visitParticipants.createdAt))
-    const [people, summaries] = await Promise.all([
-      publicUsers(db, [...rows.map((r) => r.createdBy), ...members.map((m) => m.userId)]),
-      gameSummaries(db, [query.gameId]),
-    ])
+    if (!own) return { candidates: [] }
+    const mine = db.select({ id: visitParticipants.visitId }).from(visitParticipants).where(eq(visitParticipants.userId, user.id))
+    // Visits a friend logged (created), not ones a friend merely accepted on a stranger's log.
+    const rows = await db
+      .select()
+      .from(visits)
+      .where(and(near, inArray(visits.createdBy, friends), notInArray(visits.id, mine)))
+      .orderBy(asc(visits.date), asc(visits.createdAt))
+    if (!rows.length) return { candidates: [] }
+    const open = await joinableVisits(db, rows, user.id, new Set(friends))
+    const shown = rows.filter((r) => open.has(r.id))
+    if (!shown.length) return { candidates: [] }
+    const [people, summaries] = await Promise.all([publicUsers(db, shown.map((r) => r.createdBy)), gameSummaries(db, [query.gameId])])
     const game = summaries.get(query.gameId)
     if (!game) return { candidates: [] }
-    const friendSet = new Set(friends)
-    const candidates: MergeCandidate[] = rows
+    const candidates: MergeCandidate[] = shown
       .sort((a, b) => daysApart(a.date, query.date) - daysApart(b.date, query.date))
       .flatMap((v) => {
-        const by = v.createdBy && friendSet.has(v.createdBy) ? v.createdBy : members.find((m) => m.visitId === v.id)?.userId
-        const loggedBy = by ? people.get(by) : undefined
+        const loggedBy = v.createdBy ? people.get(v.createdBy) : undefined
         if (!loggedBy) return []
         const facts = factsOf(v)
-        const conflicts = own ? diffFacts(factsOf(own), facts) : v.date !== query.date ? ['date'] : []
-        return [{ visitId: v.id, game, facts, loggedBy, conflicts }]
+        return [{ visitId: v.id, game, facts, loggedBy, conflicts: diffFacts(factsOf(own), facts) }]
       })
     return { candidates }
-  })
+  }, { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } })
 
   defineRoute(app, ctx, ROUTES.joinVisit, async ({ params, body, user }) => {
     const db = ctx.db()
@@ -223,14 +237,9 @@ export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
       if (!target) throw new HttpError('not_found', 'Visit not found.')
       const mineOnTarget = await myParticipant(tx, target.id, user.id)
       const friends = await friendIds(tx, user.id)
-      const friendMembers = friends.size
-        ? await tx
-            .select({ userId: visitParticipants.userId })
-            .from(visitParticipants)
-            .where(and(eq(visitParticipants.visitId, target.id), inArray(visitParticipants.userId, [...friends]), inArray(visitParticipants.status, MEMBER_STATUSES)))
-        : []
       const alreadyMember = mineOnTarget?.status === 'owner' || mineOnTarget?.status === 'accepted'
-      if (!alreadyMember && mineOnTarget?.status !== 'pending' && !friendMembers.length) throw new HttpError('not_found', 'Visit not found.')
+      const pending = mineOnTarget?.status === 'pending'
+      if (!alreadyMember && !pending && !body.fromVisitId) throw new HttpError('not_found', 'Visit not found.')
 
       let from: VisitRow | null = null
       if (body.fromVisitId) {
@@ -238,6 +247,13 @@ export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
         from = await getVisitRow(tx, body.fromVisitId)
         const meOnFrom = from ? await myParticipant(tx, from.id, user.id) : null
         if (!from || !meOnFrom || !MEMBER_STATUSES.includes(meOnFrom.status)) throw new HttpError('not_found', 'Your visit to merge was not found.')
+      }
+      // Without a tag, joining is only the merge case: my own log of the same room, onto a visit an
+      // accepted friend logged and lets friends see. Everyone else learns nothing (404).
+      if (!alreadyMember && !pending && !(await joinableVisits(tx, [target], user.id, friends)).has(target.id)) {
+        throw new HttpError('not_found', 'Visit not found.')
+      }
+      if (from) {
         if (from.gameId !== target.gameId) throw new HttpError('invalid', 'Only visits of the same game can be merged.')
         if (daysApart(from.date, target.date) > 1) throw new HttpError('invalid', 'Only visits within a day of each other can be merged.')
       }
@@ -260,7 +276,7 @@ export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
       // 4. My review: the one I sent, else the one I brought, else a flagged copy of the logger's.
       if (body.review) await upsertReview(tx, target.id, user.id, body.review)
       else {
-        const source = target.createdBy && friends.has(target.createdBy) ? target.createdBy : (friendMembers[0]?.userId ?? target.createdBy)
+        const source = pending && mineOnTarget?.addedBy && mineOnTarget.addedBy !== user.id ? mineOnTarget.addedBy : target.createdBy
         await copyReviewFor(tx, target.id, user.id, source)
       }
 
@@ -275,6 +291,32 @@ export async function claimsRoutes(app: FastifyInstance, ctx: AppContext) {
     await notify(db, notices)
     return visitDetail(db, params.id, user.id)
   })
+}
+
+/**
+ * Of `rows`, the visits `me` may join without a tag: created by my accepted friend (a block ends
+ * the friendship, so blocked people never qualify), the creator is still on it, and the creator's
+ * own review on it is visible to me (public or friends only; never private or hidden).
+ */
+async function joinableVisits(db: Db, rows: VisitRow[], me: string, friends: Set<string>): Promise<Set<string>> {
+  const byFriend = rows.filter((r) => r.createdBy && friends.has(r.createdBy))
+  if (!byFriend.length) return new Set()
+  const ids = byFriend.map((r) => r.id)
+  const [creatorsOn, revs] = await Promise.all([
+    db
+      .select({ visitId: visitParticipants.visitId, userId: visitParticipants.userId })
+      .from(visitParticipants)
+      .where(and(inArray(visitParticipants.visitId, ids), inArray(visitParticipants.status, MEMBER_STATUSES))),
+    db.select().from(reviews).where(inArray(reviews.visitId, ids)),
+  ])
+  const authors = await authorInfo(db, revs.map((r) => r.authorId))
+  const out = new Set<string>()
+  for (const v of byFriend) {
+    if (!creatorsOn.some((p) => p.visitId === v.id && p.userId === v.createdBy)) continue
+    const r = revs.find((x) => x.visitId === v.id && x.authorId === v.createdBy)
+    if (r && reviewVisibleTo(r, authors.get(r.authorId), me, friends)) out.add(v.id)
+  }
+  return out
 }
 
 async function acceptParticipantNotice(db: Db, visit: VisitRow, addedBy: string | null, me: string): Promise<NotifyInput[]> {
