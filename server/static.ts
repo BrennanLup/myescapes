@@ -4,6 +4,7 @@ import fastifyStatic from '@fastify/static'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { precompressDist } from './precompress'
+import { injectHeadTags } from './seo/head'
 
 export const CACHE_IMMUTABLE = 'public, max-age=31536000, immutable'
 export const CACHE_NONE = 'no-cache'
@@ -110,7 +111,7 @@ export async function registerStatic(app: FastifyInstance, distDir: string, opts
           return
         }
         indexHtml ??= readFileSync(path.join(distDir, 'index.html'), 'utf8')
-        reply.header('cache-control', CACHE_NONE).type('text/html; charset=utf-8').send(indexHtml.replace('</head>', `${tags}</head>`))
+        reply.header('cache-control', CACHE_NONE).type('text/html; charset=utf-8').send(injectHeadTags(indexHtml, tags))
       })
     return reply
   }
