@@ -12,7 +12,7 @@ trophy shelf on the west wall that opens it.
   emissive glow while `hoveredId === 'wrap:trophy'`. One AABB collider (`wrap:shelf`) covers the
   shelf.
 - `WrapOverlay`: DOM overlay. Cards: intro, rooms done, best room (photo or genre placeholder),
-  fastest escape (+ streak), favourite puzzle type (+ most memorable puzzle), cities, crew MVP,
+  fastest escape (+ streak), favourite puzzle type (+ most memorable puzzle), cities, your #1 teammate (rooms together, escape rate together, picture or initials),
   summary grid (+ genre breakdown). With no data for the period it shows intro + an empty-state
   card. Year selector lists each year and "All time". It defaults to the most recent year that has
   data.
@@ -33,6 +33,7 @@ trophy shelf on the west wall that opens it.
 - Favourite puzzle type: the most common type. Ties go to the higher memorable count, then the `PUZZLE_TYPES` order.
 - Most memorable puzzle: the first memorable puzzle of the visit with the highest *puzzles* score.
 - Crew MVP: most visits attended. Ties are broken alphabetically. A name counts once per visit.
+- #1 teammate (`topTeammate`): from `store.crewIndex` (account identities and pictures when signed in, names otherwise); pending tags don't count; ties go to more escapes, then name.
 - Longest streak: consecutive escapes in date order.
 - Reviews whose `roomId` is not in `rooms` are ignored.
 

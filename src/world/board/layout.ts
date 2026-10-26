@@ -6,7 +6,8 @@
  * Coordinates: board-area local, metres, origin at the centre of the area,
  * +X right, +Y up. A slot's (x, y) is the centre of its (untilted) polaroid.
  */
-import { type Review, type Room, type SortKey } from '@/contracts/types'
+import { type Review, type Room } from '@/contracts/types'
+import { crewFrequency, crewLabel, SOLO_LABEL, type BoardSortKey, type CrewIndex } from '@/state/crew'
 
 /** Polaroid paper aspect (width / height); matches the 256x300 canvas texture. */
 export const PHOTO_ASPECT = 256 / 300
@@ -61,7 +62,7 @@ export interface LayoutGroup {
 }
 
 export interface BoardLayout {
-  sort: SortKey
+  sort: BoardSortKey
   photoW: number
   photoH: number
   groups: LayoutGroup[]
@@ -121,9 +122,20 @@ function clean(s: string | undefined, fallback: string): string {
   return t.length ? t : fallback
 }
 
-/** Group key of a room under a sort. */
-export function groupKeyFor(sort: SortKey, room: Room, review: Review | undefined): string {
+/**
+ * Group key of a room under a sort. For 'crew', pass the crew index (and optionally the
+ * teammate frequency, so labels list the most frequent teammate first).
+ */
+export function groupKeyFor(
+  sort: BoardSortKey,
+  room: Room,
+  review: Review | undefined,
+  crew: CrewIndex = {},
+  freq?: ReadonlyMap<string, number>,
+): string {
   switch (sort) {
+    case 'crew':
+      return review ? crewLabel(crew[review.id] ?? [], freq) : SOLO_LABEL
     case 'city':
       return clean(room.city, 'Unknown')
     case 'brand':
@@ -140,7 +152,7 @@ export function groupKeyFor(sort: SortKey, room: Room, review: Review | undefine
 }
 
 /** Display label of a group key. */
-export function groupLabel(sort: SortKey, key: string): string {
+export function groupLabel(sort: BoardSortKey, key: string): string {
   if (sort === 'genre') return key === 'sci-fi' ? 'Sci-Fi' : key.charAt(0).toUpperCase() + key.slice(1)
   return key
 }
@@ -158,8 +170,15 @@ function textCompare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-function compareGroups(sort: SortKey, a: string, b: string): number {
+function compareGroups(sort: BoardSortKey, a: string, b: string, counts?: ReadonlyMap<string, number>): number {
   switch (sort) {
+    case 'crew': {
+      // Most rooms together first, Solo last, then alphabetical.
+      if (a === b) return 0
+      if (a === SOLO_LABEL) return 1
+      if (b === SOLO_LABEL) return -1
+      return (counts?.get(b) ?? 0) - (counts?.get(a) ?? 0) || textCompare(a, b)
+    }
     case 'rating':
       return fixedRank(RATING_BUCKETS, a) - fixedRank(RATING_BUCKETS, b)
     case 'escapeTime':
@@ -185,7 +204,7 @@ interface Item {
   group: string
 }
 
-function compareItems(sort: SortKey, a: Item, b: Item): number {
+function compareItems(sort: BoardSortKey, a: Item, b: Item): number {
   const da = a.review?.date ?? '9999-99-99'
   const db = b.review?.date ?? '9999-99-99'
   const sa = a.review?.ratings.overall.score ?? -1
@@ -204,21 +223,23 @@ function compareItems(sort: SortKey, a: Item, b: Item): number {
 }
 
 /** Groups and orders rooms (no geometry). */
-export function groupRooms(rooms: Room[], reviews: Review[], sort: SortKey): Array<{ key: string; items: Item[] }> {
+export function groupRooms(rooms: Room[], reviews: Review[], sort: BoardSortKey, crew: CrewIndex = {}): Array<{ key: string; items: Item[] }> {
   const latest = new Map<string, Review>()
   for (const r of reviews) {
     const cur = latest.get(r.roomId)
     if (!cur || r.date > cur.date) latest.set(r.roomId, r)
   }
+  const freq = sort === 'crew' ? crewFrequency([...latest.values()], crew) : undefined
   const map = new Map<string, Item[]>()
   for (const room of rooms) {
     const review = latest.get(room.id)
-    const group = groupKeyFor(sort, room, review)
+    const group = groupKeyFor(sort, room, review, crew, freq)
     let list = map.get(group)
     if (!list) map.set(group, (list = []))
     list.push({ room, review, group })
   }
-  const keys = [...map.keys()].sort((a, b) => compareGroups(sort, a, b))
+  const counts = new Map([...map].map(([k, v]) => [k, v.length]))
+  const keys = [...map.keys()].sort((a, b) => compareGroups(sort, a, b, counts))
   return keys.map((key) => ({ key, items: map.get(key)!.sort((a, b) => compareItems(sort, a, b)) }))
 }
 
@@ -300,8 +321,8 @@ function findFit(counts: Array<{ key: string; n: number }>, W: number, H: number
  * Lays out every room on a board area of boardW x boardH metres.
  * Deterministic: same input, same output.
  */
-export function layoutBoard(rooms: Room[], reviews: Review[], sort: SortKey, boardW: number, boardH: number): BoardLayout {
-  const grouped = groupRooms(rooms, reviews, sort)
+export function layoutBoard(rooms: Room[], reviews: Review[], sort: BoardSortKey, boardW: number, boardH: number, crew: CrewIndex = {}): BoardLayout {
+  const grouped = groupRooms(rooms, reviews, sort, crew)
   if (!grouped.length) return { sort, photoW: MAX_PHOTO_W, photoH: MAX_PHOTO_W / PHOTO_ASPECT, groups: [], slots: [] }
   const fit = findFit(
     grouped.map((g) => ({ key: g.key, n: g.items.length })),

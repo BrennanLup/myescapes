@@ -55,7 +55,7 @@ export function RedString() {
       mesh.receiveShadow = false
     }
     oldMesh.renderOrder = 1
-    const controller = new StringController(liveGeo, oldGeo, useStore.getState().sort, {
+    const controller = new StringController(liveGeo, oldGeo, useStore.getState().boardSort, {
       emitSfx: () => bus.emit('sfx', { name: 'string' }),
     })
     return { liveGeo, oldGeo, liveMat, oldMat, liveMesh, oldMesh, controller }
@@ -65,10 +65,10 @@ export function RedString() {
     const { controller } = parts
     const now = () => performance.now() / 1000
     const s0 = useStore.getState()
-    controller.setPins(s0.boardPins, s0.sort, now())
+    controller.setPins(s0.boardPins, s0.boardSort, now())
     const unsubStore = useStore.subscribe((s, prev) => {
-      if (s.boardPins !== prev.boardPins) controller.setPins(s.boardPins, s.sort, now())
-      else if (s.sort !== prev.sort) controller.sortChanged(s.sort, now())
+      if (s.boardPins !== prev.boardPins) controller.setPins(s.boardPins, s.boardSort, now())
+      else if (s.boardSort !== prev.boardSort) controller.sortChanged(s.boardSort, now())
     })
     const offSort = bus.on('sort:changed', ({ sort }) => controller.sortChanged(sort, now()))
     const offSaved = bus.on('entry:saved', ({ entry }) => controller.markFresh(entry.room.id))

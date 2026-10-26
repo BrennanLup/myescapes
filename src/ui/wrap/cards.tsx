@@ -2,9 +2,10 @@
  * The individual Wrapped cards. Each card is a full-bleed gradient with bold copy.
  * `buildCards(stats)` picks the sequence for a given period.
  */
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { GENRE_COLORS, PUZZLE_TYPE_COLORS } from '@/contracts/style'
 import type { Room, Review } from '@/contracts/types'
+import { initialsOf } from '@/state/crew'
 import { cityListLabel, PUZZLE_TYPE_LABELS, type WrapStats } from './computeWrap'
 
 export interface WrapCard {
@@ -344,32 +345,33 @@ export function buildCards(s: WrapStats): WrapCard[] {
     ),
   })
 
-  const mvp = s.crewMvp
+  const mate = s.topTeammate
   cards.push({
     key: 'crew',
     bg: 'linear-gradient(160deg, #e8433a 0%, #e07b39 100%)',
     dark: true,
-    confetti: mvp ? 22 : 0,
+    confetti: mate ? 22 : 0,
     render: () =>
-      mvp ? (
-        <div className="flex flex-col items-start gap-4">
+      mate ? (
+        <div className="flex flex-col items-start gap-4" data-testid="wrap-teammate">
           <Rise i={0}>
-            <Kicker>Crew MVP</Kicker>
+            <Kicker>Your #1 teammate</Kicker>
           </Rise>
-          <Rise i={1}>
+          <Rise i={1} className="flex items-end gap-3">
+            <TeammateAvatar name={mate.name} image={mate.image} />
             <Trophy />
           </Rise>
           <div className="wrap-pop font-display text-[clamp(3.4rem,16vw,5.6rem)] font-bold leading-[0.95]" style={{ animationDelay: '0.25s' }}>
-            {mvp.name}
+            {mate.name}
           </div>
           <Rise i={3}>
-            <p className="text-xl font-semibold">
-              Showed up for {mvp.count} of {plural(s.roomsDone, 'room')}. Legend.
+            <p className="text-xl font-semibold" data-testid="wrap-teammate-line">
+              {plural(mate.count, 'room')} together, {pct(mate.escapeRate)} escape rate
             </p>
           </Rise>
           <Rise i={4} className="flex flex-wrap gap-2">
-            {s.crew.slice(1, 7).map((c) => (
-              <span key={c.name} className="rounded-full bg-white/25 px-3 py-1 text-base font-bold">
+            {s.teammates.slice(1, 7).map((c) => (
+              <span key={c.key} className="rounded-full bg-white/25 px-3 py-1 text-base font-bold">
                 {c.name} · {c.count}
               </span>
             ))}
@@ -378,13 +380,13 @@ export function buildCards(s: WrapStats): WrapCard[] {
       ) : (
         <div className="flex flex-col items-start gap-4">
           <Rise i={0}>
-            <Kicker>Crew MVP</Kicker>
+            <Kicker>Your #1 teammate</Kicker>
           </Rise>
           <Rise i={1}>
             <p className="font-display text-5xl font-bold">Solo mission?</p>
           </Rise>
           <Rise i={2}>
-            <p className="text-xl">No crew logged. Add names when you record your next room.</p>
+            <p className="text-xl">No crew logged. Tag your friends when you log your next room.</p>
           </Rise>
         </div>
       ),
@@ -399,6 +401,21 @@ export function buildCards(s: WrapStats): WrapCard[] {
   })
 
   return cards
+}
+
+/** Round profile picture, or coloured initials when there is none (or it fails to load). */
+function TeammateAvatar({ name, image }: { name: string; image: string | null }) {
+  const [failed, setFailed] = useState(false)
+  const initials = initialsOf(name)
+  return (
+    <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-white/25 ring-4 ring-white/80 shadow-cozy" data-testid="wrap-teammate-avatar">
+      {image && !failed ? (
+        <img src={image} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" onError={() => setFailed(true)} />
+      ) : (
+        <span className="font-display text-4xl font-bold">{initials}</span>
+      )}
+    </div>
+  )
 }
 
 function Trophy() {
@@ -446,7 +463,13 @@ function Summary({ s }: { s: WrapStats }) {
         />
         <Tile i={5} label="Cities" value={s.cities.length} sub={cityListLabel(s.cities) || undefined} />
         <Tile i={6} label="Time inside" value={hoursLabel(s.totalMinutes)} />
-        <Tile i={7} label="Crew MVP" value={s.crewMvp?.name ?? '-'} sub={s.crewMvp ? plural(s.crewMvp.count, 'room') : undefined} wide />
+        <Tile
+          i={7}
+          label="Top teammate"
+          value={s.topTeammate?.name ?? '-'}
+          sub={s.topTeammate ? `${plural(s.topTeammate.count, 'room')} together, ${pct(s.topTeammate.escapeRate)} escaped` : undefined}
+          wide
+        />
       </div>
       {total > 0 && (
         <div className="wrap-rise" style={{ animationDelay: '0.7s' }}>

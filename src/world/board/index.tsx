@@ -15,8 +15,10 @@ import { runtime } from '@/contracts/runtime'
 import { ANCHORS, type Vec3 } from '@/contracts/scene'
 import { useColliders } from '@/contracts/colliders'
 import { GENRE_COLORS, PALETTE, UI } from '@/contracts/style'
-import { SORT_KEYS, SORT_LABELS, type Review, type Room, type SortKey } from '@/contracts/types'
-import { useStore, type BoardPin } from '@/state/store'
+import { SORT_KEYS, type Review, type Room } from '@/contracts/types'
+import { BOARD_SORT_KEYS, BOARD_SORT_LABELS, useStore, type BoardPin, type BoardSortKey } from '@/state/store'
+import type { CrewSticker } from '@/state/crew'
+import { loadAvatars } from './avatars'
 import { boardColliders } from './colliders'
 import { layoutBoard, PHOTO_ASPECT, PIN_LOCAL_Y, PIN_LOCAL_Z, slotPinLocal, type BoardLayout, type LayoutGroup } from './layout'
 import {
@@ -205,6 +207,7 @@ function toWorld(out: Vec3, x: number, y: number, z: number): Vec3 {
 interface PolaroidProps {
   room: Room
   review: Review | undefined
+  crew: readonly CrewSticker[]
   res: number
   tape: 'left' | 'right' | null
   tapeSeed: number
@@ -212,7 +215,9 @@ interface PolaroidProps {
   register: (id: string, obj: THREE.Object3D | null) => void
 }
 
-const Polaroid = memo(function Polaroid({ room, review, res, tape, tapeSeed, fontsReady, register }: PolaroidProps) {
+const NO_AVATARS: ReadonlyMap<string, HTMLImageElement> = new Map()
+
+const Polaroid = memo(function Polaroid({ room, review, crew, res, tape, tapeSeed, fontsReady, register }: PolaroidProps) {
   const { canvas, texture, material } = useMemo(() => {
     const c = document.createElement('canvas')
     c.width = Math.round(POLAROID_W * res)
@@ -250,14 +255,29 @@ const Polaroid = memo(function Polaroid({ room, review, res, tape, tapeSeed, fon
     }
   }, [url])
 
+  // Crew profile pictures for the stickers (initials until they load, or if they can't).
+  const avatarKey = crew.flatMap((c) => (c.image ? [c.image] : [])).join('\n')
+  const [avatars, setAvatars] = useState<ReadonlyMap<string, HTMLImageElement>>(NO_AVATARS)
+  useEffect(() => {
+    if (!avatarKey) {
+      setAvatars(NO_AVATARS)
+      return
+    }
+    let alive = true
+    void loadAvatars(avatarKey.split('\n')).then((m) => alive && m.size > 0 && setAvatars(m))
+    return () => {
+      alive = false
+    }
+  }, [avatarKey])
+
   useEffect(() => {
     try {
-      drawPolaroid(canvas, { room, review }, img)
+      drawPolaroid(canvas, { room, review, crew }, img, avatars)
     } catch {
-      drawPolaroid(canvas, { room, review }, null)
+      drawPolaroid(canvas, { room, review, crew }, null)
     }
     texture.needsUpdate = true
-  }, [canvas, texture, room, review, img, fontsReady])
+  }, [canvas, texture, room, review, crew, img, avatars, fontsReady])
 
   const ref = useCallback((g: THREE.Object3D | null) => register(room.id, g), [register, room.id])
   const spec = useMemo(
@@ -304,14 +324,14 @@ const TIME_ACCENTS: Record<string, string> = {
   Unknown: '#9a8a80',
 }
 
-function accentFor(sort: SortKey, g: LayoutGroup): string {
+function accentFor(sort: BoardSortKey, g: LayoutGroup): string {
   if (sort === 'genre') return GENRE_COLORS[g.key] ?? GENRE_COLORS.other
   if (sort === 'rating') return RATING_ACCENTS[g.key] ?? UI.accent
   if (sort === 'escapeTime') return TIME_ACCENTS[g.key] ?? UI.accent
   return LABEL_ACCENTS[g.index % LABEL_ACCENTS.length]
 }
 
-function GroupLabel({ group, sort, fontsReady, delay }: { group: LayoutGroup; sort: SortKey; fontsReady: boolean; delay: number }) {
+function GroupLabel({ group, sort, fontsReady, delay }: { group: LayoutGroup; sort: BoardSortKey; fontsReady: boolean; delay: number }) {
   const ref = useRef<THREE.Mesh>(null)
   const accent = accentFor(sort, group)
   const aspect = group.labelW / group.labelH
@@ -362,8 +382,8 @@ const TAB_W = 0.62
 const TAB_H = TAB_W / (256 / 80)
 const TAB_GAP = 0.07
 
-function SortTab({ sortKey, active, x, fontsReady }: { sortKey: SortKey; active: boolean; x: number; fontsReady: boolean }) {
-  const label = SORT_LABELS[sortKey]
+function SortTab({ sortKey, active, x, fontsReady }: { sortKey: BoardSortKey; active: boolean; x: number; fontsReady: boolean }) {
+  const label = BOARD_SORT_LABELS[sortKey]
   const material = useMemo(() => {
     void fontsReady
     const t = makeCanvasTexture(drawTab(label, active))
@@ -445,14 +465,38 @@ function Frame() {
 // The board
 // ---------------------------------------------------------------------------
 
+const NO_CREW = {}
+const NO_STICKERS: readonly CrewSticker[] = []
+
+function crewFor(index: Record<string, readonly CrewSticker[]>, review: Review | undefined): readonly CrewSticker[] {
+  return (review && index[review.id]) || NO_STICKERS
+}
+
+/** The empty-board note: a signed-in user's own (new) room, or the demo with nothing in it. */
+export function emptyBoardLines(signedIn: boolean): string[] {
+  return signedIn
+    ? ['Your board is empty!', 'Log your first escape at the desk', 'or from your phone.']
+    : ['No escapes pinned yet!', 'Log one at the desk.']
+}
+
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || typeof el.tagName !== 'string') return false
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable === true
+}
+
 export function BulletinBoard() {
   const rooms = useStore((s) => s.rooms)
   const reviews = useStore((s) => s.reviews)
-  const sort = useStore((s) => s.sort)
+  const sort = useStore((s) => s.boardSort)
+  const crewIndex = useStore((s) => s.crewIndex)
+  const signedIn = useStore((s) => s.dataSource === 'postgres')
   const lastAddedRoomId = useStore((s) => s.lastAddedRoomId)
   const fontsReady = useFontsReady()
 
-  const layout: BoardLayout = useMemo(() => layoutBoard(rooms, reviews, sort, AREA_W, AREA_H), [rooms, reviews, sort])
+  // Only the crew sort depends on the crew, so other sorts don't re-layout when avatars arrive.
+  const layoutCrew = sort === 'crew' ? crewIndex : NO_CREW
+  const layout: BoardLayout = useMemo(() => layoutBoard(rooms, reviews, sort, AREA_W, AREA_H, layoutCrew), [rooms, reviews, sort, layoutCrew])
   const latest = useMemo(() => {
     const m = new Map<string, Review>()
     for (const r of reviews) {
@@ -481,11 +525,24 @@ export function BulletinBoard() {
     () =>
       bus.on('interact', ({ id }) => {
         if (!id.startsWith('sort:')) return
-        const key = id.slice(5) as SortKey
-        if ((SORT_KEYS as readonly string[]).includes(key)) useStore.getState().setSort(key)
+        const key = id.slice(5) as BoardSortKey
+        if (BOARD_SORT_KEYS.includes(key)) useStore.getState().setBoardSort(key)
       }),
     [],
   )
+
+  // Key 7 groups by crew (the HUD handles 1-6).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || isTyping(e.target)) return
+      if (e.key !== '7' && e.code !== 'Digit7' && e.code !== 'Numpad7') return
+      const st = useStore.getState()
+      if (!st.worldReady || st.overlay) return
+      st.setBoardSort('crew')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const register = useCallback((id: string, obj: THREE.Object3D | null) => {
     if (!obj) {
@@ -663,19 +720,20 @@ export function BulletinBoard() {
     }
   })
 
+  // The six Phase 1 tabs stay centred where they always were; Crew is a seventh tab to their right.
   const tabsW = SORT_KEYS.length * TAB_W + (SORT_KEYS.length - 1) * TAB_GAP
   const n = rooms.length
 
   return (
     <Anchor name="bulletinBoard">
       <Frame />
-      {SORT_KEYS.map((k, i) => (
+      {BOARD_SORT_KEYS.map((k, i) => (
         <SortTab key={k} sortKey={k} active={k === sort} x={-tabsW / 2 + TAB_W / 2 + i * (TAB_W + TAB_GAP)} fontsReady={fontsReady} />
       ))}
       <Note lines={['Sort by:']} x={-tabsW / 2 - 0.5} y={TAB_Y + 0.005} w={0.66} h={0.19} rot={0.03} fontsReady={fontsReady} />
       <Note
         lines={[n === 1 ? '1 room escaped!' : `${n} rooms escaped!`]}
-        x={tabsW / 2 + 0.62}
+        x={tabsW / 2 + TAB_GAP + TAB_W + 0.54}
         y={TAB_Y + 0.005}
         w={0.92}
         h={0.19}
@@ -694,6 +752,7 @@ export function BulletinBoard() {
             key={room.id}
             room={room}
             review={latest.get(room.id)}
+            crew={crewFor(crewIndex, latest.get(room.id))}
             res={res}
             tape={slot.tape}
             tapeSeed={slot.seed}
@@ -702,9 +761,7 @@ export function BulletinBoard() {
           />
         )
       })}
-      {n === 0 && (
-        <Note lines={['No escapes pinned yet!', 'Log one at the desk.']} x={0} y={AREA_CY} w={1.6} h={0.75} rot={-0.03} fontsReady={fontsReady} />
-      )}
+      {n === 0 && <Note lines={emptyBoardLines(signedIn)} x={0} y={AREA_CY} w={1.9} h={0.9} rot={-0.03} fontsReady={fontsReady} />}
     </Anchor>
   )
 }

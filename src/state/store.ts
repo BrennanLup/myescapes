@@ -5,7 +5,13 @@
 import { create } from 'zustand'
 import { apiClient } from '@/contracts/api'
 import { bus } from '@/contracts/events'
+import type { LogRow } from '@/contracts/models'
+import { callApi, ROUTES } from '@/contracts/routes'
 import type { CrewMember, Dataset, Entry, ReviewDraft, Room, Review, SortKey, WishlistItem } from '@/contracts/types'
+import { buildCrewIndex, type BoardSortKey, type CrewIndex } from './crew'
+import { MAX_ARRIVALS, newArrivals, readLastSeen, writeLastSeen } from './arrivals'
+
+export { BOARD_SORT_KEYS, BOARD_SORT_LABELS, type BoardSortKey } from './crew'
 
 export type Overlay =
   | { kind: 'review'; roomId: string }
@@ -60,9 +66,18 @@ export interface AppState {
   dataError: string | null
   /** roomId of the most recently added entry (board animates it in). */
   lastAddedRoomId: string | null
+  /** My rooms from `GET /api/logs` (signed in only; null until loaded or when unavailable). */
+  logRows: LogRow[] | null
+  /** Crew stickers per review id (= visit id). */
+  crewIndex: CrewIndex
+  /** Rooms that arrived since the last visit (or from another device) and should fly onto the board. */
+  pendingArrivals: string[]
 
   // world / ui
+  /** Last Phase 1 sort key (the HUD chips). The board shows `boardSort`. */
   sort: SortKey
+  /** What the board is grouped by: `sort`, or 'crew'. */
+  boardSort: BoardSortKey
   overlay: Overlay | null
   hoveredId: string | null
   boardPins: BoardPin[]
@@ -73,10 +88,20 @@ export interface AppState {
 
   // actions
   loadData(): Promise<void>
+  /** Re-fetch quietly (no loading screen). New rooms fly onto the board. */
+  refreshData(): Promise<void>
+  /**
+   * Fetch `/api/logs` for crew avatars (signed in only). Never throws. With `arrivals`, rooms
+   * logged since this browser last opened the room are queued to fly in (initial load only).
+   */
+  loadCrew(opts?: { arrivals?: boolean }): Promise<void>
   setDataset(d: Dataset): void
+  /** Mark rooms as played on the board (consumes them from `pendingArrivals`). */
+  takeArrival(): string | null
   addEntry(entry: Entry): Promise<Entry>
   setWishlist(items: WishlistItem[]): Promise<void>
   setSort(sort: SortKey): void
+  setBoardSort(sort: BoardSortKey): void
   openOverlay(o: Overlay): void
   closeOverlay(): void
   setHovered(id: string | null): void
@@ -113,8 +138,12 @@ export const useStore = create<AppState>()((set, get) => ({
   dataStatus: 'idle',
   dataError: null,
   lastAddedRoomId: null,
+  logRows: null,
+  crewIndex: {},
+  pendingArrivals: [],
 
   sort: 'city',
+  boardSort: 'city',
   overlay: null,
   hoveredId: null,
   boardPins: [],
@@ -129,19 +158,78 @@ export const useStore = create<AppState>()((set, get) => ({
       get().setDataset(await apiClient.getData())
     } catch (err) {
       set({ dataStatus: 'error', dataError: err instanceof Error ? err.message : String(err) })
+      return
     }
+    if (get().dataSource === 'postgres') void get().loadCrew({ arrivals: true })
+  },
+  async refreshData() {
+    if (get().dataStatus !== 'ready') return
+    let d: Dataset
+    try {
+      d = await apiClient.getData()
+    } catch (err) {
+      console.warn('[store] refresh failed', err)
+      return
+    }
+    const before = new Set(get().reviews.map((r) => r.id))
+    const fresh = d.reviews.filter((r) => !before.has(r.id))
+    get().setDataset(d)
+    if (fresh.length) {
+      const ids = [...new Set(fresh.sort((a, b) => a.date.localeCompare(b.date)).map((r) => r.roomId))].slice(-MAX_ARRIVALS)
+      set((s) => ({ pendingArrivals: [...s.pendingArrivals.filter((x) => !ids.includes(x)), ...ids] }))
+    }
+    if (d.source === 'postgres') await get().loadCrew()
+  },
+  async loadCrew(opts = {}) {
+    if (get().dataSource !== 'postgres') return
+    let rows: LogRow[]
+    try {
+      rows = (await callApi(ROUTES.logs, { query: {} })).rows
+    } catch (err) {
+      // Not signed in any more, or the route is unavailable: keep the name stickers.
+      console.warn('[store] crew (/api/logs) unavailable', err instanceof Error ? err.message : err)
+      return
+    }
+    const s = get()
+    set({ logRows: rows, crewIndex: buildCrewIndex(s.reviews, rows) })
+    // Rooms that arrived since the last visit to the 3D room pin themselves once the world is open.
+    const arrived = opts.arrivals ? newArrivals(rows, readLastSeen()).filter((id) => s.rooms.some((r) => r.id === id)) : []
+    writeLastSeen(rows)
+    if (arrived.length) set((st) => ({ pendingArrivals: [...st.pendingArrivals.filter((x) => !arrived.includes(x)), ...arrived] }))
   },
   setDataset(d) {
-    set({ rooms: d.rooms, reviews: d.reviews, wishlist: d.wishlist, crew: d.crew, dataSource: d.source, dataStatus: 'ready' })
+    const rows = d.source === 'postgres' ? get().logRows : null
+    set({
+      rooms: d.rooms,
+      reviews: d.reviews,
+      wishlist: d.wishlist,
+      crew: d.crew,
+      dataSource: d.source,
+      dataStatus: 'ready',
+      logRows: rows,
+      crewIndex: buildCrewIndex(d.reviews, rows),
+    })
+  },
+  takeArrival() {
+    const [next, ...rest] = get().pendingArrivals
+    if (next === undefined) return null
+    set({ pendingArrivals: rest, lastAddedRoomId: next })
+    return next
   },
   async addEntry(entry) {
     const saved = await apiClient.saveEntry(entry)
-    set((s) => ({
-      rooms: [...s.rooms.filter((r) => r.id !== saved.room.id), saved.room],
-      reviews: [...s.reviews.filter((r) => r.id !== saved.review.id), saved.review],
-      lastAddedRoomId: saved.room.id,
-    }))
+    set((s) => {
+      const reviews = [...s.reviews.filter((r) => r.id !== saved.review.id), saved.review]
+      return {
+        rooms: [...s.rooms.filter((r) => r.id !== saved.room.id), saved.room],
+        reviews,
+        crewIndex: buildCrewIndex(reviews, s.logRows),
+        lastAddedRoomId: saved.room.id,
+        pendingArrivals: s.pendingArrivals.filter((x) => x !== saved.room.id),
+      }
+    })
     bus.emit('entry:saved', { entry: saved })
+    if (get().dataSource === 'postgres') void get().loadCrew()
     return saved
   },
   async setWishlist(items) {
@@ -157,9 +245,18 @@ export const useStore = create<AppState>()((set, get) => ({
   },
   setSort(sort) {
     const previous = get().sort
-    if (previous === sort) return
-    set({ sort })
+    if (previous === sort) {
+      if (get().boardSort !== sort) set({ boardSort: sort })
+      return
+    }
+    set({ sort, boardSort: sort })
     bus.emit('sort:changed', { sort, previous })
+  },
+  setBoardSort(sort) {
+    if (sort !== 'crew') return get().setSort(sort)
+    if (get().boardSort === 'crew') return
+    set({ boardSort: 'crew' })
+    bus.emit('sfx', { name: 'paper' })
   },
   openOverlay(o) {
     set({ overlay: o, hoveredId: null })
