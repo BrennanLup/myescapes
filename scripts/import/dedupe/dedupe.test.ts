@@ -14,7 +14,9 @@ import {
   dedupePlaces,
   encodeSeed,
   fillMissingCities,
+  isNonLatinCity,
   isSamePlace,
+  latinizeCities,
   nameSimilarity,
   normaliseName,
   normalisePlace,
@@ -189,6 +191,31 @@ describe('cities, brands and slugs', () => {
     const merged = dedupePlaces([place({ name: 'Tagged Escape' }), place({ name: 'Untagged Puzzle Room', city: '', lat: north(37.7897, 3000) }), place({ name: 'Far Away Escape', city: '', lat: 10, lng: 10 })])
     fillMissingCities(merged, 'Unknown')
     expect(merged.map((m) => m.primary.city).sort()).toEqual(['San Francisco', 'San Francisco', 'Unknown'])
+  })
+
+  it('replaces a city name in another script with the nearby Latin-named city', () => {
+    const merged = dedupePlaces([
+      place({ name: 'Tagged Escape', city: 'Richmond', region: 'BC', country: 'CA', lat: 49.18, lng: -123.13 }),
+      place({ name: 'Zone Puzzle Room', city: '里士满', region: 'BC', country: 'CA', lat: north(49.18, 1500), lng: -123.13 }),
+      place({ name: 'Remote Puzzle Room', city: '温哥华', region: 'BC', country: 'CA', lat: 52, lng: -120 }),
+    ])
+    latinizeCities(merged)
+    const city = (name: string) => merged.find((m) => m.primary.name === name)!.primary.city
+    expect(city('Zone Puzzle Room')).toBe('Richmond')
+    expect(city('Remote Puzzle Room')).toBe('温哥华')
+    expect(isNonLatinCity('里士满')).toBe(true)
+    expect(isNonLatinCity('‘Aiea')).toBe(false)
+    expect(isNonLatinCity('Montréal')).toBe(false)
+  })
+
+  it('never shares one region-wide city slug between non-Latin city names', () => {
+    const seed = buildRegionSeed({ id: 'ca', name: 'Canada', country: 'CA' } as Region, [
+      place({ name: 'A Puzzle Room', city: '里士满', region: 'BC', country: 'CA', lat: 49.18, lng: -123.13 }),
+      place({ name: 'B Puzzle Room', city: '温哥华', region: 'BC', country: 'CA', lat: 49.28, lng: -123.12 }),
+    ])
+    const slugs = seed.file.venues.map((v) => v.citySlug)
+    expect(new Set(slugs).size).toBe(2)
+    expect(slugs).not.toContain('bc-ca')
   })
 
   it('tags chains that share a website host across 3+ cities', () => {

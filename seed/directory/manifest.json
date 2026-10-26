@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "version": "38459e11de21ad2d",
+  "version": "bdc2cdeb0187c9d4",
   "generatedAt": "2026-10-26T05:31:44.189Z",
   "source": "foursquare",
   "license": "Apache-2.0",
@@ -24,12 +24,12 @@
       "name": "Canada",
       "country": "CA",
       "file": "ca.json.gz",
-      "sha": "20ca4d8bdf9264c9",
+      "sha": "0f36066085286120",
       "venues": 212,
-      "cities": 84,
+      "cities": 82,
       "read": 216,
       "merged": 4,
-      "bytes": 20421
+      "bytes": 20305
     },
     {
       "id": "gb-london",

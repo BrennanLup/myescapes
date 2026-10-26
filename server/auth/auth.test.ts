@@ -233,3 +233,45 @@ describe('Google configuration', () => {
     expect(DISABLED_AUTH_PATHS).toContain('/update-user')
   })
 })
+
+describe('sign-in rate limit is per client behind a proxy', () => {
+  it('keys Better Auth limits on the address Fastify trusts, not one shared bucket, and ignores a client-sent IP header', async () => {
+    const origin = 'https://escapes.example.com'
+    const t = await buildTestApp({
+      resolveUser,
+      env: { NODE_ENV: 'production', GOOGLE_CLIENT_ID: 'cid', GOOGLE_CLIENT_SECRET: 's', BETTER_AUTH_SECRET: 'z'.repeat(40), PUBLIC_URL: origin },
+    })
+    // Railway's edge appends the client to X-Forwarded-For, so the header is a chain.
+    const signIn = (client: string, extra: Record<string, string> = {}) =>
+      t.inject({
+        method: 'POST',
+        url: '/api/auth/sign-in/social',
+        headers: { 'content-type': 'application/json', origin, 'x-forwarded-for': `198.51.100.77, ${client}`, ...extra },
+        payload: JSON.stringify({ provider: 'google', callbackURL: '/' }),
+      })
+    try {
+      let limited = false
+      for (let i = 0; i < 80 && !limited; i++) limited = (await signIn('203.0.113.10')).statusCode === 429
+      expect(limited).toBe(true)
+      // The same client cannot dodge its limit by naming another address in our private header.
+      expect((await signIn('203.0.113.10', { 'x-myescapes-client-ip': '192.0.2.200' })).statusCode).toBe(429)
+      // Another visitor is unaffected.
+      expect((await signIn('203.0.113.20')).statusCode).toBe(200)
+    } finally {
+      await t.close()
+    }
+  })
+
+  it('never stores the client address on a session row', async () => {
+    const t = await buildTestApp({ fixtures: true, resolveUser })
+    try {
+      const login = await t.inject({ method: 'POST', url: '/api/test/login', headers: { 'x-forwarded-for': '203.0.113.30' }, payload: { email: 'ip.check@example.com', name: 'Ip Check' } })
+      expect(login.statusCode).toBe(200)
+      const rows = await t.db.select().from(sessions)
+      expect(rows.length).toBeGreaterThan(0)
+      expect(rows.every((r) => r.ipAddress === null)).toBe(true)
+    } finally {
+      await t.close()
+    }
+  })
+})

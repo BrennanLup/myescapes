@@ -20,9 +20,26 @@ export function slugify(text: string, maxLength = 80): string {
   return s || 'item'
 }
 
-/** City slug: `san-francisco-ca-us`. */
+/**
+ * City slug: `san-francisco-ca-us`. A name with no Latin letters or digits ("里士满", "東京") would
+ * slugify to nothing and every such city in a region would share `bc-ca`, so it gets a stable
+ * `city-<hash>` part instead.
+ */
 export function citySlug(city: string, region: string, country: string): string {
-  return slugify([city, region, country].filter(Boolean).join(' '))
+  const name = city.trim()
+  const latin = slugify(name) !== 'item' || /item/i.test(name)
+  const cityPart = !name || latin ? name : `city ${shortHash(name.normalize('NFKC').toLowerCase())}`
+  return slugify([cityPart, region, country].filter(Boolean).join(' '))
+}
+
+/** 8 hex characters of FNV-1a: stable across runs and machines, not for security. */
+function shortHash(text: string): string {
+  let h = 0x811c9dc5
+  for (const ch of text) {
+    h ^= ch.codePointAt(0)!
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
 }
 
 /**

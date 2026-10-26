@@ -17,7 +17,7 @@ import type { Db } from '../db/client'
 import { newId, users } from '../db/schema'
 import { isUniqueViolation } from '../db/util'
 import { defineRoute, HttpError } from '../http'
-import { authSecret, COOKIE_PREFIX, createAuth, googleConfigured, secureCookiesFor, type Auth } from './config'
+import { authSecret, CLIENT_IP_HEADER, COOKIE_PREFIX, createAuth, googleConfigured, secureCookiesFor, type Auth } from './config'
 import { meFromRow } from './users'
 
 export { GOOGLE_SCOPES } from './config'
@@ -120,6 +120,9 @@ async function handleAuthRequest(req: FastifyRequest, reply: FastifyReply, ctx: 
   }
   const headers = toWebHeaders(req.headers)
   headers.delete('content-length')
+  // The address Fastify trusts (server/proxy.ts), for Better Auth's per-client rate limiter.
+  headers.delete(CLIENT_IP_HEADER)
+  if (req.ip) headers.set(CLIENT_IP_HEADER, req.ip)
   const res = await auth.handler(new Request(url, { method, headers, body }))
   return sendWebResponse(reply, res)
 }

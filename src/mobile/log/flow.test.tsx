@@ -270,6 +270,33 @@ describe('mobile log flow', () => {
     }
   })
 
+  it('a puzzle without a type focuses and highlights its type select, not the description', async () => {
+    const proto = Element.prototype as { scrollIntoView?: Element['scrollIntoView'] }
+    const original = proto.scrollIntoView
+    proto.scrollIntoView = function () {}
+    try {
+      const s = server({ transcribe: 'ok' })
+      render(<LogFlow onDone={vi.fn()} me={ME} fetch={s.fetch} />)
+      await userEvent.click(screen.getByTestId('record-sample'))
+      await matchAndConfirm()
+      for (const k of ['overall', 'puzzles', 'setting', 'storyline', 'difficulty']) {
+        const el = screen.getByTestId(`confirm-score-${k}`) as HTMLInputElement
+        if (el.value === '') await userEvent.type(el, '80')
+      }
+      await userEvent.click(screen.getByTestId('confirm-add-puzzle'))
+      const n = document.querySelectorAll('[data-testid^="confirm-puzzle-type-"]').length - 1
+      await userEvent.type(screen.getByTestId(`confirm-puzzle-${n}`), 'The laser hallway')
+      await userEvent.click(screen.getByTestId('confirm-save'))
+      const select = screen.getByTestId(`confirm-puzzle-type-${n}`)
+      await waitFor(() => expect(document.activeElement).toBe(select))
+      expect(select.getAttribute('aria-invalid')).toBe('true')
+      expect(select.className).toContain('border-bad')
+      expect(s.calls.some((c) => c.url === '/api/visits')).toBe(false)
+    } finally {
+      proto.scrollIntoView = original
+    }
+  })
+
   it('without a microphone you can type, and "fill it in by hand" skips extraction', async () => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined })
     const s = server({ transcribe: 'ok' })

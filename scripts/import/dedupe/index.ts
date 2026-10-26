@@ -347,6 +347,36 @@ export function fillMissingCities(venues: MergedVenue[], fallback: string): void
   }
 }
 
+/** True when a city name has no Latin letters or digits ("里士满"), so it cannot make a URL slug. */
+export function isNonLatinCity(name: string): boolean {
+  return !!name.trim() && !/[a-z0-9]/i.test(name.normalize('NFKD').replace(/[\u0300-\u036f]/g, ''))
+}
+
+/**
+ * Foursquare sometimes tags a place with the city's name in another script (Richmond, BC as
+ * "里士满", Mississauga as "米西索加"). Such a venue takes the city of the nearest Latin-named venue
+ * in the same country and region within `maxKm`; otherwise it keeps its name (citySlug then gives
+ * it a hashed slug of its own).
+ */
+export function latinizeCities(venues: MergedVenue[], maxKm = 5): void {
+  const latin = venues.filter((v) => v.primary.city && !isNonLatinCity(v.primary.city) && v.primary.lat != null && v.primary.lng != null)
+  for (const v of venues) {
+    const p = v.primary
+    if (!isNonLatinCity(p.city) || p.lat == null || p.lng == null) continue
+    let best: MergedVenue | null = null
+    let bestKm = maxKm
+    for (const t of latin) {
+      if (t.primary.country !== p.country || t.primary.region !== p.region) continue
+      const km = haversineKm(p.lat, p.lng, t.primary.lat!, t.primary.lng!)
+      if (km < bestKm) {
+        bestKm = km
+        best = t
+      }
+    }
+    if (best) v.primary = { ...p, city: best.primary.city }
+  }
+}
+
 /**
  * Chains: a website host shared by venues in at least 3 cities names the brand (the shortest
  * venue name among them, e.g. "Escapology"). Hosts used in one city only are not brands.
@@ -406,6 +436,7 @@ export function buildRegionSeed(region: Region, raw: readonly RawPlace[], takenS
   const cleaned = raw.map((p) => normalisePlace(p, region)).filter((p) => p.country === region.country)
   const merged = dedupePlaces(cleaned)
   fillMissingCities(merged, region.bbox ? region.name : 'Unknown')
+  latinizeCities(merged)
   tagBrands(merged)
   const slugs = assignSlugs(merged.map((m) => venueSlugBase(m.primary)), takenSlugs)
   const cities = new Map<string, SeedCity & { n: number; latSum: number; lngSum: number }>()

@@ -33,7 +33,11 @@ export function revealFirstError(root: ParentNode = document): HTMLElement | nul
   const err = root.querySelector<HTMLElement>('[data-field-error]')
   if (!err) return null
   const box = err.parentElement ?? err
-  const target = box.querySelector<HTMLElement>('input:not([type="hidden"]):not([type="range"]):not([type="checkbox"]):not([type="radio"]), select, textarea') ?? err
+  // A control marked invalid wins (a puzzle's type select sits after its description textarea).
+  const target =
+    box.querySelector<HTMLElement>('[aria-invalid="true"]') ??
+    box.querySelector<HTMLElement>('input:not([type="hidden"]):not([type="range"]):not([type="checkbox"]):not([type="radio"]), select, textarea') ??
+    err
   box.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
   target.focus?.({ preventScroll: true })
   return target
@@ -187,8 +191,10 @@ export function ConfirmStep(p: ConfirmProps) {
             />
             <div className="flex flex-wrap items-center gap-2">
               <select
-                className="rounded-xl border border-panel-edge bg-white px-2 py-2 text-sm"
+                className={`rounded-xl border bg-white px-2 py-2 text-sm ${errors[`puzzles.${i}.type`] ? 'border-bad' : 'border-panel-edge'}`}
                 aria-label={`Puzzle ${i + 1} type`}
+                aria-invalid={errors[`puzzles.${i}.type`] ? true : undefined}
+                data-testid={`confirm-puzzle-type-${i}`}
                 value={pz.type}
                 onChange={(e) => set('puzzles', form.puzzles.map((q, j) => (j === i ? { ...q, type: e.target.value as PuzzleType | '' } : q)))}
               >

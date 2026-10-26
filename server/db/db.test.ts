@@ -176,6 +176,18 @@ describe('util', () => {
     expect(slugify('Café Évasion')).toBe('cafe-evasion')
     expect(slugify('???')).toBe('item')
     expect(citySlug('San Francisco', 'CA', 'US')).toBe('san-francisco-ca-us')
+    expect(citySlug('‘Aiea', 'HI', 'US')).toBe('aiea-hi-us')
+    expect(citySlug('Itemville', 'TX', 'US')).toBe('itemville-tx-us')
+  })
+
+  it('citySlug keeps non-Latin city names apart instead of collapsing them to the region', () => {
+    const richmond = citySlug('里士满', 'BC', 'CA')
+    const vancouver = citySlug('温哥华', 'BC', 'CA')
+    expect(richmond).toMatch(/^city-[0-9a-f]{8}-bc-ca$/)
+    expect(vancouver).toMatch(/^city-[0-9a-f]{8}-bc-ca$/)
+    expect(richmond).not.toBe(vancouver)
+    expect(citySlug(' 里士满 ', 'BC', 'CA')).toBe(richmond)
+    expect(citySlug('', 'BC', 'CA')).toBe('bc-ca')
   })
 
   it('uniqueSlug finds the next free suffix', async () => {

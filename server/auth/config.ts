@@ -22,6 +22,13 @@ export const COOKIE_PREFIX = 'myescapes'
 /** Session lifetime: 30 days, refreshed at most once a day while in use. */
 export const SESSION_EXPIRES_IN = 60 * 60 * 24 * 30
 export const SESSION_UPDATE_AGE = 60 * 60 * 24
+/**
+ * The header our Fastify bridge sets to the client address Fastify resolved (`request.ip`, see
+ * server/proxy.ts) before handing a request to Better Auth. Any copy the client sent is replaced.
+ * Better Auth's own reader only trusts a single-value X-Forwarded-For, and Railway's edge sends a
+ * chain, so without this every visitor shared one sign-in rate-limit bucket.
+ */
+export const CLIENT_IP_HEADER = 'x-myescapes-client-ip'
 
 /**
  * A fixed secret for NODE_ENV=test only, so tests can sign cookies without real credentials.
@@ -148,6 +155,10 @@ export function authOptions(db: Db, env: NodeJS.ProcessEnv) {
         // the email is not proven to be theirs. Better Auth then ends the sign-in with "unable to create user".
         create: { before: async (data: Record<string, unknown>) => (data.emailVerified === true ? { data } : false) },
       },
+      // Sessions never store the client address: /privacy only promises it in short-lived server logs.
+      session: {
+        create: { before: async (data: Record<string, unknown>) => ({ data: { ...data, ipAddress: null } }) },
+      },
       account: {
         create: { before: async (data: Record<string, unknown>) => ({ data: stripTokens(data) }) },
         update: { before: async (data: Record<string, unknown>) => ({ data: stripTokens(data) }) },
@@ -156,6 +167,7 @@ export function authOptions(db: Db, env: NodeJS.ProcessEnv) {
     disabledPaths: DISABLED_AUTH_PATHS,
     advanced: {
       cookiePrefix: COOKIE_PREFIX,
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
       useSecureCookies: secureCookiesFor(env),
       // Better Auth skips origin/callbackURL checks under NODE_ENV=test by default; keep them on so tests see production behaviour.
       disableOriginCheck: false,
