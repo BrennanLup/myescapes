@@ -19,3 +19,6 @@ three.js, React Three Fiber, drei, postprocessing / @react-three/postprocessing 
 
 ## Sample data
 The 12 sample escape rooms, companies, addresses and reviews in `seed/reviews.json` are fictional.
+
+## Directory data
+The venue directory in `seed/directory/` is derived from [Foursquare Open Source Places](https://opensource.foursquare.com/os-places/) (release 2025-02-06), licensed under Apache-2.0. Its `LICENSE.txt` and `NOTICE.txt` ship with the data, and `seed/directory/README.md` lists the changes we made. Public directory pages show this attribution. Venues and games added by users are their contributions.
