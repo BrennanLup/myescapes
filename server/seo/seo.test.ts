@@ -161,7 +161,8 @@ describe('page meta from the database', () => {
     const invite = renderHeadTags(staticPageMeta('/invite/SECRETCODE')!, ORIGIN)
     expect(invite).toContain('noindex')
     expect(invite).not.toContain('SECRETCODE')
-    expect(staticPageMeta('/welcome')?.path).toBe('/')
+    expect(staticPageMeta('/')).toBeNull()
+    expect(staticPageMeta('/welcome')).toBeNull()
   })
 })
 

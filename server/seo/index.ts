@@ -156,7 +156,8 @@ export function cityMeta(c: { slug: string; name: string; region: string; countr
 
 /** Static app routes: their tags need no database. */
 export function staticPageMeta(p: string): PageMeta | null {
-  if (p === '/' || p === '/welcome') return { title: SITE_NAME, description: DEFAULT_DESCRIPTION, path: '/' }
+  // The home page keeps index.html as is (its default tags), so it is still served precompressed.
+  if (p === '/' || p === '/welcome') return null
   if (p === '/daily') {
     return {
       title: `Escape of the Day · ${SITE_NAME}`,
