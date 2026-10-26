@@ -3,7 +3,8 @@
  * the 3D room itself is lazy too, so /m and the public pages never download three.js.
  *
  * Routes (see `ROUTE_TABLE`):
- *   /                 3D room (desktop). Phones are sent to /m by `shouldRedirectToMobile` (13).
+ *   /                 landing + sign-in when signed out (19), the 3D room when signed in (`/?demo=1`:
+ *                     the demo room while signed out). Phones are sent to /m by `shouldRedirectToMobile` (13).
  *   /m, /m/*          mobile app (13; subroutes handled inside the shell)
  *   /games/:slug      public game page (16)
  *   /venues/:slug     public venue page (17)
@@ -38,7 +39,8 @@ export interface RouteEntry {
 }
 
 export const ROUTE_TABLE: RouteEntry[] = [
-  { pattern: '/', page: page(() => import('./desktop'), (m) => m.DesktopApp) },
+  // Signed out: landing + "Continue with Google" (19). Signed in: onboarding once, then the 3D room.
+  { pattern: '/', page: page(() => import('./public/landing'), (m) => m.Home) },
   { pattern: '/m', prefix: true, page: page(() => import('./mobile/shell'), (m) => m.MobileApp) },
   { pattern: '/games/:slug', page: page(() => import('./public/game'), (m) => m.GamePage) },
   { pattern: '/venues/:slug', page: page(() => import('./public/venue'), (m) => m.VenuePage) },
