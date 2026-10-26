@@ -19,6 +19,23 @@ export interface SessionUser {
   onboarded: boolean
 }
 
+/**
+ * Admins by email: `ADMIN_EMAILS` is a comma- or space-separated list (case-insensitive). A user whose
+ * email is listed is an admin even when `users.is_admin` is false (added by workstream 25).
+ */
+export function adminEmails(env: NodeJS.ProcessEnv = process.env): Set<string> {
+  return new Set(
+    (env.ADMIN_EMAILS ?? '')
+      .split(/[\s,;]+/)
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => e.includes('@')),
+  )
+}
+
+export function isAdminEmail(email: string | null | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(email) && adminEmails(env).has(email!.trim().toLowerCase())
+}
+
 export type DbStatus = 'none' | 'migrating' | 'ready' | 'unavailable'
 
 /** Mutable database state: the server can start before the database is reachable. */
@@ -78,7 +95,7 @@ export function createContext(opts: CreateContextOptions = {}): AppContext {
     getUser(req) {
       let p = cache.get(req)
       if (!p) {
-        p = resolveUser(req, ctx)
+        p = resolveUser(req, ctx).then((u) => (u && !u.isAdmin && isAdminEmail(u.email, env) ? { ...u, isAdmin: true } : u))
         cache.set(req, p)
       }
       return p
