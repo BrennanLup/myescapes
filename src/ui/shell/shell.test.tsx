@@ -7,9 +7,12 @@ import { SettingsOverlay } from './SettingsOverlay'
 import { Hud } from './Hud'
 import { LoadingScreen } from './LoadingScreen'
 import { resetShellForTests } from './shellStore'
+import { resetSessionForTests, setSessionUser } from '@/auth/session'
 
 beforeEach(() => {
   resetShellForTests()
+  resetSessionForTests()
+  setSessionUser(null)
   vi.spyOn(apiClient, 'getStatus').mockResolvedValue({ extraction: 'mock', transcription: 'mock', storage: 'none', database: 'none', auth: 'disabled', version: '0.1.0' })
   useStore.setState({ settings: { ...DEFAULT_SETTINGS }, sort: 'city', overlay: null, worldReady: false, dataStatus: 'idle', isTouch: false })
 })
@@ -36,6 +39,22 @@ describe('SettingsOverlay', () => {
     expect(await screen.findByText('Mock extractor')).toBeTruthy()
     expect(screen.getByText('ANTHROPIC_API_KEY')).toBeTruthy()
     expect(screen.getByText('DATABASE_URL')).toBeTruthy()
+  })
+
+  it('signed in, links to the account page (friends, invites, sign out, delete)', () => {
+    setSessionUser({ id: 'usr_a', handle: 'brennan', displayName: 'Brennan', image: null, email: 'b@example.com', onboarded: true, isAdmin: false, createdAt: '2026-10-01T00:00:00Z' })
+    render(<SettingsOverlay />)
+    const link = screen.getByTestId('settings-account-link')
+    expect(link.getAttribute('href')).toBe('/settings')
+    expect(screen.getByText('Brennan')).toBeTruthy()
+    // Never the email.
+    expect(screen.queryByText(/b@example\.com/)).toBeNull()
+  })
+
+  it('signed out, shows no account link', () => {
+    setSessionUser(null)
+    render(<SettingsOverlay />)
+    expect(screen.queryByTestId('settings-account-link')).toBeNull()
   })
 
   it('emits overlay:close on Escape and on close', () => {

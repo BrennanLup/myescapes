@@ -246,6 +246,30 @@ describe('mobile log flow', () => {
     expect(screen.getByTestId('log-confirm')).toBeTruthy()
   })
 
+  it('a save blocked by a missing field scrolls to that field and focuses it', async () => {
+    const scrolled: Element[] = []
+    // jsdom has no scrollIntoView.
+    const proto = Element.prototype as { scrollIntoView?: Element['scrollIntoView'] }
+    const original = proto.scrollIntoView
+    proto.scrollIntoView = function (this: Element) {
+      scrolled.push(this)
+    }
+    try {
+      const s = server({ transcribe: 'ok' })
+      render(<LogFlow onDone={vi.fn()} me={ME} fetch={s.fetch} />)
+      await userEvent.click(screen.getByTestId('record-sample'))
+      await matchAndConfirm()
+      // The draft has no storyline score: saving is blocked.
+      await userEvent.click(screen.getByTestId('confirm-save'))
+      const storyline = screen.getByTestId('confirm-score-storyline')
+      await waitFor(() => expect(document.activeElement).toBe(storyline))
+      expect(scrolled.some((el) => el.contains(storyline))).toBe(true)
+      expect(s.calls.some((c) => c.url === '/api/visits')).toBe(false)
+    } finally {
+      proto.scrollIntoView = original
+    }
+  })
+
   it('without a microphone you can type, and "fill it in by hand" skips extraction', async () => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined })
     const s = server({ transcribe: 'ok' })

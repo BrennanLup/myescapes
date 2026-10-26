@@ -15,7 +15,7 @@ import { formatElapsed, RECORD_PROMPTS, SAMPLE_TRANSCRIPT } from '../../ui/recor
 import { VenueGameMatcher } from '../match'
 import type { MatchHints } from '../match/logic'
 import { createVisit, extract, transcribe, type ExtractResult } from './api'
-import { ConfirmStep } from './confirm'
+import { ConfirmStep, revealFirstError } from './confirm'
 import { tagsFromNames } from './crew/logic'
 import { useCrewSuggestions } from './crew'
 import { draftToForm, hintsFrom, memorableIds, reviewOf, toCreateVisitBody, validateLogForm, type FormErrors, type LogForm } from './form'
@@ -84,6 +84,11 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
   const rec = usePhoneRecorder()
   const [step, setStep] = useState<Step>({ kind: resumeRecordingId ? 'transcript' : 'record' })
   const [recordingId, setRecordingId] = useState<string | null>(resumeRecordingId)
+  // Bumped by a save that validation blocked; the effect runs after the errors have rendered.
+  const [revealTick, setRevealTick] = useState(0)
+  useEffect(() => {
+    if (revealTick) revealFirstError()
+  }, [revealTick])
   const [transcript, setTranscript] = useState('')
   const [uploadNote, setUploadNote] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -182,7 +187,10 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
     if (!form || !choice) return
     const errs = validateLogForm(form)
     setErrors(errs)
-    if (Object.keys(errs).length) return
+    if (Object.keys(errs).length) {
+      setRevealTick((n) => n + 1)
+      return
+    }
     setSaving(true)
     setSaveError(null)
     try {

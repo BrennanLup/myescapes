@@ -51,6 +51,9 @@ describe('format helpers', () => {
   it('joins place parts, skipping blanks and the unknown country', () => {
     expect(placeLine('Toronto', '', 'ZZ')).toBe('Toronto')
     expect(placeLine('San Francisco', 'CA', 'US')).toBe('San Francisco, CA, US')
+    // An address that already names its city doesn't repeat it.
+    expect(placeLine('418 Bayview Wharf, San Francisco, CA', 'San Francisco')).toBe('418 Bayview Wharf, San Francisco, CA')
+    expect(placeLine('12 Main St', 'san francisco')).toBe('12 Main St, san francisco')
   })
 })
 

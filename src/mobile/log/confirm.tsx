@@ -25,6 +25,20 @@ export interface ConfirmProps {
   onSave(): void
 }
 
+/**
+ * After a blocked save: bring the first field with an error into view and focus its input. The
+ * save button sits in a sticky footer, so without this the error can be a long scroll away.
+ */
+export function revealFirstError(root: ParentNode = document): HTMLElement | null {
+  const err = root.querySelector<HTMLElement>('[data-field-error]')
+  if (!err) return null
+  const box = err.parentElement ?? err
+  const target = box.querySelector<HTMLElement>('input:not([type="hidden"]):not([type="range"]):not([type="checkbox"]):not([type="radio"]), select, textarea') ?? err
+  box.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+  target.focus?.({ preventScroll: true })
+  return target
+}
+
 const input = 'w-full rounded-xl border border-panel-edge bg-white px-3 py-2 text-base text-ink outline-none focus:border-accent'
 
 function Field({ label, flag, error, children }: { label: string; flag?: boolean; error?: string; children: ReactNode }) {
@@ -35,7 +49,7 @@ function Field({ label, flag, error, children }: { label: string; flag?: boolean
         {flag && <span className="rounded-full bg-warn/20 px-2 py-0.5 text-xs font-bold text-ink">Check this</span>}
       </div>
       {children}
-      {error && <p className="mt-1 text-sm text-bad">{error}</p>}
+      {error && <p data-field-error className="mt-1 text-sm text-bad">{error}</p>}
     </div>
   )
 }
@@ -193,7 +207,7 @@ export function ConfirmStep(p: ConfirmProps) {
                 Remove
               </button>
             </div>
-            {errors[`puzzles.${i}.type`] && <p className="text-sm text-bad">{errors[`puzzles.${i}.type`]}</p>}
+            {errors[`puzzles.${i}.type`] && <p data-field-error className="text-sm text-bad">{errors[`puzzles.${i}.type`]}</p>}
           </div>
         ))}
         <button type="button" data-testid="confirm-add-puzzle" className="text-sm font-semibold text-teal underline" onClick={() => set('puzzles', [...form.puzzles, { key: puzzleKey(), description: '', type: '', memorable: false }])}>

@@ -112,7 +112,16 @@ export function hostOf(url: string): string {
 
 /** A readable place line: "San Francisco, CA, US". Skips blanks and the unknown country `ZZ`. */
 export function placeLine(...parts: (string | null | undefined)[]): string {
-  return parts.filter((p): p is string => Boolean(p && p.trim() && p !== 'ZZ')).join(', ')
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const p of parts) {
+    if (!p || !p.trim() || p === 'ZZ') continue
+    // Skip a part the line already says (an address that already ends in its city).
+    if (seen.has(p.trim().toLowerCase())) continue
+    out.push(p.trim())
+    for (const seg of p.split(',')) seen.add(seg.trim().toLowerCase())
+  }
+  return out.join(', ')
 }
 
 /** The browser tab title for a public page. */

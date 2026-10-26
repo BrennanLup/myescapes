@@ -3,6 +3,7 @@ import { useStore, type QualityPreset } from '@/state/store'
 import { bus } from '@/contracts/events'
 import { useServerStatus, fetchServerStatus } from './shellStore'
 import { IconClose } from './icons'
+import { useSession } from '@/auth/session'
 
 export const QUALITY_INFO: Record<QualityPreset, { label: string; desc: string }> = {
   low: { label: 'Low', desc: 'No shadows, lower resolution. Smoothest on phones and older laptops.' },
@@ -57,6 +58,7 @@ export function SettingsOverlay() {
         </header>
 
         <div className="flex flex-col gap-6 overflow-y-auto px-5 py-5 sm:px-6" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+          <AccountSection />
           <Section title="Controls">
             <Slider
               label="Look sensitivity"
@@ -119,6 +121,31 @@ export function SettingsOverlay() {
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * Signed in: the way from the 3D room to the account page (/settings), where the invite link,
+ * friends, inbox, data download, sign-out and account deletion live.
+ */
+function AccountSection() {
+  const session = useSession()
+  if (session.status !== 'signed-in') return null
+  const u = session.user
+  return (
+    <Section title="Account">
+      <p className="text-sm text-ink-soft">
+        Signed in as <span className="font-semibold text-ink">{u.displayName ?? u.handle ?? 'you'}</span>
+        {u.handle ? ` (@${u.handle})` : ''}
+      </p>
+      <a
+        href="/settings"
+        data-testid="settings-account-link"
+        className="self-start rounded-full bg-accent px-4 py-2 text-sm font-bold text-accent-ink transition hover:scale-[1.02]"
+      >
+        Friends, invites and account
+      </a>
+    </Section>
   )
 }
 
