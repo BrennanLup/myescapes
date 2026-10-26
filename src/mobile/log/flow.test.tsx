@@ -62,6 +62,7 @@ class FakeRecorder {
   }
 }
 let recognition: { onresult: ((e: unknown) => void) | null } | null = null
+let recognitionsCreated = 0
 class FakeRecognition {
   continuous = false
   interimResults = false
@@ -73,6 +74,7 @@ class FakeRecognition {
     // The flow creates one per recording; the test drives the latest.
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     recognition = this
+    recognitionsCreated++
   }
   start() {}
   stop() {}
@@ -116,6 +118,8 @@ beforeEach(() => {
   globalThis.indexedDB = new IDBFactory()
   resetQueueStoreForTests()
   recognition = null
+  recognitionsCreated = 0
+  localStorage.clear()
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop() {} }] })) } })
   vi.stubGlobal('MediaRecorder', FakeRecorder)
   ;(window as unknown as { webkitSpeechRecognition: unknown }).webkitSpeechRecognition = FakeRecognition
@@ -126,7 +130,9 @@ afterEach(() => {
   delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition
 })
 
+/** `text`: speak it with live captions turned on (they are opt-in). */
 async function recordAndStop(text: string) {
+  if (text) await userEvent.click(screen.getByTestId('record-captions'))
   await userEvent.click(screen.getByTestId('record-start'))
   await screen.findByTestId('record-stop')
   if (text) {
@@ -143,6 +149,31 @@ async function matchAndConfirm() {
 }
 
 describe('mobile log flow', () => {
+  it("live captions are off by default, so the browser's speech service never gets the audio", async () => {
+    const s = server({ transcribe: 'ok' })
+    render(<LogFlow onDone={vi.fn()} me={ME} fetch={s.fetch} />)
+    expect((screen.getByTestId('record-captions') as HTMLInputElement).checked).toBe(false)
+    await userEvent.click(screen.getByTestId('record-start'))
+    await screen.findByTestId('record-stop')
+    expect(recognitionsCreated).toBe(0)
+    await userEvent.click(screen.getByTestId('record-stop'))
+    expect((await screen.findByTestId('transcript-input') as HTMLTextAreaElement).value).toBe('Server transcript about The Lost Observatory.')
+    expect(recognitionsCreated).toBe(0)
+    expect(s.calls.some((c) => c.url === '/api/transcribe')).toBe(true)
+  })
+
+  it('turning live captions on is remembered on this device', async () => {
+    const s = server({ transcribe: 'ok' })
+    render(<LogFlow onDone={vi.fn()} me={ME} fetch={s.fetch} />)
+    await userEvent.click(screen.getByTestId('record-captions'))
+    cleanup()
+    render(<LogFlow onDone={vi.fn()} me={ME} fetch={s.fetch} />)
+    expect((screen.getByTestId('record-captions') as HTMLInputElement).checked).toBe(true)
+    await userEvent.click(screen.getByTestId('record-start'))
+    await screen.findByTestId('record-stop')
+    expect(recognitionsCreated).toBe(1)
+  })
+
   it('offline: keeps the recording on the phone, carries on with live captions, saves, then forgets the recording', async () => {
     const s = server({ transcribe: 'offline' })
     const onDone = vi.fn()
@@ -152,7 +183,7 @@ describe('mobile log flow', () => {
     const note = await screen.findByTestId('upload-note')
     expect(note.textContent).toContain('1 recording waiting to upload')
     expect((screen.getByTestId('transcript-input') as HTMLTextAreaElement).value).toBe('We did the lost observatory')
-    const queued = await listRecordings()
+    const queued = await listRecordings(ME.id)
     expect(queued).toHaveLength(1)
     expect(queued[0]).toMatchObject({ status: 'pending', mimeType: 'audio/webm', liveTranscript: 'We did the lost observatory' })
     expect(queued[0].audio?.byteLength).toBe(3)
@@ -176,7 +207,7 @@ describe('mobile log flow', () => {
     })
     // Memorable puzzles are attached once their ids exist.
     expect(s.calls.find((c) => c.url === '/api/visits/vis_new/review')?.body).toMatchObject({ memorablePuzzleIds: ['pzl_0'] })
-    expect(await listRecordings()).toEqual([])
+    expect(await listRecordings(ME.id)).toEqual([])
     expect(screen.getByTestId('log-done-public').getAttribute('href')).toBe(`/games/${GAME.slug}`)
     await userEvent.click(screen.getByTestId('log-done-home'))
     expect(onDone).toHaveBeenCalledWith('vis_new')
@@ -192,7 +223,7 @@ describe('mobile log flow', () => {
     expect(up.clientId).toMatch(/^rec_/)
     expect(up.audio).toMatch(/^<file rec_.*\.webm audio\/webm>$/)
     expect(Number(up.durationSeconds)).toBeGreaterThanOrEqual(0)
-    const [item] = await listRecordings()
+    const [item] = await listRecordings(ME.id)
     expect(item).toMatchObject({ status: 'transcribed', audio: null, transcript: 'Server transcript about The Lost Observatory.' })
   })
 
@@ -201,7 +232,7 @@ describe('mobile log flow', () => {
     render(<LogFlow onDone={vi.fn()} me={ME} fetch={s.fetch} />)
     await recordAndStop('')
     expect((await screen.findByTestId('upload-note')).textContent).toMatch(/allowance is used up/)
-    expect((await listRecordings())[0].status).toBe('pending')
+    expect((await listRecordings(ME.id))[0].status).toBe('pending')
   })
 
   it('a save the server refuses keeps everything on screen with a clear message', async () => {

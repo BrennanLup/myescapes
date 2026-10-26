@@ -1,10 +1,15 @@
+import 'fake-indexeddb/auto'
+import { IDBFactory } from 'fake-indexeddb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { apiError, fakeApi, me } from '../testing/fakeApi'
+import { countAllRecordings, enqueueRecording, resetQueueStoreForTests } from '../../mobile/log/queue'
 import { SettingsPage, settingsNav } from './index'
 
 const auth = vi.hoisted(() => ({ signIn: vi.fn(async (_cb?: string) => undefined), signOut: vi.fn(async () => undefined) }))
-vi.mock('../../auth', () => ({
+vi.mock('../../auth', async () => ({
+  // The real one: it clears this device's recording queue.
+  clearLocalAccountData: (await vi.importActual<typeof import('../../auth/api')>('../../auth/api')).clearLocalAccountData,
   useSession: () => ({ status: 'signed-in', user: null }),
   signInWithGoogle: auth.signIn,
   signOut: auth.signOut,
@@ -16,6 +21,8 @@ beforeEach(() => {
   settingsNav.leave = leave as unknown as (to: string) => void
   auth.signIn.mockClear()
   auth.signOut.mockClear()
+  globalThis.indexedDB = new IDBFactory()
+  resetQueueStoreForTests()
 })
 afterEach(() => {
   cleanup()
@@ -165,6 +172,20 @@ describe('account', () => {
     await waitFor(() => expect(leave).toHaveBeenCalledWith('/welcome?deleted=1'))
     expect(api.calls('deleteMe')[0].body).toEqual({ confirm: 'DELETE' })
     expect(auth.signOut).toHaveBeenCalled()
+  })
+
+  it('deleting the account empties the voice-note queue on this device, after warning about it', async () => {
+    serve({ deleteMe: () => ({ deleted: true }) })
+    const audio = new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/webm' })
+    await enqueueRecording({ ownerId: me().id, audio, durationSeconds: 3 })
+    await enqueueRecording({ ownerId: 'usr_someone_else', audio, durationSeconds: 3 })
+    render(<SettingsPage />)
+    expect((await screen.findByTestId('queued-warning')).textContent).toContain('1 voice note is still on this device')
+    fireEvent.click(screen.getByTestId('delete-open'))
+    fireEvent.change(screen.getByTestId('delete-confirm-input'), { target: { value: 'DELETE' } })
+    fireEvent.click(screen.getByTestId('delete-confirm'))
+    await waitFor(() => expect(leave).toHaveBeenCalledWith('/welcome?deleted=1'))
+    expect(await countAllRecordings()).toBe(0)
   })
 
   it('keeps the user on the page when deletion fails', async () => {

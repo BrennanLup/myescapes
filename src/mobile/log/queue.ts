@@ -7,8 +7,13 @@
  *
  * Item lifecycle: `pending` (audio stored) -> `transcribed` (audio deleted, transcript kept) -> removed.
  * A `failed` item hit an error that retrying won't fix (bad file); it can be retried by hand or discarded.
+ *
+ * Each item belongs to the account that recorded it (`ownerId`). Listing, resuming and uploading
+ * only ever see the current account's items, so a second person signing in on the same phone can
+ * neither see nor upload them, and signing out or deleting the account clears the whole queue
+ * (`clearRecordingQueue`, called from `signOut` in src/auth/api.ts).
  */
-import { createStore, del, entries, get, set, type UseStore } from 'idb-keyval'
+import { clear, createStore, del, entries, get, set, type UseStore } from 'idb-keyval'
 import { ApiCallError } from '../../contracts/errors'
 
 export type QueueStatus = 'pending' | 'transcribed' | 'failed'
@@ -16,6 +21,11 @@ export type QueueStatus = 'pending' | 'transcribed' | 'failed'
 export interface QueuedRecording {
   /** Also sent to the server as `clientId`, so retries are recognisable. */
   id: string
+  /**
+   * The signed-in account that recorded it (null only when nobody was signed in, e.g. in tests).
+   * Items saved before this field existed have none and are treated as null.
+   */
+  ownerId?: string | null
   status: QueueStatus
   /**
    * The recorded bytes while `pending` / `failed`; deleted once the transcript is in. Stored as an
@@ -66,9 +76,10 @@ export function newRecordingId(): string {
   return `rec_${rnd}`
 }
 
-export async function enqueueRecording(input: { id?: string; audio: Blob; mimeType?: string; durationSeconds: number; liveTranscript?: string; now?: Date }): Promise<QueuedRecording> {
+export async function enqueueRecording(input: { id?: string; ownerId?: string | null; audio: Blob; mimeType?: string; durationSeconds: number; liveTranscript?: string; now?: Date }): Promise<QueuedRecording> {
   const item: QueuedRecording = {
     id: input.id ?? newRecordingId(),
+    ownerId: input.ownerId ?? null,
     status: 'pending',
     audio: await blobBytes(input.audio),
     mimeType: input.mimeType || input.audio.type || 'audio/webm',
@@ -94,20 +105,44 @@ export function audioBlob(item: QueuedRecording): Blob | null {
   return item.audio ? new Blob([item.audio], { type: item.mimeType }) : null
 }
 
-export async function getRecording(id: string): Promise<QueuedRecording | undefined> {
+function ownedBy(item: QueuedRecording, ownerId: string | null): boolean {
+  return (item.ownerId ?? null) === ownerId
+}
+
+async function rawGet(id: string): Promise<QueuedRecording | undefined> {
   return get<QueuedRecording>(id, db())
 }
 
-/** Oldest first. */
-export async function listRecordings(): Promise<QueuedRecording[]> {
-  const all = (await entries<string, QueuedRecording>(db())).map(([, v]) => v)
+/** One of `ownerId`'s recordings (undefined when it is missing or belongs to someone else). */
+export async function getRecording(id: string, ownerId: string | null = null): Promise<QueuedRecording | undefined> {
+  const item = await rawGet(id)
+  return item && ownedBy(item, ownerId) ? item : undefined
+}
+
+/** `ownerId`'s recordings, oldest first. */
+export async function listRecordings(ownerId: string | null = null): Promise<QueuedRecording[]> {
+  const all = (await entries<string, QueuedRecording>(db())).map(([, v]) => v).filter((v) => ownedBy(v, ownerId))
   return all.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 }
 
+/** How many recordings (any account) are on this device. */
+export async function countAllRecordings(): Promise<number> {
+  return (await entries(db())).length
+}
+
+/**
+ * Delete every recording on this device, audio and transcripts, for every account. Called on
+ * sign-out and account deletion so nothing is left for the next person to sign in on this phone.
+ */
+export async function clearRecordingQueue(): Promise<void> {
+  await clear(db())
+  changed()
+}
+
 export async function updateRecording(id: string, patch: Partial<QueuedRecording>): Promise<QueuedRecording | undefined> {
-  const cur = await getRecording(id)
+  const cur = await rawGet(id)
   if (!cur) return undefined
-  const next = { ...cur, ...patch, id: cur.id }
+  const next = { ...cur, ...patch, id: cur.id, ownerId: cur.ownerId ?? null }
   await set(id, next, db())
   changed()
   return next
@@ -152,17 +187,18 @@ export function errorMessage(err: unknown): string {
  */
 const inFlight = new Map<string, Promise<QueuedRecording>>()
 
-export function uploadRecording(id: string, upload: Uploader): Promise<QueuedRecording> {
+export function uploadRecording(id: string, upload: Uploader, ownerId: string | null = null): Promise<QueuedRecording> {
   // The log screen and the background retry may both try the same recording: share one upload.
-  const cur = inFlight.get(id)
+  const key = `${ownerId ?? ''}\u0000${id}`
+  const cur = inFlight.get(key)
   if (cur) return cur
-  const p = doUpload(id, upload).finally(() => inFlight.delete(id))
-  inFlight.set(id, p)
+  const p = doUpload(id, upload, ownerId).finally(() => inFlight.delete(key))
+  inFlight.set(key, p)
   return p
 }
 
-async function doUpload(id: string, upload: Uploader): Promise<QueuedRecording> {
-  const item = await getRecording(id)
+async function doUpload(id: string, upload: Uploader, ownerId: string | null): Promise<QueuedRecording> {
+  const item = await getRecording(id, ownerId)
   if (!item) throw new Error('That recording is no longer on this phone.')
   if (item.status === 'transcribed') return item
   if (!item.audio) throw new Error('That recording has no audio left to upload.')
@@ -175,31 +211,39 @@ async function doUpload(id: string, upload: Uploader): Promise<QueuedRecording> 
   }
 }
 
-let flushing: Promise<{ uploaded: number; failed: number }> | null = null
+let flushing: { ownerId: string | null; token: object; run: Promise<{ uploaded: number; failed: number }> } | null = null
 
-/** Upload every `pending` recording, one at a time. Concurrent calls share one run. */
-export function flushQueue(upload: Uploader, opts: { includeFailed?: boolean } = {}): Promise<{ uploaded: number; failed: number }> {
-  if (flushing) return flushing
-  flushing = (async () => {
+/**
+ * Upload every `pending` recording of `ownerId` (only theirs), one at a time. Concurrent calls for
+ * the same account share one run.
+ */
+export function flushQueue(upload: Uploader, opts: { includeFailed?: boolean; ownerId?: string | null } = {}): Promise<{ uploaded: number; failed: number }> {
+  const ownerId = opts.ownerId ?? null
+  if (flushing && flushing.ownerId === ownerId) return flushing.run
+  const before = flushing?.run.catch(() => undefined)
+  const token = {}
+  const run = (async () => {
     let uploaded = 0
     let failed = 0
     try {
-      for (const item of await listRecordings()) {
+      await before
+      for (const item of await listRecordings(ownerId)) {
         if (item.status === 'transcribed') continue
         if (item.status === 'failed' && !opts.includeFailed) continue
         try {
-          await uploadRecording(item.id, upload)
+          await uploadRecording(item.id, upload, ownerId)
           uploaded++
         } catch {
           failed++
         }
       }
     } finally {
-      flushing = null
+      if (flushing?.token === token) flushing = null
     }
     return { uploaded, failed }
   })()
-  return flushing
+  flushing = { ownerId, token, run }
+  return run
 }
 
 export interface QueueSummary {

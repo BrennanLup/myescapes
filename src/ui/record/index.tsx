@@ -288,6 +288,11 @@ export function RecordOverlay() {
               </div>
             )}
             {cap.speechError && !fallback && <p className="text-sm text-bad">{cap.speechError}</p>}
+            {!fallback && !recording && (
+              <p className="text-xs text-ink-soft" data-testid="speech-notice">
+                The live transcript uses your browser's speech recognition (Google in Chrome, Apple in Safari, Microsoft in Edge), which may process your voice. Prefer not to? Type or paste your notes instead.
+              </p>
+            )}
 
             {recording ? (
               <div

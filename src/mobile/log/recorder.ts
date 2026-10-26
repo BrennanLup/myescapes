@@ -1,10 +1,12 @@
 /**
- * Phone recorder for the log flow: MediaRecorder audio (the thing we upload) plus the browser's
- * live captions as a preview and fallback. Unlike the Phase 1 overlay's hook this hands back the
+ * Phone recorder for the log flow: MediaRecorder audio (the thing we upload) plus, only if the
+ * person turns them on, the browser's live captions as a preview and fallback. Captions are off by
+ * default because the browser's speech service (Google in Chrome, Apple in Safari) may receive the
+ * audio; see `liveCaptionsEnabled` in src/ui/record/speech.ts. Unlike the Phase 1 overlay's hook this hands back the
  * recorded Blob so it can be queued in IndexedDB and uploaded.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { foldResults, getSpeechRecognition, hasMicrophoneApi, joinSentence, type SpeechRecognitionLike } from '../../ui/record/speech'
+import { foldResults, getSpeechRecognition, hasMicrophoneApi, joinSentence, liveCaptionsEnabled, setLiveCaptionsEnabled, type SpeechRecognitionLike } from '../../ui/record/speech'
 
 export type RecorderStatus = 'idle' | 'requesting' | 'recording'
 
@@ -46,6 +48,11 @@ export interface PhoneRecorder {
   error: string | null
   elapsed: number
   liveText: string
+  /** Whether this browser offers live captions at all. */
+  captionsAvailable: boolean
+  /** Live captions are on (opt-in, remembered on this device). */
+  captions: boolean
+  setCaptions(on: boolean): void
   start(): Promise<boolean>
   /** Stop and hand back the recording (null if nothing was captured). */
   stop(): Promise<Recording | null>
@@ -59,6 +66,14 @@ export function usePhoneRecorder(): PhoneRecorder {
   const [elapsed, setElapsed] = useState(0)
   const [liveText, setLiveText] = useState('')
   const supported = hasMicrophoneApi()
+  const captionsAvailable = getSpeechRecognition() !== null
+  const [captions, setCaptionsState] = useState(liveCaptionsEnabled)
+  const captionsOn = useRef(captions)
+  const setCaptions = useCallback((on: boolean) => {
+    captionsOn.current = on
+    setCaptionsState(on)
+    setLiveCaptionsEnabled(on)
+  }, [])
 
   const stream = useRef<MediaStream | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
@@ -112,6 +127,8 @@ export function usePhoneRecorder(): PhoneRecorder {
   )
 
   const startRecognition = useCallback(() => {
+    // Off unless the person opted in: the browser's speech service may receive the audio.
+    if (!captionsOn.current) return
     const Ctor = getSpeechRecognition()
     if (!Ctor) return
     let rec: SpeechRecognitionLike
@@ -239,5 +256,5 @@ export function usePhoneRecorder(): PhoneRecorder {
     setLiveText('')
   }, [teardown])
 
-  return { status, supported, error, elapsed, liveText, start, stop, cancel }
+  return { status, supported, error, elapsed, liveText, captionsAvailable, captions, setCaptions, start, stop, cancel }
 }

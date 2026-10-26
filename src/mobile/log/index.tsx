@@ -99,21 +99,24 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
   const [ticked, setTicked] = useState<Set<string>>(new Set())
   const { suggestions } = useCrewSuggestions(true, fetchImpl)
 
+  // The account the queued recordings belong to: only its own can be resumed or uploaded.
+  const ownerId = me?.id ?? null
+
   // Resuming a queued recording: its transcript (or live captions) is the starting text.
   useEffect(() => {
     if (!resumeRecordingId) return
-    void getRecording(resumeRecordingId).then((item) => {
+    void getRecording(resumeRecordingId, ownerId).then((item) => {
       if (!item) return
       setTranscript(item.transcript ?? item.liveTranscript)
       if (item.status !== 'transcribed') setUploadNote(`Still waiting to upload. ${item.lastError ?? ''}`.trim())
     })
-  }, [resumeRecordingId])
+  }, [resumeRecordingId, ownerId])
 
   const upload = async (id: string, fallbackText: string) => {
     setStep({ kind: 'uploading' })
     setUploadNote(null)
     try {
-      const item = await uploadRecording(id, (it) => transcribe(it, opts))
+      const item = await uploadRecording(id, (it) => transcribe(it, opts), ownerId)
       setTranscript(item.transcript ?? fallbackText)
     } catch (err) {
       setTranscript((t) => t || fallbackText)
@@ -130,7 +133,7 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
     }
     let id: string
     try {
-      id = (await enqueueRecording({ audio: take.blob, mimeType: take.mimeType, durationSeconds: take.durationSeconds, liveTranscript: take.liveTranscript })).id
+      id = (await enqueueRecording({ ownerId, audio: take.blob, mimeType: take.mimeType, durationSeconds: take.durationSeconds, liveTranscript: take.liveTranscript })).id
     } catch {
       // No IndexedDB (old private mode): upload straight from memory, without the retry queue.
       setStep({ kind: 'uploading' })
@@ -258,6 +261,14 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
                 <p data-testid="record-mic-error" className="text-sm text-bad">
                   {rec.error}
                 </p>
+              )}
+              {rec.supported && rec.captionsAvailable && (
+                <label className="flex items-start gap-2 text-sm text-ink-soft">
+                  <input type="checkbox" data-testid="record-captions" className="mt-1" checked={rec.captions} onChange={(e) => rec.setCaptions(e.target.checked)} />
+                  <span>
+                    Show live captions while I talk. Your browser's speech service (Google in Chrome, Apple in Safari) may process the audio to make them. Off means the recording is only sent to our transcription service.
+                  </span>
+                </label>
               )}
               {rec.supported && (
                 <button type="button" data-testid="record-start" disabled={rec.status === 'requesting'} className={btnPrimary} onClick={() => void rec.start()}>

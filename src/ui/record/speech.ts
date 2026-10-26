@@ -40,6 +40,31 @@ export function getSpeechRecognition(): SpeechRecognitionCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
+/**
+ * Live captions on the phone are opt-in. The browser's built-in speech recognition may send the
+ * microphone audio to its maker (Google in Chrome, Apple in Safari), so by default the only place
+ * voice-note audio goes is our own upload (OpenAI transcription), as public/privacy.html says.
+ * The choice is remembered per device (a convenience, so storage failures just mean "off").
+ */
+export const LIVE_CAPTIONS_KEY = 'myescapes.liveCaptions'
+
+export function liveCaptionsEnabled(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(LIVE_CAPTIONS_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+
+export function setLiveCaptionsEnabled(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(LIVE_CAPTIONS_KEY, 'on')
+    else localStorage.removeItem(LIVE_CAPTIONS_KEY)
+  } catch {
+    /* not remembered */
+  }
+}
+
 export function hasMicrophoneApi(): boolean {
   return (
     typeof navigator !== 'undefined' &&

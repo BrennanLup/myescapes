@@ -7,9 +7,10 @@
  * for the mobile shell to embed (e.g. at /m/settings).
  */
 import { useEffect, useState } from 'react'
-import { signInWithGoogle, signOut } from '../../auth'
+import { clearLocalAccountData, signInWithGoogle, signOut } from '../../auth'
 import type { Me } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
+import { listRecordings, subscribeQueue } from '../../mobile/log/queue'
 import type { RouteProps } from '../../router'
 import { checkHandle, downloadText, exportFileName, fetchExport, isUnauthorized, localHandleCheck, type HandleCheck } from '../client'
 import { FriendsPanel, Inbox, LegalLinks } from '../index'
@@ -258,10 +259,32 @@ function DataCard() {
 
 export const DELETE_WORD = 'DELETE'
 
+/** How many of this account's recordings are still only on this device (not logged yet). */
+function useQueuedOnDevice(ownerId: string): number {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    let live = true
+    const load = () =>
+      void listRecordings(ownerId)
+        .then((items) => live && setN(items.length))
+        .catch(() => {
+          /* no IndexedDB: nothing queued */
+        })
+    load()
+    const off = subscribeQueue(load)
+    return () => {
+      live = false
+      off()
+    }
+  }, [ownerId])
+  return n
+}
+
 function AccountCard({ me }: { me: Me }) {
   const act = useAction()
   const [open, setOpen] = useState(false)
   const [typed, setTyped] = useState('')
+  const queued = useQueuedOnDevice(me.id)
 
   const doSignOut = () =>
     act.run(async () => {
@@ -271,6 +294,8 @@ function AccountCard({ me }: { me: Me }) {
   const doDelete = () =>
     act.run(async () => {
       await callApi(ROUTES.deleteMe, { body: { confirm: DELETE_WORD } })
+      // Voice notes still queued on this phone (audio or transcripts) go too, as the privacy page promises.
+      await clearLocalAccountData()
       // The server already ended the session; signing out client-side too clears any cached state.
       await signOut().catch(() => undefined)
       settingsNav.leave('/welcome?deleted=1')
@@ -279,6 +304,11 @@ function AccountCard({ me }: { me: Me }) {
   return (
     <Card title="Account" testId="account-card">
       <p className="mb-3 text-sm text-ink-soft">Signed in with Google as {me.email}.</p>
+      {queued > 0 && (
+        <p className="mb-3 rounded-lg bg-warn/20 p-2 text-sm" data-testid="queued-warning">
+          {queued} voice note{queued === 1 ? ' is' : 's are'} still on this device and not logged yet. Signing out or deleting your account removes {queued === 1 ? 'it' : 'them'} from this device.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button disabled={act.busy} onClick={() => void doSignOut()} data-testid="sign-out">
           Sign out

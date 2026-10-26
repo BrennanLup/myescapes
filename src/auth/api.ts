@@ -3,7 +3,20 @@
  */
 import type { Me } from '../contracts/models'
 import { callApi, ROUTES } from '../contracts/routes'
+import { clearRecordingQueue } from '../mobile/log/queue'
 import { setSessionUser, type SessionState } from './session'
+
+/**
+ * Remove what this account left on the device: the phone's recording queue (audio and
+ * transcripts in IndexedDB). Never throws; IndexedDB may be unavailable (old private mode).
+ */
+export async function clearLocalAccountData(): Promise<void> {
+  try {
+    await clearRecordingQueue()
+  } catch {
+    /* nothing stored on this device */
+  }
+}
 
 /** Signed in, but no public name yet: show onboarding before anything can be public. */
 export function needsOnboarding(s: SessionState): boolean {
@@ -24,10 +37,12 @@ export async function signInWithGoogle(callbackURL = '/', fetchImpl: typeof fetc
   window.location.assign(body.url)
 }
 
+/** Ends the session and clears this account's data from the device (the recording queue). */
 export async function signOut(fetchImpl: typeof fetch = fetch): Promise<void> {
   try {
     await fetchImpl('/api/auth/sign-out', { method: 'POST', headers: { 'content-type': 'application/json' }, credentials: 'same-origin', body: '{}' })
   } finally {
+    await clearLocalAccountData()
     setSessionUser(null)
   }
 }
@@ -46,6 +61,7 @@ export async function checkHandle(handle: string, fetchImpl?: typeof fetch) {
 /** Delete my account (the privacy policy's promise). Signs out locally too. */
 export async function deleteAccount(fetchImpl?: typeof fetch): Promise<void> {
   await callApi(ROUTES.deleteMe, { body: { confirm: 'DELETE' } }, { fetch: fetchImpl })
+  await clearLocalAccountData()
   setSessionUser(null)
 }
 

@@ -83,8 +83,8 @@ describe('MobileApp', () => {
 
   it('home: big log button, visits to confirm, recordings waiting, transcripts ready, view on desktop', async () => {
     session.current = { status: 'signed-in', user: ME }
-    const waiting = await enqueueRecording({ audio: new Blob([new Uint8Array([1])], { type: 'audio/webm' }), durationSeconds: 3 })
-    const ready = await enqueueRecording({ audio: new Blob([new Uint8Array([2])], { type: 'audio/webm' }), durationSeconds: 3 })
+    const waiting = await enqueueRecording({ ownerId: ME.id, audio: new Blob([new Uint8Array([1])], { type: 'audio/webm' }), durationSeconds: 3 })
+    const ready = await enqueueRecording({ ownerId: ME.id, audio: new Blob([new Uint8Array([2])], { type: 'audio/webm' }), durationSeconds: 3 })
     await markTranscribed(ready.id, 'done already')
     let transcribeCalls = 0
     const fetchMock = vi.fn(async (url: string) => {
@@ -113,6 +113,32 @@ describe('MobileApp', () => {
 
     await userEvent.click(screen.getByTestId('upload-ready'))
     expect(window.location.pathname + window.location.search).toBe(`/m/log?resume=${ready.id}`)
+  })
+
+  it("home: another account's recordings left on this phone are not shown or uploaded", async () => {
+    session.current = { status: 'signed-in', user: ME }
+    const other = await enqueueRecording({ ownerId: 'usr_previous', audio: new Blob([new Uint8Array([1])], { type: 'audio/webm' }), durationSeconds: 3 })
+    const theirs = await enqueueRecording({ ownerId: 'usr_previous', audio: new Blob([new Uint8Array([2])], { type: 'audio/webm' }), durationSeconds: 3 })
+    await markTranscribed(theirs.id, "someone else's transcript")
+    let transcribeCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/transcribe') {
+        transcribeCalls++
+        return json({ transcript: 'x' })
+      }
+      return json({ error: 'x', code: 'not_implemented' }, 501)
+    })
+    render(<MobileApp rest="/" fetch={fetchMock as unknown as typeof fetch} />)
+    expect(await screen.findByTestId('mobile-home')).toBeTruthy()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+      window.dispatchEvent(new Event('online'))
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    expect(transcribeCalls).toBe(0)
+    expect(screen.queryByTestId('upload-queue')).toBeNull()
+    expect(screen.queryByTestId('upload-ready')).toBeNull()
+    expect(other.id).toBeTruthy()
   })
 
   it('visits to confirm counts pending tags and guest-name claims once per visit', async () => {

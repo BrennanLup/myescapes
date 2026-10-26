@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiCallError } from '../../contracts/errors'
 import {
   audioBlob,
+  clearRecordingQueue,
+  countAllRecordings,
   enqueueRecording,
   flushQueue,
   getRecording,
@@ -111,5 +113,42 @@ describe('recording queue (IndexedDB)', () => {
     expect(fn).toHaveBeenCalledTimes(3)
     expect(await listRecordings()).toEqual([])
     await expect(uploadRecording(item.id, async () => ({ transcript: 'x' }))).rejects.toThrow(/no longer/)
+  })
+})
+
+describe('recordings belong to the account that made them', () => {
+  it('another account on the same phone can neither list, resume nor upload them', async () => {
+    const a = await enqueueRecording({ ownerId: 'usr_a', audio: audio(), durationSeconds: 4, liveTranscript: 'secret' })
+    const b = await enqueueRecording({ ownerId: 'usr_b', audio: audio(), durationSeconds: 4 })
+    expect((await listRecordings('usr_a')).map((i) => i.id)).toEqual([a.id])
+    expect((await listRecordings('usr_b')).map((i) => i.id)).toEqual([b.id])
+    expect(await getRecording(a.id, 'usr_b')).toBeUndefined()
+    expect((await getRecording(a.id, 'usr_a'))?.liveTranscript).toBe('secret')
+
+    const upload = vi.fn(async (item: { id: string }) => ({ transcript: `t-${item.id}` }))
+    expect(await flushQueue(upload, { ownerId: 'usr_b', includeFailed: true })).toEqual({ uploaded: 1, failed: 0 })
+    expect(upload.mock.calls.map(([item]) => item.id)).toEqual([b.id])
+    await expect(uploadRecording(a.id, upload, 'usr_b')).rejects.toThrow(/no longer/)
+    expect(upload).toHaveBeenCalledTimes(1)
+    // A's audio is untouched and still theirs.
+    expect(await getRecording(a.id, 'usr_a')).toMatchObject({ status: 'pending', ownerId: 'usr_a' })
+  })
+
+  it('items saved before owners were recorded are not shown to a signed-in account', async () => {
+    const legacy = await enqueueRecording({ audio: audio(), durationSeconds: 1 })
+    expect(await listRecordings('usr_a')).toEqual([])
+    expect(await getRecording(legacy.id, 'usr_a')).toBeUndefined()
+  })
+
+  it('clearRecordingQueue deletes every recording, audio and transcripts, for every account', async () => {
+    await enqueueRecording({ ownerId: 'usr_a', audio: audio(), durationSeconds: 1 })
+    const t = await enqueueRecording({ ownerId: 'usr_b', audio: audio(), durationSeconds: 1 })
+    await markTranscribed(t.id, 'kept transcript')
+    const fn = vi.fn()
+    const off = subscribeQueue(fn)
+    await clearRecordingQueue()
+    off()
+    expect(fn).toHaveBeenCalled()
+    expect(await countAllRecordings()).toBe(0)
   })
 })

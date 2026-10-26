@@ -1,8 +1,11 @@
+import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { Me } from '../contracts/models'
-import { localHandleProblem, needsOnboarding, Onboarding, OnboardingGate, refreshSession, signInWithGoogle, signOut, suggestHandle, useSession } from './index'
+import { IDBFactory } from 'fake-indexeddb'
+import { countAllRecordings, enqueueRecording, resetQueueStoreForTests } from '../mobile/log/queue'
+import { deleteAccount, localHandleProblem, needsOnboarding, Onboarding, OnboardingGate, refreshSession, signInWithGoogle, signOut, suggestHandle, useSession } from './index'
 import { resetSessionForTests } from './session'
 
 const me = (over: Partial<Me> = {}): Me => ({
@@ -81,6 +84,24 @@ describe('session', () => {
     expect(url).toBe('/api/auth/sign-in/social')
     expect(JSON.parse(init.body)).toMatchObject({ provider: 'google', callbackURL: '/m' })
     expect(assign).toHaveBeenCalledWith('https://accounts.google.com/o/oauth2/v2/auth?x=1')
+  })
+
+  it('signOut deletes the recording queue on this device, even if the request fails', async () => {
+    globalThis.indexedDB = new IDBFactory()
+    resetQueueStoreForTests()
+    await enqueueRecording({ ownerId: 'usr_a', audio: new Blob([new Uint8Array([1, 2])], { type: 'audio/webm' }), durationSeconds: 2 })
+    fetchMock.mockRejectedValueOnce(new Error('offline'))
+    await expect(signOut()).rejects.toThrow('offline')
+    expect(await countAllRecordings()).toBe(0)
+  })
+
+  it('deleteAccount deletes the recording queue on this device', async () => {
+    globalThis.indexedDB = new IDBFactory()
+    resetQueueStoreForTests()
+    await enqueueRecording({ ownerId: 'usr_a', audio: new Blob([new Uint8Array([1, 2])], { type: 'audio/webm' }), durationSeconds: 2 })
+    fetchMock.mockResolvedValueOnce(json(200, { deleted: true }))
+    await deleteAccount()
+    expect(await countAllRecordings()).toBe(0)
   })
 
   it('signOut clears the session even if the request fails', async () => {

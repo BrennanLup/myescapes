@@ -220,6 +220,13 @@ describe('RecordOverlay', () => {
     expect((screen.getByTestId('extract-submit') as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it("tells you before recording that the browser's speech recognition may process your voice", () => {
+    installMic()
+    installSpeech()
+    render(<RecordOverlay />)
+    expect(screen.getByTestId('speech-notice').textContent).toMatch(/browser's speech recognition \(Google in Chrome, Apple in Safari/)
+  })
+
   it('records with live transcript, emits start/stop and stops tracks', async () => {
     installMic()
     installSpeech()

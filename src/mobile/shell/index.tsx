@@ -96,7 +96,7 @@ export function MobileApp({ rest = '/', fetch: fetchImpl }: MobileAppProps) {
       </section>
     )
   } else {
-    body = <Home fetch={fetchImpl} />
+    body = <Home fetch={fetchImpl} meId={user.id} />
   }
 
   return (
@@ -128,9 +128,9 @@ export function MobileApp({ rest = '/', fetch: fetchImpl }: MobileAppProps) {
   )
 }
 
-function Home({ fetch: fetchImpl }: { fetch?: typeof fetch }) {
+function Home({ fetch: fetchImpl, meId }: { fetch?: typeof fetch; meId: string }) {
   const opts = useMemo(() => (fetchImpl ? { fetch: fetchImpl } : {}), [fetchImpl])
-  const queue = useUploadQueue({ fetch: fetchImpl })
+  const queue = useUploadQueue({ fetch: fetchImpl, ownerId: meId })
   const [pending, setPending] = useState(0)
   useEffect(() => {
     let live = true

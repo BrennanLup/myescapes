@@ -17,31 +17,35 @@ export interface UploadQueue {
   retry(): Promise<void>
 }
 
-export function useUploadQueue(opts: { uploader?: Uploader; auto?: boolean; fetch?: typeof fetch } = {}): UploadQueue {
-  const { auto = true } = opts
+/**
+ * `ownerId` is the signed-in account: only its recordings are listed and uploaded, so another
+ * person's recordings left on a shared phone are never sent under this account's session.
+ */
+export function useUploadQueue(opts: { ownerId: string | null; uploader?: Uploader; auto?: boolean; fetch?: typeof fetch }): UploadQueue {
+  const { auto = true, ownerId } = opts
   const [items, setItems] = useState<QueuedRecording[]>([])
   const [uploading, setUploading] = useState(false)
   const uploader = useRef<Uploader>(opts.uploader ?? ((item) => transcribe(item, opts.fetch ? { fetch: opts.fetch } : {})))
 
   const refresh = useCallback(async () => {
     try {
-      setItems(await listRecordings())
+      setItems(await listRecordings(ownerId))
     } catch {
       /* IndexedDB unavailable (private mode on old Safari): nothing queued */
     }
-  }, [])
+  }, [ownerId])
 
   const run = useCallback(async (includeFailed: boolean) => {
     setUploading(true)
     try {
-      await flushQueue(uploader.current, { includeFailed })
+      await flushQueue(uploader.current, { includeFailed, ownerId })
     } catch {
       /* errors are recorded on the items */
     } finally {
       setUploading(false)
       void refresh()
     }
-  }, [refresh])
+  }, [refresh, ownerId])
 
   useEffect(() => {
     void refresh()
