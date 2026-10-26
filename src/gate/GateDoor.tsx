@@ -107,10 +107,10 @@ function makeSignTexture(solved: boolean): THREE.Texture | null {
   g.textAlign = 'center'
   g.textBaseline = 'middle'
   g.font = "600 64px 'Fredoka', 'Nunito', sans-serif"
-  g.fillText(solved ? 'SOLVED TODAY' : 'DAILY LOCK', 256, 62)
+  g.fillText(solved ? 'SOLVED TODAY' : 'ESCAPE OF THE DAY', 256, 62, 480)
   g.font = "600 44px 'Caveat', 'Nunito', cursive"
   g.fillStyle = '#7a6258'
-  g.fillText(solved ? 'come back tomorrow' : 'crack it to enter', 256, 120)
+  g.fillText(solved ? 'come back tomorrow' : 'open the door to play', 256, 120, 480)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   return tex

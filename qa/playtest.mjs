@@ -389,53 +389,71 @@ function makeRecorder(bag) {
   }
 }
 
-// ---------------------------------------------------------------- gate
+// ---------------------------------------------------------------- Escape of the Day (the door)
+// Phase 2 replaced the auto-opening gate with Escape of the Day (src/daily/ui/overlay.tsx): the
+// door opens it (bus 'gate:open'), it never opens on its own, and window.__ESCAPE_DAILY__
+// exposes { kind, mode, answer() } while a puzzle is mounted.
 
-async function gateKind(page) {
-  return page.getByTestId('gate-overlay').getAttribute('data-gate-kind')
+async function openDoor(page) {
+  await page.evaluate(() => window.__ESCAPE__.bus.emit('gate:open'))
+  await page.getByTestId('daily-overlay').waitFor({ state: 'visible', timeout: SLOW })
 }
 
-async function solveGate(page) {
-  const answer = await page.evaluate(() => window.__ESCAPE_GATE__.answer())
-  if (Array.isArray(answer)) {
-    for (const id of answer) {
-      // answer holds target ids; map to their index-based testids.
-      const byId = page.locator(`[data-target-id="${id}"]`)
-      if (await byId.count()) await byId.first().click()
-      else await page.getByTestId(`gate-target-${id}`).click()
-    }
-  } else if ((await page.locator(`[data-choice-id="${answer}"]`).count()) > 0) {
-    await page.locator(`[data-choice-id="${answer}"]`).click()
+async function dailyHook(page) {
+  return page.evaluate(() => ({ kind: window.__ESCAPE_DAILY__.kind, mode: window.__ESCAPE_DAILY__.mode, answer: window.__ESCAPE_DAILY__.answer() }))
+}
+
+async function startDaily(page) {
+  await page.getByTestId('daily-start').click({ timeout: SLOW })
+  return dailyHook(page)
+}
+
+/** Plays the answer as one guess (after startDaily). */
+async function solveDaily(page) {
+  const hook = await dailyHook(page)
+  if (hook.kind === 'search') {
+    for (const id of hook.answer) await page.getByTestId(`gate-target-${id}`).click()
+  } else if (hook.kind === 'sequence' && hook.mode === 'shape') {
+    for (const id of hook.answer) await page.getByTestId(`daily-choice-${id}`).click()
+    await page.getByTestId('daily-submit').click()
+  } else if (hook.kind === 'sequence') {
+    for (let i = 0; i < hook.answer.length; i++) await page.getByTestId(`daily-input-${i}`).fill(hook.answer[i])
+    await page.getByTestId('daily-submit').click()
   } else {
-    await page.getByTestId('gate-answer').fill(String(answer))
-    await page.getByTestId('gate-submit').click()
+    await page.getByTestId('daily-input').fill(hook.answer.join(''))
+    await page.getByTestId('daily-submit').click()
   }
-  return answer
+  await page.getByTestId('daily-finished').waitFor({ timeout: SLOW })
+  return hook
 }
 
-async function missGate(page) {
-  const answer = await page.evaluate(() => window.__ESCAPE_GATE__.answer())
-  if (Array.isArray(answer)) {
-    // Click the search picture away from every target.
-    const box = await page.locator('[data-testid=gate-overlay] svg[role=img]').first().boundingBox()
-    await page.mouse.click(box.x + 3, box.y + 3)
-    return 'clicked empty picture corner'
+/** Plays one wrong guess (after startDaily). */
+async function missDaily(page) {
+  const hook = await dailyHook(page)
+  const n = hook.answer.length
+  if (hook.kind === 'search') {
+    const box = await page.locator('[data-testid=daily-game] svg[role=img]').first().boundingBox()
+    for (let i = 0; i < n; i++) await page.mouse.click(box.x + 3, box.y + 3)
+    return 'tapped empty picture corner'
   }
-  const choices = page.locator('[data-choice-id]')
-  if ((await choices.count()) > 0) {
-    const n = await choices.count()
-    for (let i = 0; i < n; i++) {
-      const id = await choices.nth(i).getAttribute('data-choice-id')
-      if (id !== answer) {
-        await choices.nth(i).click()
-        return 'choice ' + id
-      }
-    }
+  if (hook.kind === 'sequence' && hook.mode === 'shape') {
+    const choices = page.locator('[data-testid^=daily-choice-]')
+    const ids = []
+    for (let i = 0; i < (await choices.count()); i++) ids.push((await choices.nth(i).getAttribute('data-testid')).slice('daily-choice-'.length))
+    const wrong = ids.find((id) => id !== hook.answer[0]) ?? ids[0]
+    for (let i = 0; i < n; i++) await page.getByTestId(`daily-choice-${wrong}`).click()
+    await page.getByTestId('daily-submit').click()
+    return 'tiles ' + wrong
   }
-  const s = String(answer)
-  const wrong = /^\d+$/.test(s) ? (s[0] === '1' ? '2' : '1').repeat(s.length) : 'ZZQX'
-  await page.getByTestId('gate-answer').fill(wrong)
-  await page.getByTestId('gate-submit').click()
+  if (hook.kind === 'sequence') {
+    for (let i = 0; i < n; i++) await page.getByTestId(`daily-input-${i}`).fill(String(Number(hook.answer[i]) + 999))
+    await page.getByTestId('daily-submit').click()
+    return 'numbers +999'
+  }
+  const digits = /^\d$/.test(hook.answer[0])
+  const wrong = hook.answer.map((ch) => (digits ? (ch === '1' ? '2' : '1') : ch === 'Z' ? 'Q' : 'Z')).join('')
+  await page.getByTestId('daily-input').fill(wrong)
+  await page.getByTestId('daily-submit').click()
   return 'typed ' + wrong
 }
 
@@ -516,27 +534,34 @@ async function runViewport(browser, vp) {
     void worldReadyAt
   })
 
-  // 2. Daily gate ------------------------------------------------------------
+  // 2. Escape of the Day behind the door -------------------------------------
   await step('2-gate', async ({ check, details }) => {
-    await page.getByTestId('gate-overlay').waitFor({ state: 'visible', timeout: SLOW })
-    check('gate auto-opens on a fresh profile', true)
-    details.kind = await gateKind(page)
-    await H.shot('gate-open')
-    details.answer = await solveGate(page)
-    await page.getByTestId('gate-reveal').waitFor({ timeout: SLOW })
-    await page
-      .waitForFunction(() => document.querySelector('[data-testid=gate-overlay]').getAnimations({ subtree: true }).every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity), null, { timeout: 15_000 })
-      .catch(() => {})
-    await H.shot('gate-solved')
-    details.revealText = (await page.getByTestId('gate-reveal').innerText()).replace(/\s+/g, ' ').trim()
-    check('reveal says it opened', /opens|Solved/i.test(details.revealText))
-    check('reveal shows no raw id slug (e.g. lock-and-key)', !/\b[a-z]+(?:-[a-z]+){2,}\b/.test(details.revealText), details.revealText)
-    await page.getByTestId('gate-continue').click()
+    let autoOpened = false
+    for (let i = 0; i < 6; i++) {
+      if ((await H.state('overlay.kind')) === 'gate' || (await page.getByTestId('daily-overlay').count()) > 0) autoOpened = true
+      await sleep(400)
+    }
+    check('nothing opens on its own (Escape of the Day never blocks entry)', !autoOpened)
+    await openDoor(page)
+    await H.shot('daily-open')
+    await page.keyboard.press('Escape')
     await H.waitOverlay(null)
-    check('gate stored as solved today', !!(await page.evaluate(() => localStorage.getItem('myescapes.gate.lastSolved'))))
+    check('Esc closes the door overlay', true)
+    await openDoor(page)
+    const hook = await startDaily(page)
+    details.kind = hook.kind
+    details.mode = hook.mode
+    await solveDaily(page)
+    await H.shot('daily-solved')
+    details.outcome = (await page.getByTestId('daily-outcome').innerText().catch(() => '')).replace(/\s+/g, ' ').trim()
+    const share = await page.getByTestId('daily-share-text').innerText().catch(() => '')
+    check('share text is spoiler-free (no answer in it)', share.length > 0 && !share.includes(hook.answer.join('')), share)
+    await page.getByTestId('daily-close').click()
+    await H.waitOverlay(null)
+    check('door stored as solved today', !!(await page.evaluate(() => localStorage.getItem('myescapes.gate.lastSolved'))))
     await page.waitForFunction(() => window.__ESCAPE__.store.getState().boardPins.length > 0, null, { timeout: SLOW })
-    await H.shot('room-after-gate')
-    // Reload in the same context: no gate.
+    await H.shot('room-after-daily')
+    // Reload in the same context: still nothing opens on its own.
     await page.reload({ waitUntil: 'commit' })
     await page.waitForFunction(() => {
       const s = window.__ESCAPE__?.store.getState()
@@ -544,10 +569,10 @@ async function runViewport(browser, vp) {
     }, null, { timeout: 240_000 })
     let reopened = false
     for (let i = 0; i < 12; i++) {
-      if ((await H.state('overlay.kind')) === 'gate' || (await page.getByTestId('gate-overlay').count()) > 0) reopened = true
+      if ((await H.state('overlay.kind')) === 'gate' || (await page.getByTestId('daily-overlay').count()) > 0) reopened = true
       await sleep(400)
     }
-    check('gate does not show again after reload', !reopened)
+    check('nothing opens after reload', !reopened)
     await H.shot('reload-no-gate')
   })
 
@@ -1138,86 +1163,72 @@ async function runViewport(browser, vp) {
     await H.shot('end-hud')
   })
 
-  // Wrong-answer gate flow in a fresh context ---------------------------------
+  // Wrong guesses, hints and giving up, in a fresh context -------------------
   await step('2b-gate-wrong-answers', async ({ check, details }) => {
     const ctx2 = await browser.newContext(vp.options)
+    await ctx2.addInitScript(initScript)
     const p2 = await ctx2.newPage()
     attachCollectors(p2, bag)
     try {
       await p2.goto(BASE + '/?demo=1', { waitUntil: 'commit' })
-      await p2.getByTestId('gate-overlay').waitFor({ state: 'visible', timeout: 240_000 })
-      details.kind = await gateKind(p2)
-      details.miss1 = await missGate(p2)
-      await sleep(600)
-      check('no hints after 1 miss', (await p2.getByTestId('gate-hints').count()) === 0)
-      details.miss2 = await missGate(p2)
-      await sleep(600)
-      const hints = await p2.getByTestId('gate-hints').count()
-      check('2 wrong answers reveal hints', hints > 0)
-      if (hints) {
-        await p2.waitForFunction(() => document.querySelector('[data-testid=gate-hints]').getAnimations({ subtree: true }).every((a) => a.playState !== 'running'), null, { timeout: 30_000 }).catch(() => {})
-        const h = await p2.getByTestId('gate-hints').evaluate((el) => ({ text: el.innerText, opacity: getComputedStyle(el.querySelector('li')).opacity }))
-        details.hint = h
-        check('hint text is visible (opacity 1, non-empty)', h.text.trim().length > 5 && Number(h.opacity) > 0.9, h)
-      }
-      details.skipAfter2 = await p2.getByTestId('gate-skip').isVisible().catch(() => false)
-      await p2.screenshot({ path: path.join(ROOT, `qa/screenshots/${TAG}-${vp.name}-90-gate-two-misses.png`) })
-      bag.shots.push(`qa/screenshots/${TAG}-${vp.name}-90-gate-two-misses.png`)
-      if (!details.skipAfter2) {
-        details.miss3 = await missGate(p2)
-        await sleep(600)
-      }
-      const skipVisible = await p2.getByTestId('gate-skip').isVisible().catch(() => false)
-      check('skip becomes available (after 2 misses, or after the 3rd)', skipVisible, { after2: details.skipAfter2 })
-      await p2.getByTestId('gate-skip').click()
-      // Skip closes the gate straight away (no reveal card); accept either.
-      await p2.waitForFunction(
-        () => (window.__ESCAPE__.store.getState().overlay?.kind ?? null) === null || !!document.querySelector('[data-testid=gate-reveal]'),
-        null,
-        { timeout: SLOW },
-      )
-      details.skipShowsReveal = (await p2.getByTestId('gate-reveal').count()) > 0
-      if (details.skipShowsReveal) await p2.getByTestId('gate-continue').click()
+      await p2.waitForFunction(() => window.__ESCAPE__?.store.getState().worldReady === true, null, { timeout: 240_000 })
+      await openDoor(p2)
+      details.kind = (await startDaily(p2)).kind
+      details.miss1 = await missDaily(p2)
+      details.miss2 = await missDaily(p2)
+      await sleep(400)
+      const rows = await p2.locator('[data-testid^=daily-row-]').count()
+      check('two wrong guesses show two marked rows', rows === 2, rows)
+      details.left = (await p2.getByTestId('daily-left').innerText()).trim()
+      check('guesses-left counter drops to 4', /^4 guesses left/.test(details.left), details.left)
+      await p2.getByTestId('daily-hint').click()
+      const hint = await p2.getByTestId('daily-hints').innerText().catch(() => '')
+      details.hint = hint
+      check('a hint shows when asked for', hint.trim().length > 3, hint)
+      await p2.screenshot({ path: path.join(ROOT, `qa/screenshots/${TAG}-${vp.name}-90-daily-two-misses.png`) })
+      bag.shots.push(`qa/screenshots/${TAG}-${vp.name}-90-daily-two-misses.png`)
+      await p2.getByTestId('daily-give-up').click()
+      await p2.getByTestId('daily-answer').waitFor({ timeout: SLOW })
+      check('giving up shows the answer', true)
+      await p2.screenshot({ path: path.join(ROOT, `qa/screenshots/${TAG}-${vp.name}-91-daily-gave-up.png`) })
+      bag.shots.push(`qa/screenshots/${TAG}-${vp.name}-91-daily-gave-up.png`)
+      await p2.getByTestId('daily-close').click()
       await p2.waitForFunction(() => (window.__ESCAPE__.store.getState().overlay?.kind ?? null) === null, null, { timeout: SLOW })
-      await sleep(1500)
-      await p2.screenshot({ path: path.join(ROOT, `qa/screenshots/${TAG}-${vp.name}-91-gate-skipped.png`) })
-      bag.shots.push(`qa/screenshots/${TAG}-${vp.name}-91-gate-skipped.png`)
-      check('skip enters the room', true)
-      details.lastSolvedAfterSkip = await p2.evaluate(() => localStorage.getItem('myescapes.gate.lastSolved'))
+      check('closing returns to the room', true)
     } finally {
       await ctx2.close()
     }
   })
 
-  // Every gate generator once (layout check), forced via ?gate=force&gateType=.
+  // The /daily page on its own (layout check): renders, fits, solvable.
   await step('2c-gate-kinds', async ({ check, details }) => {
     const ctx3 = await browser.newContext(vp.options)
+    await ctx3.addInitScript(initScript)
     const p3 = await ctx3.newPage()
     attachCollectors(p3, bag)
-    details.kinds = {}
     try {
-      for (const [i, k] of ['lock', 'cipher', 'sequence', 'search', 'recall'].entries()) {
-        await p3.goto(`${BASE}/?demo=1&gate=force&gateType=${k}`, { waitUntil: 'commit' })
-        await p3.getByTestId('gate-overlay').waitFor({ state: 'visible', timeout: 240_000 })
-        await sleep(1200)
-        const kind = await gateKind(p3)
-        const fit = await p3.evaluate(() => ({ sw: document.documentElement.scrollWidth, vw: innerWidth }))
-        const file = `qa/screenshots/${TAG}-${vp.name}-${92 + i}-gate-kind-${k}.png`
-        await p3.screenshot({ path: path.join(ROOT, file) })
-        bag.shots.push(file)
-        let solved = false
-        try {
-          await solveGate(p3)
-          await p3.getByTestId('gate-reveal').waitFor({ timeout: 20_000 })
-          solved = /opens|Solved/i.test(await p3.getByTestId('gate-reveal').innerText())
-        } catch (e) {
-          details.kinds[k + '-error'] = String(e.message).split('\n')[0]
-        }
-        details.kinds[k] = { kind, fit, solved }
-        check(`gate ${k}: renders as ${k}`, kind === k, kind)
-        check(`gate ${k}: solvable through UI`, solved)
-        check(`gate ${k}: no horizontal overflow`, fit.sw <= fit.vw + 1, fit)
+      await p3.goto(`${BASE}/daily`, { waitUntil: 'commit' })
+      await p3.getByTestId('daily-page').waitFor({ state: 'visible', timeout: 240_000 })
+      details.number = (await p3.getByTestId('daily-number').innerText()).trim()
+      check('/daily shows the puzzle number', /Escape #\d+/.test(details.number), details.number)
+      const hook = await startDaily(p3)
+      details.kind = hook.kind
+      await sleep(600)
+      const fit = await p3.evaluate(() => ({ sw: document.documentElement.scrollWidth, vw: innerWidth }))
+      details.fit = fit
+      const file = `qa/screenshots/${TAG}-${vp.name}-92-daily-page-${hook.kind}.png`
+      await p3.screenshot({ path: path.join(ROOT, file) })
+      bag.shots.push(file)
+      check('/daily: no horizontal overflow', fit.sw <= fit.vw + 1, fit)
+      let solved = false
+      try {
+        await solveDaily(p3)
+        solved = true
+      } catch (e) {
+        details.error = String(e.message).split('\n')[0]
       }
+      check(`/daily ${hook.kind}: solvable through UI`, solved)
+      for (const href of ['/about', '/privacy', '/terms']) check(`/daily links ${href}`, (await p3.locator(`a[href="${href}"]`).count()) > 0)
     } finally {
       await ctx3.close()
     }

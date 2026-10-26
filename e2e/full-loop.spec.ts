@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { SLOW, aimAt, roomUrl, fillMissingConfirmFields, playerPosition, solveGate, storeState, waitHover, waitOverlay } from './helpers'
+import { SLOW, aimAt, roomUrl, fillMissingConfirmFields, playerPosition, storeState, waitHover, waitOverlay } from './helpers'
 
 // Board geometry (see src/world/board/index.tsx): sort tabs sit along the top of the cork.
 const BOARD = { x: 0, y: 2.05, faceZ: -7.98 + 0.072 }
@@ -9,18 +9,19 @@ const SORT_ORDER = ['city', 'brand', 'genre', 'date', 'rating', 'escapeTime'] as
 test.describe('full loop', () => {
   test.skip(({ isMobile }) => isMobile, 'keyboard-driven loop; mobile has its own spec')
 
-  test('gate -> walk -> review -> sort -> record -> confirm -> pin -> wish list -> wrap', async ({ page, request }) => {
+  test('enter -> walk -> review -> sort -> record -> confirm -> pin -> wish list -> wrap', async ({ page, request }) => {
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(e.message))
     page.on('console', (m) => {
       if (m.type() === 'error') errors.push(m.text())
     })
 
-    // 1. Loading screen, then the daily gate opens on its own.
+    // 1. Loading screen, then straight into the room (Escape of the Day never blocks entry).
     await page.goto(roomUrl(), { waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('loading-screen')).toBeAttached({ timeout: SLOW })
-    await solveGate(page)
-    await expect(page.getByTestId('loading-screen')).toHaveCount(0)
+    await page.waitForFunction(() => window.__ESCAPE__?.store.getState().worldReady === true, null, { timeout: SLOW })
+    await expect(page.getByTestId('loading-screen')).toHaveCount(0, { timeout: SLOW })
+    expect(await storeState<unknown>(page, 'overlay')).toBeNull()
     await expect(page.getByTestId('hud')).toBeVisible()
     await page.waitForFunction(() => window.__ESCAPE__!.store.getState().boardPins.length > 0, null, { timeout: SLOW })
 

@@ -69,21 +69,26 @@ export async function playerPosition(page: Page): Promise<Vec3> {
   return page.evaluate(() => [...window.__ESCAPE__!.runtime.player.position] as [number, number, number])
 }
 
-/** Solve today's gate, whichever generator it picked, through the real UI. */
-export async function solveGate(page: Page) {
-  const overlay = page.getByTestId('gate-overlay')
-  await expect(overlay).toBeVisible({ timeout: SLOW })
-  const answer = await page.evaluate(() => window.__ESCAPE_GATE__!.answer())
-  if (Array.isArray(answer)) {
-    for (const i of answer) await page.getByTestId(`gate-target-${i}`).click()
-  } else if ((await page.locator(`[data-choice-id="${answer}"]`).count()) > 0) {
-    await page.locator(`[data-choice-id="${answer}"]`).click()
+/**
+ * Solve today's Escape of the Day through the real UI (the /daily page or the door overlay),
+ * whichever generator the date picked. Leaves the finished view on screen.
+ */
+export async function solveDaily(page: Page) {
+  await page.getByTestId('daily-start').click({ timeout: SLOW })
+  const hook = await page.evaluate(() => ({ kind: window.__ESCAPE_DAILY__!.kind, mode: window.__ESCAPE_DAILY__!.mode, answer: window.__ESCAPE_DAILY__!.answer() }))
+  if (hook.kind === 'search') {
+    for (const id of hook.answer) await page.getByTestId(`gate-target-${id}`).click()
+  } else if (hook.kind === 'sequence' && hook.mode === 'shape') {
+    for (const id of hook.answer) await page.getByTestId(`daily-choice-${id}`).click()
+    await page.getByTestId('daily-submit').click()
+  } else if (hook.kind === 'sequence') {
+    for (let i = 0; i < hook.answer.length; i++) await page.getByTestId(`daily-input-${i}`).fill(hook.answer[i])
+    await page.getByTestId('daily-submit').click()
   } else {
-    await page.getByTestId('gate-answer').fill(String(answer))
-    await page.getByTestId('gate-submit').click()
+    await page.getByTestId('daily-input').fill(hook.answer.join(''))
+    await page.getByTestId('daily-submit').click()
   }
-  await page.getByTestId('gate-continue').click({ timeout: SLOW })
-  await waitOverlay(page, null)
+  await expect(page.getByTestId('daily-finished')).toBeVisible({ timeout: SLOW })
 }
 
 /** Fill every required field the confirm form still reports as missing. */

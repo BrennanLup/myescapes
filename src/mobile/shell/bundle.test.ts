@@ -13,7 +13,9 @@ const root = path.resolve(__dirname, '../../..')
 const src = path.join(root, 'src')
 
 const FORBIDDEN_PACKAGES = [/^three($|\/)/, /^@react-three\//, /^postprocessing$/, /^three-stdlib/]
-const FORBIDDEN_FILES = [/^src\/world\//, /^src\/App\.tsx$/, /^src\/desktop\.tsx$/, /^src\/player\//, /^src\/gate\/(GateDoor|SearchScene)/]
+// src/gate/SearchScene.tsx is plain SVG (no three.js) and is shared with Escape of the Day on /m;
+// the forbidden-package check above still fails if it ever imports three.
+const FORBIDDEN_FILES = [/^src\/world\//, /^src\/App\.tsx$/, /^src\/desktop\.tsx$/, /^src\/player\//, /^src\/gate\/GateDoor/, /^src\/gate\/session/, /^src\/state\/store/, /^src\/daily\/ui\/overlay/]
 
 function resolveFile(from: string, spec: string): string | null {
   let base: string
