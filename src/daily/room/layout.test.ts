@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { stepMovement, type MoveState } from '@/player/movement'
-import { clearDistance, orbitPitch, segmentBoxT, THIRD_PERSON, thirdPersonOffset } from '@/player/camera'
+import { clearDistance, orbitPitch, segmentBoxT, THIRD_PERSON, thirdPersonOffset, type CameraRig } from '@/player/camera'
 import type { Vec3 } from '@/contracts/scene'
 import { BANNER_POS, BELL_POS, BOARD_POS, clueSlots, DR, EXIT_Z, isThroughExit, PENDANT, ROOM_RIGS, roomColliders, SPAWN } from './layout'
 import { furnitureColliders } from './Furniture'
@@ -93,7 +93,7 @@ describe('third-person camera in the puzzle room', () => {
   const boxes = () => [...roomColliders(false), ...furnitureColliders()]
   const pivot: Vec3 = [SPAWN.position[0], SPAWN.position[1] - THIRD_PERSON.pivotDrop, SPAWN.position[2]]
   /** Where the camera sits at the spawn with a rig, and how much of the rig's distance it keeps. */
-  function cameraAtSpawn(rig: { distance: number; side: number; up: number }) {
+  function cameraAtSpawn(rig: CameraRig) {
     const orbit = orbitPitch(SPAWN.pitch, pivot[1], rig, DR.height)
     const want = thirdPersonOffset(SPAWN.yaw, orbit, rig.distance, rig.side, rig.up)
     const len = Math.hypot(...want)
