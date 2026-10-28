@@ -60,6 +60,10 @@ export const playerView = {
   blend: 0,
   /** Current camera distance from the head pivot (0 in first person). */
   cameraDistance: 0,
+  /** The camera's own pitch (radians; your look pitch, less while craned or on the phone rig). */
+  cameraPitch: 0,
+  /** 0..1: how far the third-person camera has slid over your head because a wall squeezed it. */
+  crane: 0,
   /** Where the interaction ray starts along the view ray (metres from the camera). */
   rayStart: 0,
   /** Feet position of your character, world space. */

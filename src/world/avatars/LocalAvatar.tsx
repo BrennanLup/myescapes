@@ -7,7 +7,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { damp, THIRD_PERSON } from '@/player/camera'
+import { damp, hideDistance } from '@/player/camera'
 import { playerView } from '@/player/view'
 import { useWardrobe } from '@/ui/wardrobe/store'
 import { activeLocalEmote } from '@/net/session'
@@ -29,7 +29,7 @@ export function LocalAvatar() {
     const g = root.current
     if (!g) return
     const v = playerView
-    const show = v.blend > 0 && v.cameraDistance > THIRD_PERSON.hideBelow
+    const show = v.blend > 0 && v.cameraDistance > hideDistance(v.crane)
     g.visible = show
     if (!show) {
       motion.opacity = v.avatarOpacity = 1

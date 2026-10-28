@@ -6,6 +6,7 @@ import {
   CRANE,
   craneAmount,
   craneSpot,
+  hideDistance,
   DESKTOP_RIG,
   orbitPitch,
   pitchLimits,
@@ -236,24 +237,61 @@ describe('crane over the head when a wall squeezes the camera (QA r3)', () => {
     expect(craneAmount(0.2)).toBe(1)
   })
 
-  it('back to the south wall: the full rig collapses, the crane keeps the character in view', () => {
+  /** Angle (radians) of the head pivot below the view centre, seen from `cam` looking at `pitch` along yaw 0 (north). */
+  const headBelowCentre = (cam: Vec3, pivot: Vec3, pitch: number) => {
+    const depth = cam[2] - pivot[2]
+    return Math.atan2(cam[1] - pivot[1], Math.max(depth, 1e-6)) + pitch
+  }
+
+  it('back to the south wall (QA r4 spot): keeps looking into the room, slides over the shoulder, head still in view', () => {
     // The QA spot: (0, 1.6, 7.4) looking north (yaw 0), so the wall is right behind.
-    const pivot: Vec3 = [0, 1.55, HALF_D - 0.3]
+    const pivot: Vec3 = [0, 1.55, 7.4]
     const offset = thirdPersonOffset(0, 0, DESKTOP_RIG.distance, DESKTOP_RIG.side, DESKTOP_RIG.up)
     const squeezed = clearDistance(pivot, offset, [])
     expect(squeezed).toBeLessThan(THIRD_PERSON.hideBelow)
     expect(craneAmount(squeezed)).toBe(1)
     const out: Vec3 = [0, 0, 0]
-    const spot = craneSpot(pivot, 0, [], out)
-    expect(out[1]).toBeCloseTo(pivot[1] + CRANE.rise)
+    const spot = craneSpot(pivot, 0, [], out, undefined, undefined, undefined, CRANE.side)
+    // Never a top-down view: at most 25 degrees down, so the room ahead fills most of the screen.
+    expect(spot.pitch).toBeGreaterThanOrEqual(-CRANE.maxTilt - 1e-9)
+    expect(spot.pitch).toBeLessThanOrEqual(0)
+    // Slid to the right shoulder, inside the wall margin, not straight over the head.
+    close(out[0], CRANE.side)
     expect(out[2]).toBeLessThanOrEqual(HALF_D - THIRD_PERSON.margin + 1e-9)
-    expect(spot.distance).toBeGreaterThan(THIRD_PERSON.hideBelow)
-    // Looking down so the head sits CRANE.headBelow under the centre of the view.
-    const headAngle = Math.atan2(out[1] - pivot[1], out[2] - pivot[2])
-    expect(headAngle + spot.pitch).toBeCloseTo(CRANE.headBelow)
+    expect(out[2]).toBeGreaterThan(pivot[2])
+    expect(out[1] - pivot[1]).toBeLessThan(0.7)
+    // The head sits in the lower part of the view, still on screen, and your character shows.
+    const below = headBelowCentre(out, pivot, spot.pitch)
+    expect(below).toBeGreaterThan(0.15)
+    expect(below).toBeLessThanOrEqual(CRANE.headLowest + 1e-6)
+    expect(screenY(below)).toBeLessThan(0.9)
+    expect(spot.distance).toBeGreaterThan(hideDistance(1))
+    // A level look puts the reticle on the floor over 4 m ahead at the most (r3: under 2 m, at your feet).
+    expect(out[1] / Math.tan(-spot.pitch)).toBeGreaterThan(4)
   })
 
-  it('a corner: rises and backs off diagonally as far as both walls allow', () => {
+  it('the phone rig stays centred against the wall, also looking at most 25 degrees down', () => {
+    const pivot: Vec3 = [0, 1.55, 7.4]
+    const out: Vec3 = [0, 0, 0]
+    const spot = craneSpot(pivot, 0, [], out)
+    close(out[0], 0)
+    expect(spot.pitch).toBeGreaterThanOrEqual(-CRANE.maxTilt - 1e-9)
+    expect(headBelowCentre(out, pivot, spot.pitch)).toBeLessThanOrEqual(CRANE.headLowest + 1e-6)
+    expect(spot.distance).toBeGreaterThan(hideDistance(1))
+  })
+
+  it('pressed flat to the wall: a short over-the-shoulder view of the room, not of the floor', () => {
+    // As close as the collision radius allows.
+    const pivot: Vec3 = [0, 1.55, HALF_D - 0.35]
+    const out: Vec3 = [0, 0, 0]
+    const spot = craneSpot(pivot, 0, [], out, undefined, undefined, undefined, CRANE.side)
+    expect(out[1] - pivot[1]).toBeCloseTo(CRANE.minRise)
+    expect(spot.pitch).toBeGreaterThanOrEqual(-CRANE.maxTilt - 1e-9)
+    // Too close to show yourself: the character hides and the room ahead fills the view.
+    expect(spot.distance).toBeLessThan(hideDistance(1))
+  })
+
+  it('a corner: backs off diagonally as far as both walls allow and keeps the look pitch', () => {
     const pivot: Vec3 = [HALF_W - 0.7, 1.55, HALF_D - 0.7]
     const out: Vec3 = [0, 0, 0]
     // Looking diagonally into the room (yaw PI/4: towards -x, -z).
@@ -261,7 +299,35 @@ describe('crane over the head when a wall squeezes the camera (QA r3)', () => {
     expect(out[0]).toBeLessThanOrEqual(HALF_W - THIRD_PERSON.margin + 1e-9)
     expect(out[2]).toBeLessThanOrEqual(HALF_D - THIRD_PERSON.margin + 1e-9)
     expect(out[0]).toBeGreaterThan(pivot[0])
-    expect(spot.distance).toBeGreaterThan(1.2)
+    expect(spot.pitch).toBeGreaterThanOrEqual(-CRANE.maxTilt - 1e-9)
+    expect(spot.distance).toBeGreaterThan(hideDistance(1))
+  })
+
+  it('a corner with the wall on the right shoulder: slides to the left instead', () => {
+    // Back to the south wall, pressed against the east wall on the right, looking north.
+    const pivot: Vec3 = [HALF_W - 0.35, 1.55, 7.4]
+    const out: Vec3 = [0, 0, 0]
+    craneSpot(pivot, 0, [], out, undefined, undefined, undefined, CRANE.side)
+    close(out[0], pivot[0] - CRANE.side)
+    // With room on the right, it keeps the right shoulder.
+    craneSpot([0, 1.55, 7.4], 0, [], out, undefined, undefined, undefined, CRANE.side)
+    close(out[0], CRANE.side)
+  })
+
+  it('plenty of room behind: rises up to CRANE.rise, still no steeper than 25 degrees', () => {
+    const pivot: Vec3 = [0, 1.55, 0]
+    const out: Vec3 = [0, 0, 0]
+    const spot = craneSpot(pivot, 0, [], out)
+    close(out[1], pivot[1] + CRANE.rise)
+    close(out[2], CRANE.back)
+    close(spot.pitch, -CRANE.maxTilt)
+  })
+
+  it('hides your character closer in while craned', () => {
+    expect(hideDistance(0)).toBe(THIRD_PERSON.hideBelow)
+    expect(hideDistance(1)).toBe(CRANE.hideBelow)
+    expect(hideDistance(0.5)).toBeGreaterThan(CRANE.hideBelow)
+    expect(hideDistance(0.5)).toBeLessThan(THIRD_PERSON.hideBelow)
   })
 
   it('something overhead or a low ceiling limits the rise', () => {

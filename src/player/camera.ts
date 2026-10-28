@@ -211,24 +211,51 @@ export function clearDistance(pivot: Vec3, offset: Vec3, boxes: readonly Pick<AA
 
 /**
  * The "crane" used when a wall or corner right behind you would pull the camera into your head
- * (QA r3: 0.2-0.6 m with your back to the south wall or in a corner). Instead of a near first
- * person view filled with whatever is behind you, the camera rises over your head and looks down
- * at your character. It blends in as the normal spot gets squeezed (`craneAmount`).
+ * (QA r3: 0.2-0.6 m with your back to the south wall or in a corner). The camera slides along the
+ * wall instead: a little over your head, over the shoulder on a desktop, back as far as the wall
+ * allows, and it keeps most of your look pitch (QA r4: the r3 crane rose 1.25 m and tilted to
+ * about 55 degrees down, a top-down view of your own head with the reticle on the floorboards).
+ *
+ * How high it rises follows how much room there is behind: the head stays in the lower part of
+ * the view while the camera looks at most `maxTilt` below the horizontal. With a wall right
+ * behind there is no room to see yourself, so it ends as a short over-the-shoulder view of the
+ * room ahead (your character is hidden that close), never as a view of the floor.
+ * It blends in as the normal spot gets squeezed (`craneAmount`).
  */
 export const CRANE = {
   /** Fully craned at or below this clear distance (metres). */
   fullBelow: 0.55,
   /** Starts craning below this clear distance (just above `hideBelow`, so the character stays visible). */
   startBelow: 1.25,
-  /** Rise above the head pivot (metres), less when the ceiling is lower. */
-  rise: 1.25,
+  /** Highest rise above the head pivot (metres), less when the ceiling is lower or the wall is close. */
+  rise: 1,
+  /** Lowest rise (metres): just over the head, so the view clears it. */
+  minRise: 0.25,
   /** How far back the crane would like to be (metres); usually the wall allows less. */
   back: 1.1,
-  /** Where the head lands below the view centre (radians, about 15 degrees: the lower part of the screen). */
+  /** Largest sideways slide along the wall (metres), towards the rig's shoulder side. */
+  side: 0.35,
+  /** Where the head would like to sit below the view centre (radians, about 15 degrees). */
   headBelow: 0.26,
+  /** The camera looks at most this far below the horizontal while craned (radians, 25 degrees). */
+  maxTilt: (25 * Math.PI) / 180,
+  /** The head may sit at most this far below the view centre (radians, 27 degrees: still on screen). */
+  headLowest: (27 * Math.PI) / 180,
   /** Easing rate (1/s) in and out of the crane, so backing into a wall never pops. */
   rate: 6,
+  /**
+   * Fully craned, your character shows from this camera distance (metres) instead of
+   * `THIRD_PERSON.hideBelow`: the camera is above and behind the head, not in it, so the top of
+   * your head can sit at the bottom of the view.
+   */
+  hideBelow: 0.6,
 } as const
+
+/** Camera distance under which your character is hidden, for a crane amount from 0 to 1. */
+export function hideDistance(crane: number): number {
+  const w = Math.min(1, Math.max(0, crane))
+  return THIRD_PERSON.hideBelow + (CRANE.hideBelow - THIRD_PERSON.hideBelow) * w
+}
 
 /** 0 (normal follow) to 1 (fully craned) for how far the normal camera spot was squeezed. */
 export function craneAmount(clear: number): number {
@@ -237,14 +264,57 @@ export function craneAmount(clear: number): number {
 }
 
 /** Scratch points for craneSpot (per frame, no garbage). */
+const CRANE_STEP: Vec3 = [0, 0, 0]
 const CRANE_TOP: Vec3 = [0, 0, 0]
-const CRANE_BACK: Vec3 = [0, 0, 0]
+const CRANE_MID: Vec3 = [0, 0, 0]
+const CRANE_ALT: Vec3 = [0, 0, 0]
 
 /**
- * The crane spot over the head: straight up from `pivot` as far as the ceiling and anything
- * overhead allow, then back (opposite the look yaw) as far as the wall allows. Writes the camera
- * position into `out` and returns the camera pitch that puts the head `CRANE.headBelow` under the
- * centre of the view, plus the camera-to-pivot distance.
+ * One pass of the crane: from `pivot` straight up by `up` (as far as clear), then sideways by
+ * `side` (signed, along the right vector; as far as clear), then back (opposite the look yaw, as
+ * far as clear). Writes the camera spot into `out` and returns how far up, sideways and back it got.
+ */
+function craneLeg(pivot: Vec3, yaw: number, up: number, side: number, boxes: readonly Pick<AABB, 'min' | 'max'>[], out: Vec3, margin: number, interior: Interior): { up: number; side: number; back: number } {
+  CRANE_STEP[0] = 0
+  CRANE_STEP[1] = up
+  CRANE_STEP[2] = 0
+  const u = up > 0 ? clearDistance(pivot, CRANE_STEP, boxes, margin, interior) : 0
+  CRANE_TOP[0] = pivot[0]
+  CRANE_TOP[1] = pivot[1] + u
+  CRANE_TOP[2] = pivot[2]
+  let sx = 0
+  let sz = 0
+  let slid = 0
+  if (Math.abs(side) > 1e-6) {
+    CRANE_STEP[0] = Math.cos(yaw) * side
+    CRANE_STEP[1] = 0
+    CRANE_STEP[2] = -Math.sin(yaw) * side
+    slid = clearDistance(CRANE_TOP, CRANE_STEP, boxes, margin, interior)
+    const k = slid / Math.abs(side)
+    sx = CRANE_STEP[0] * k
+    sz = CRANE_STEP[2] * k
+  }
+  CRANE_MID[0] = CRANE_TOP[0] + sx
+  CRANE_MID[1] = CRANE_TOP[1]
+  CRANE_MID[2] = CRANE_TOP[2] + sz
+  CRANE_STEP[0] = Math.sin(yaw) * CRANE.back
+  CRANE_STEP[1] = 0
+  CRANE_STEP[2] = Math.cos(yaw) * CRANE.back
+  const b = clearDistance(CRANE_MID, CRANE_STEP, boxes, margin, interior)
+  const kb = b / CRANE.back
+  out[0] = CRANE_MID[0] + CRANE_STEP[0] * kb
+  out[1] = CRANE_MID[1]
+  out[2] = CRANE_MID[2] + CRANE_STEP[2] * kb
+  return { up: u, side: slid, back: b }
+}
+
+/**
+ * The crane spot: over the head, slid sideways along the wall (`side`, signed: + is the right
+ * shoulder; 0 for the centred phone rig) and back as far as the wall allows. It rises only as
+ * high as keeps the head in view from that far back (`headLowest` under the centre while looking
+ * `maxTilt` down), and never into the ceiling margin or anything overhead. Writes the camera
+ * position into `out` and returns the camera pitch (between `-maxTilt` and 0) and the
+ * camera-to-pivot distance.
  */
 export function craneSpot(
   pivot: Vec3,
@@ -254,26 +324,29 @@ export function craneSpot(
   ceiling: number = ROOM.height,
   margin: number = THIRD_PERSON.margin,
   interior: Interior = ROOM_INTERIOR,
+  side: number = 0,
 ): { pitch: number; distance: number } {
-  // Up first (a shelf or lamp overhead stops it), never into the ceiling margin.
-  const wantUp = Math.max(0, Math.min(CRANE.rise, ceiling - margin - pivot[1]))
-  CRANE_TOP[0] = 0
-  CRANE_TOP[1] = wantUp
-  CRANE_TOP[2] = 0
-  const up = wantUp > 0 ? clearDistance(pivot, CRANE_TOP, boxes, margin, interior) : 0
-  const top: Vec3 = [pivot[0], pivot[1] + up, pivot[2]]
-  // Then back, away from where you look.
-  CRANE_BACK[0] = Math.sin(yaw) * CRANE.back
-  CRANE_BACK[1] = 0
-  CRANE_BACK[2] = Math.cos(yaw) * CRANE.back
-  const back = clearDistance(top, CRANE_BACK, boxes, margin, interior)
-  const k = back / CRANE.back
-  out[0] = top[0] + CRANE_BACK[0] * k
-  out[1] = top[1]
-  out[2] = top[2] + CRANE_BACK[2] * k
-  // The head is atan2(up, back) below the horizontal from here.
-  const pitch = CRANE.headBelow - Math.atan2(up, Math.max(back, 1e-3))
-  return { pitch: Math.min(0, pitch), distance: Math.hypot(up, back) }
+  const roof = Math.max(0, Math.min(CRANE.rise, ceiling - margin - pivot[1]))
+  // Slide towards the rig's shoulder; when a wall cuts that short, the other shoulder if it has more room.
+  let s = Math.max(-CRANE.side, Math.min(CRANE.side, side))
+  // First pass at full height, to find how much room there is behind.
+  let leg = craneLeg(pivot, yaw, roof, s, boxes, out, margin, interior)
+  if (s !== 0 && leg.side < Math.abs(s) - 1e-6) {
+    const other = craneLeg(pivot, yaw, roof, -s, boxes, CRANE_ALT, margin, interior)
+    if (other.side > leg.side + 0.05) {
+      s = -s
+      leg = other
+      out[0] = CRANE_ALT[0]
+      out[1] = CRANE_ALT[1]
+      out[2] = CRANE_ALT[2]
+    }
+  }
+  // No higher than keeps the head on screen from this far back (looking maxTilt down).
+  const fit = Math.max(CRANE.minRise, leg.back * Math.tan(CRANE.maxTilt + CRANE.headLowest))
+  const want = Math.min(roof, fit)
+  if (want < leg.up - 1e-3) leg = craneLeg(pivot, yaw, want, s, boxes, out, margin, interior)
+  const pitch = Math.max(-CRANE.maxTilt, CRANE.headBelow - Math.atan2(leg.up, Math.max(leg.back, 1e-3)))
+  return { pitch: Math.min(0, pitch), distance: Math.hypot(out[0] - pivot[0], out[1] - pivot[1], out[2] - pivot[2]) }
 }
 
 /**
