@@ -46,6 +46,8 @@ async function stand(page: Page, at: [number, number, number], yaw: number) {
 }
 
 test('friends meet in a room, chat, wave and visit each other', async ({ browser }, info) => {
+  // Two software-rendered 3D rooms at once, and five room loads in all.
+  test.setTimeout(600_000)
   const phone = info.project.name === 'mobile'
   const baseURL = String(info.project.use.baseURL)
   const run = String(Date.now()).slice(-7)
@@ -53,6 +55,8 @@ test('friends meet in a room, chat, wave and visit each other', async ({ browser
   const B = person(phone ? 'mpguest' : 'mguest', 'Sam Guest', run)
   const hostCtx = await newDevice(browser, baseURL, 'laptop')
   const guestCtx = await newDevice(browser, baseURL, phone ? 'phone' : 'laptop')
+  // Low quality keeps two SwiftShader rooms responsive.
+  for (const ctx of [hostCtx, guestCtx]) await ctx.addInitScript(() => localStorage.setItem('myescapes.settings.v1', JSON.stringify({ quality: 'low' })))
   const errors: string[] = []
   try {
     const hostUser = await signIn(hostCtx, A, { onboarded: true })

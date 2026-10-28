@@ -8,7 +8,7 @@
  * re-renders when their look, bubble or emote changes.
  */
 import { memo, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import type * as THREE from 'three'
 import { useStore } from '@/state/store'
@@ -22,11 +22,15 @@ const TAG_FADE_START = 9
 const TAG_HIDE = 16
 /** Above the head (eyes are at 1.6 m; hats reach about 1.95 m). */
 const TAG_HEIGHT = 2.08
+const NO_POINTER = { pointerEvents: 'none' } as const
 
 export function RemotePlayers() {
   const players = useRealtime((s) => s.players)
   const list = useMemo(() => Object.values(players), [players])
-  if (!list.length) return null
+  // drei's Html picks its DOM parent when it mounts and re-creates its root (empty) if that parent
+  // changes later; the canvas connects its event target a moment after start-up, so wait for it.
+  const connected = useThree((s) => !!s.events.connected)
+  if (!list.length || !connected) return null
   return (
     <group name="remote-players">
       {list.map((p) => (
@@ -78,7 +82,7 @@ const RemotePlayer = memo(function RemotePlayer({ player }: { player: Player }) 
   return (
     <group ref={root} visible={false} userData={{ raycastIgnore: true }} name={`remote-player-${handle ?? player.sid}`}>
       <Character outfit={player.outfit} motion={motion} shadows={shadows} />
-      <Html position={[0, TAG_HEIGHT, 0]} center zIndexRange={[24, 10]} pointerEvents="none" style={{ pointerEvents: 'none' }}>
+      <Html position={[0, TAG_HEIGHT, 0]} center zIndexRange={[24, 10]} pointerEvents="none" style={NO_POINTER}>
         <div ref={tag} className="flex flex-col items-center gap-1.5 font-body transition-opacity duration-200" style={{ opacity: 0 }}>
           {bubble ? <Bubble line={bubble} /> : null}
           <NameTag player={player} />
