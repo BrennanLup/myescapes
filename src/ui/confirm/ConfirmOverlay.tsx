@@ -177,6 +177,23 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
     if (canAutoLink(formRef.current, game)) pickRoom({ kind: 'game', game }, true)
   }
 
+  // The match skipped above (search box focused) gets its one try when focus leaves the box, as
+  // the suggestion itself won't change again.
+  const pickRoomRef = useRef(pickRoom)
+  useEffect(() => {
+    pickRoomRef.current = pickRoom
+  })
+  useEffect(() => {
+    if (!suggested) return
+    const onOut = (e: FocusEvent) => {
+      if ((e.target as HTMLElement | null)?.id !== 'cf-room-search' || autoTried.current) return
+      autoTried.current = true
+      if (canAutoLink(formRef.current, suggested)) pickRoomRef.current({ kind: 'game', game: suggested }, true)
+    }
+    document.addEventListener('focusout', onOut)
+    return () => document.removeEventListener('focusout', onOut)
+  }, [suggested])
+
   const newRoom = (text: string) => {
     setForm((f) => newRoomNamed(f, text))
     clearFlags(['room.name'])

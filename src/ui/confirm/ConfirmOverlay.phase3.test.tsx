@@ -191,6 +191,16 @@ describe('ConfirmOverlay exact directory match', () => {
     expect(addEntry.mock.calls[0][0].room.id).toBe('gam_clock')
   })
 
+  it('links the match once focus leaves the search box, when it arrived while typing there', async () => {
+    render(<ConfirmOverlay draft={at({ company: null, city: 'san francisco' })} />)
+    const input = document.getElementById('cf-room-search') as HTMLInputElement
+    act(() => input.focus())
+    expect(await screen.findByTestId('room-search-suggestion')).toBeTruthy()
+    expect(screen.queryByTestId('confirm-room-linked')).toBeNull()
+    act(() => input.blur())
+    expect(await screen.findByTestId('confirm-room-linked')).toBeTruthy()
+  })
+
   it('does not link again after "Change"', async () => {
     render(<ConfirmOverlay draft={at({ company: null, city: 'San Francisco' })} />)
     fireEvent.click(await screen.findByTestId('confirm-room-unlink'))
