@@ -219,6 +219,18 @@ describe('cross-user access: /api/wishlist', () => {
     expect(bobItems.map((w) => w.name)).toEqual(['Hijacked'])
     expect(bobItems[0].id).not.toBe('wsh_alice_1')
   })
+
+  it('keeps a directory room link through /api/data and drops unknown game ids', async () => {
+    const items = [
+      { id: 'wsh_bob_linked', name: 'The Vault', city: 'Toronto', link: '/games/the-vault', addedBy: '', priority: 1, done: false, gameId: FX.games.vault },
+      { id: 'wsh_bob_ghost', name: 'Ghost', city: '', link: '', addedBy: '', priority: 2, done: false, gameId: 'gam_does_not_exist' },
+    ]
+    const res = await t.inject({ method: 'PUT', url: '/api/wishlist', as: U().bob, payload: items })
+    expect(res.statusCode).toBe(200)
+    expect((res.json() as { gameId: string | null }[]).map((w) => w.gameId)).toEqual([FX.games.vault, null])
+    const data = DatasetSchema.parse((await t.inject({ method: 'GET', url: '/api/data', as: U().bob })).json())
+    expect(data.wishlist.find((w) => w.id === 'wsh_bob_linked')?.gameId).toBe(FX.games.vault)
+  })
 })
 
 describe('cross-user access: /api/me/usage', () => {

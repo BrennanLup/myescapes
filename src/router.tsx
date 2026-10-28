@@ -9,6 +9,7 @@
  *   /games/:slug      public game page (16)
  *   /venues/:slug     public venue page (17)
  *   /cities/:slug     public city page (17)
+ *   /reviews          public review feed, all rooms, spoiler filter (?city=<slug>)
  *   /daily            Escape of the Day (22)
  *   /daily/room       Escape of the Day as a 3D puzzle room (Phase 3, workstream D; loads three.js)
  *   /settings         account settings: name, handle, export, delete (35)
@@ -46,6 +47,7 @@ export const ROUTE_TABLE: RouteEntry[] = [
   { pattern: '/games/:slug', page: page(() => import('./public/game'), (m) => m.GamePage) },
   { pattern: '/venues/:slug', page: page(() => import('./public/venue'), (m) => m.VenuePage) },
   { pattern: '/cities/:slug', page: page(() => import('./public/city'), (m) => m.CityPage) },
+  { pattern: '/reviews', page: page(() => import('./public/feed'), (m) => m.ReviewsFeedPage) },
   { pattern: '/daily', page: page(() => import('./daily/ui'), (m) => m.DailyPage) },
   { pattern: '/daily/room', page: page(() => import('./daily/room'), (m) => m.DailyRoomPage) },
   { pattern: '/settings', page: page(() => import('./social/settings'), (m) => m.SettingsPage) },
@@ -106,6 +108,11 @@ export function navigate(to: string, opts: { replace?: boolean } = {}) {
 
 export function usePathname(): string {
   return useSyncExternalStore(subscribe, getPath, () => '/')
+}
+
+/** The query string (`?a=b`), re-rendering on navigation between URLs with the same path. */
+export function useSearch(): string {
+  return useSyncExternalStore(subscribe, () => (typeof window === 'undefined' ? '' : window.location.search), () => '')
 }
 
 export function useRoute(): RouteProps & { pathname: string } {

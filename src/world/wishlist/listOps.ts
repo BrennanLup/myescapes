@@ -9,6 +9,8 @@ export interface NewWishInput {
   city?: string
   link?: string
   addedBy?: string
+  /** Directory room this wish was picked from. */
+  gameId?: string | null
 }
 
 /** Stable sort by priority (ties keep their incoming order). */
@@ -42,6 +44,7 @@ export function addItem(items: readonly WishlistItem[], input: NewWishInput, id:
     addedBy: (input.addedBy ?? '').trim(),
     priority: list.length + 1,
     done: false,
+    ...(input.gameId ? { gameId: input.gameId } : {}),
   }
   return [...list, item]
 }
@@ -103,6 +106,8 @@ export function toggleDone(items: readonly WishlistItem[], id: string): Wishlist
 export function safeHref(link: string): string {
   const raw = link.trim()
   if (!raw) return ''
+  // Our own pages (/games/…, /venues/…) picked from the room directory.
+  if (/^\/(?!\/)[\w\-/.%]*$/.test(raw)) return raw
   const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`
   try {
     const url = new URL(withScheme)

@@ -13,6 +13,9 @@ export function PublicHeader() {
         My Escapes
       </Link>
       <nav aria-label="Site" className="ml-auto flex gap-4 text-sm font-semibold">
+        <Link to="/reviews" className="text-[#fbeedd] no-underline hover:text-[#ffb067]">
+          Reviews
+        </Link>
         <Link to="/daily" className="text-[#fbeedd] no-underline hover:text-[#ffb067]">
           Escape of the Day
         </Link>

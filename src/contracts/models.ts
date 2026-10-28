@@ -388,6 +388,8 @@ export const PublicReviewSchema = z.object({
   playedWith: z.array(z.object({ reviewId: z.string(), author: PublicUserSchema })),
   photos: z.array(PhotoV2Schema),
   createdAt: Timestamp,
+  /** The reviewed room. Set on the all-rooms review feed, left out on a game page. */
+  game: GameSummarySchema.optional(),
 })
 export type PublicReview = z.infer<typeof PublicReviewSchema>
 
@@ -419,6 +421,11 @@ export const PuzzleHighlightSchema = z.object({
 export type PuzzleHighlight = z.infer<typeof PuzzleHighlightSchema>
 
 export const PageCursorSchema = z.string().nullable()
+
+/** Review list spoiler filter: everything, only reviews without spoilers, or only reviews with spoilers. */
+export const SPOILER_FILTERS = ['all', 'free', 'only'] as const
+export const SpoilerFilterSchema = z.enum(SPOILER_FILTERS)
+export type SpoilerFilter = z.infer<typeof SpoilerFilterSchema>
 
 export const ReviewPageSchema = z.object({ reviews: z.array(PublicReviewSchema), nextCursor: PageCursorSchema })
 export type ReviewPage = z.infer<typeof ReviewPageSchema>
