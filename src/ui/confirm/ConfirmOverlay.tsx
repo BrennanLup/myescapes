@@ -310,6 +310,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                     onCreate={newRoom}
                     inputTestId="confirm-room-search"
                     suggestFor={{ name: initial.form.room.name, city: initial.form.room.city }}
+                    city={form.room.city || initial.form.room.city}
                     inputProps={{ id: 'cf-room-search', className: INPUT }}
                   />
                 )}

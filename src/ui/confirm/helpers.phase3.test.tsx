@@ -88,6 +88,25 @@ describe('room search', () => {
     expect(localStorage.getItem('myescapes.nearMe')).toBeNull()
   })
 
+  it('ranks the draft city first while Near me is off, and drops the city once it is on', async () => {
+    const user = userEvent.setup()
+    const search = vi.fn(async () => ({ games: [], venues: [] }))
+    const geo = { getCurrentPosition: vi.fn((ok: PositionCallback) => ok({ coords: { latitude: 37.77, longitude: -122.42 } } as GeolocationPosition)) } as unknown as Geolocation
+    render(<RoomSearch onPick={() => {}} onCreate={() => {}} search={search} geolocation={geo} city="San Francisco" debounceMs={0} />)
+    await user.type(screen.getByTestId('room-search-input'), 'escape')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'escape', city: 'San Francisco' }), expect.anything())
+    await user.click(screen.getByTestId('room-search-near'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+    const last = search.mock.calls.at(-1) as unknown as [Record<string, unknown>]
+    expect(last[0]).toMatchObject({ q: 'escape', lat: 37.77, lng: -122.42 })
+    expect(last[0].city).toBeUndefined()
+  })
+
   it('says so when location is blocked', async () => {
     const user = userEvent.setup()
     const geo = { getCurrentPosition: vi.fn((_ok: PositionCallback, fail: PositionErrorCallback) => fail({ code: 1 } as GeolocationPositionError)) } as unknown as Geolocation

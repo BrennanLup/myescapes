@@ -114,11 +114,19 @@ export interface SearchInput {
   lat?: number
   lng?: number
   country?: string
+  /** Soft city bias: same-city results rank first, others still show. */
+  city?: string
   limit?: number
 }
 
 /** Distance penalty for search ranking: 0 nearby, up to 0.3 for far away. */
 const distancePenalty = (d: SQL) => sql`least(0.3, coalesce(${d}, 20000) / 2000.0)`
+
+/** Rank boost for a result in the searched-for city: beats a tie, not a much better name. */
+const cityBoost = (col: SQL, city: string | undefined) => (city?.trim() ? sql`(case when lower(${col}) = ${city.trim().toLowerCase()} then 0.35 else 0 end)` : sql`0`)
+
+/** Name for tie-breaks, without leading quotes or punctuation ('"MY Escape"' sorts as 'my escape"'). */
+const sortName = (col: SQL) => sql`regexp_replace(lower(${col}), '^[^[:alnum:]]+', '')`
 
 export async function searchVenues(db: Db, input: SearchInput): Promise<VenueSummary[]> {
   const trgm = await hasTrgm(db)
@@ -135,7 +143,7 @@ export async function searchVenues(db: Db, input: SearchInput): Promise<VenueSum
       where v.status <> 'hidden'
         ${input.country ? sql`and v.country = ${input.country.toUpperCase()}` : sql``}
         and (${nameMatchSql(sql`v.name`, input.q, trgm)} or ${cityHit})
-      order by ${point ? sql`${score} - ${distancePenalty(dist)}` : score} desc, v.name asc
+      order by ${point ? sql`${score} - ${distancePenalty(dist)}` : score} + ${cityBoost(sql`v.city`, input.city)} desc, ${sortName(sql`v.name`)} asc, v.name asc
       limit ${limit}`,
   )
   return r.map((x) => toVenueSummary(x, point))
@@ -155,7 +163,7 @@ export async function searchGames(db: Db, input: SearchInput): Promise<GameSumma
       where g.status <> 'hidden' and v.status <> 'hidden'
         ${input.country ? sql`and v.country = ${input.country.toUpperCase()}` : sql``}
         and ${nameMatchSql(sql`g.name`, input.q, trgm)}
-      order by ${point ? sql`${score} - ${distancePenalty(dist)}` : score} desc, g.name asc
+      order by ${point ? sql`${score} - ${distancePenalty(dist)}` : score} + ${cityBoost(sql`v.city`, input.city)} desc, ${sortName(sql`g.name`)} asc, g.name asc
       limit ${limit}`,
   )
   return r.map(toGameSummary)
@@ -244,7 +252,7 @@ export async function matchDirectory(db: Db, input: MatchInput): Promise<{ venue
       sql`select ${VENUE_COLS}, ${dist} as "distanceKm", ${venueNameSim} as "nameSim", ${citySim} as "citySim"
         from venues v
         where v.status <> 'hidden' ${countryFilter} and ${sql.join(where, sql` and `)}
-        order by ${venueQ ? venueNameSim : point ? dist : sql`v.name`} ${venueQ ? sql`desc` : sql`asc`}
+        order by ${venueQ ? sql`${venueNameSim} + ${cityBoost(sql`v.city`, cityQ)}` : point ? dist : sql`v.name`} ${venueQ ? sql`desc` : sql`asc`}
         limit 60`,
     )
   }
@@ -267,7 +275,7 @@ export async function matchDirectory(db: Db, input: MatchInput): Promise<{ venue
         ${GAME_AGG_JOIN}
         where g.status <> 'hidden' and v.status <> 'hidden' ${countryFilter}
           and ${nameMatchSql(sql`g.name`, gameQ, trgm)}
-        order by ${gameSim} desc
+        order by ${gameSim} + ${cityBoost(sql`v.city`, cityQ)} desc
         limit 60`,
     )
     games = g.map((x) => {

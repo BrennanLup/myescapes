@@ -3,9 +3,10 @@
  * (`src/ui/roompicker`) plus an opt-in "Near me" toggle that sorts results nearest first, and an
  * "Add “…”" row for rooms the directory doesn't have. Light: no three.js, used by the phone too.
  */
-import { forwardRef, useEffect, useId, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useId, useState } from 'react'
 import type { GameSummary } from '@/contracts/models'
-import { RoomPicker, searchDirectory, type RoomPick, type RoomPickerProps } from '@/ui/roompicker'
+import { callApi, ROUTES } from '@/contracts/routes'
+import { RoomPicker, type DirectoryQuery, type RoomPick, type RoomPickerProps } from '@/ui/roompicker'
 import { keyboardInset } from './keyboard'
 import { nearLabel, useNearMe } from './near'
 
@@ -25,6 +26,12 @@ export function exactGameMatch(games: readonly GameSummary[], name: string, city
   return named.length === 1 ? named[0] : null
 }
 
+type SearchFn = NonNullable<RoomPickerProps['search']>
+type CityQuery = DirectoryQuery & { city?: string }
+
+/** The directory search, with the optional soft city bias (same-city results first). */
+const searchWithCity = (query: CityQuery, signal?: AbortSignal) => callApi(ROUTES.directorySearch, { query }, { signal })
+
 export interface RoomSearchProps {
   onPick(pick: RoomPick): void
   onCreate(text: string): void
@@ -34,6 +41,11 @@ export interface RoomSearchProps {
   inputProps?: RoomPickerProps['inputProps']
   /** data-testid for the text input. */
   inputTestId?: string
+  /**
+   * The draft's city: while Near me is off, rooms and venues there rank first (others still
+   * show). Near me, when on, sorts by distance instead.
+   */
+  city?: string | null
   /** Look this room up once and offer "Is it …?" when the directory has it exactly. */
   suggestFor?: { name: string; city?: string | null } | null
   /** Tests: swap the search and the geolocation. */
@@ -43,7 +55,7 @@ export interface RoomSearchProps {
 }
 
 export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function RoomSearch(
-  { onPick, onCreate, initialQuery = '', inputTestId = 'room-search-input', label = 'Find the room', hint = 'Type the room or venue name. Pick it from the list, or add it if it’s new.', inputProps, suggestFor = null, search, geolocation, debounceMs },
+  { onPick, onCreate, initialQuery = '', inputTestId = 'room-search-input', label = 'Find the room', hint = 'Type the room or venue name. Pick it from the list, or add it if it’s new.', inputProps, city = null, suggestFor = null, search, geolocation, debounceMs },
   ref,
 ) {
   const near = useNearMe(geolocation)
@@ -53,11 +65,14 @@ export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function
   const [suggestion, setSuggestion] = useState<GameSummary | null>(null)
   const sName = suggestFor?.name?.trim() ?? ''
   const sCity = suggestFor?.city ?? null
+  // Near me off: bias by the draft's city. The picker re-searches when this function changes.
+  const bias = on ? '' : (city ?? '').trim().slice(0, 120)
+  const run = useCallback<SearchFn>((q, signal) => (search ?? searchWithCity)(bias ? ({ ...q, city: bias } as CityQuery) : q, signal), [search, bias])
   useEffect(() => {
     setSuggestion(null)
     if (sName.length < 2) return
     const ctl = new AbortController()
-    ;(search ?? searchDirectory)({ q: sName, limit: 8 }, ctl.signal)
+    ;(search ?? searchWithCity)({ q: sName, limit: 8, ...(sCity?.trim() ? { city: sCity.trim().slice(0, 120) } : {}) } as CityQuery, ctl.signal)
       .then((r) => setSuggestion(exactGameMatch(r.games, sName, sCity)))
       .catch(() => {})
     return () => ctl.abort()
@@ -95,7 +110,7 @@ export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function
           initialQuery={initialQuery}
           near={near.near}
           limit={8}
-          search={search}
+          search={run}
           debounceMs={debounceMs}
           onPick={onPick}
           onCreate={onCreate}

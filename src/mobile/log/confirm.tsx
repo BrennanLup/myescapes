@@ -127,6 +127,7 @@ export function ConfirmStep(p: ConfirmProps) {
               label="Search the room directory"
               inputTestId="confirm-room-search"
               inputProps={{ id: 'm-room-search', autoFocus: true }}
+              city={p.venue.city || p.game.city}
               onPick={(pick) => {
                 setChangingRoom(false)
                 p.onChangeRoom?.(pick)
