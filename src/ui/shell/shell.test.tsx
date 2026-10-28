@@ -94,6 +94,17 @@ describe('Hud', () => {
   })
 })
 
+describe("Hud in a friend's room", () => {
+  afterEach(() => useStore.setState({ visiting: null }))
+
+  it("names whose escapes these are instead of 'My Escapes'", () => {
+    useStore.setState({ worldReady: true, visiting: { handle: 'robin', owner: { id: 'u-r', handle: 'robin', displayName: 'Robin Host', image: null } } })
+    render(<Hud />)
+    expect(screen.getByTestId('hud-title').textContent).toContain("Robin's escapes")
+    expect(screen.getByTestId('hud-title').textContent).not.toContain('My Escapes')
+  })
+})
+
 describe('LoadingScreen', () => {
   it('shows the enter button when ready and sets worldReady after the fade', async () => {
     vi.useFakeTimers()

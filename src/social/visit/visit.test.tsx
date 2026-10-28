@@ -6,13 +6,14 @@ import { ApiCallError } from '@/contracts/errors'
 import type { HomeView } from '@/contracts/realtime'
 import type { Dataset } from '@/contracts/types'
 import { resetRealtime, useRealtime } from '@/net/store'
+import { runtime } from '@/contracts/runtime'
 import { useStore } from '@/state/store'
 import { resetShellForTests, useShell } from '@/ui/shell/shellStore'
 import { installBridge } from '@/state/bridge'
 import { HomeVisitPage } from './HomeVisitPage'
 import { installVisitNotices } from './notices'
 import { PeopleHud } from './PeopleHud'
-import { installVisit, pageNav, resetVisitForTests, visitHandleFromPath, visitProblem, visitUrl } from './state'
+import { installVisit, pageNav, resetVisitForTests, visitHandleFromPath, visitProblem, visitUrl, VISITOR_SPAWN } from './state'
 
 vi.mock('../../desktop', () => ({ DesktopApp: () => <div data-testid="desktop-room" /> }))
 
@@ -79,6 +80,12 @@ describe("a friend's room is read-only", () => {
     expect(useStore.getState().overlay).toEqual({ kind: 'review', roomId: 'r1' })
   })
 
+  it('starts visitors a step away from the owner\'s usual spot', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, view()))
+    installVisit('robin')
+    expect(runtime.player.position).toEqual(VISITOR_SPAWN)
+  })
+
   it('explains why logging is closed', () => {
     const offBridge = installBridge()
     const off = installVisitNotices()
@@ -107,6 +114,16 @@ describe('HomeVisitPage', () => {
     expect(err.dataset.problem).toBe('forbidden')
     expect(screen.getByText("Only @robin's friends can come in")).toBeTruthy()
     expect(screen.getByTestId('visit-back').getAttribute('href')).toBe('/?autostart=1')
+  })
+
+  it('Try again asks the server again after a failed load', async () => {
+    setSessionUser(me)
+    const fetch = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('offline')).mockResolvedValue(json(200, view()))
+    render(<HomeVisitPage params={{ handle: 'robin' }} rest="/" />)
+    expect((await screen.findByTestId('visit-error')).dataset.problem).toBe('unavailable')
+    fireEvent.click(screen.getByText('Try again'))
+    expect(await screen.findByTestId('desktop-room')).toBeTruthy()
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it('opens the room for a friend, and sends you home for your own handle', async () => {
@@ -151,6 +168,19 @@ describe('PeopleHud', () => {
     expect(go).toHaveBeenCalledWith('/?autostart=1')
   })
 
+  it('fits the banner on a phone: first name and "My room"', () => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: !q.includes('min-width'), media: q, addEventListener() {}, removeEventListener() {} }))
+    try {
+      useStore.setState({ visiting: { handle: 'robin', owner: host } })
+      render(<PeopleHud />)
+      expect(screen.getByTestId('visit-banner-title').textContent).toBe("Robin's room")
+      expect(screen.getByTestId('visit-back-home').textContent).toBe('My room')
+      expect(screen.getByLabelText('Back to my room')).toBeTruthy()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('lists who is here and friends to visit, online first', () => {
     online()
     useStore.setState({ visiting: { handle: 'robin', owner: host } })
@@ -168,6 +198,66 @@ describe('PeopleHud', () => {
     expect(friends[0].textContent).toContain("You're here")
     fireEvent.click(screen.getByLabelText("Visit Kim's room"))
     expect(go).toHaveBeenCalledWith('/home/kim?autostart=1')
+  })
+
+  it('offers "Here with you" instead of Visit for a friend in your room', () => {
+    useRealtime.setState({
+      status: 'open',
+      me: host,
+      sid: 's-host',
+      home: { handle: 'robin', owner: host, isOwner: true },
+      players: { 's-guest': { sid: 's-guest', user: guest, isOwner: false, outfit: {} as never, joinedAt: 1 } },
+      friends: { [guest.id]: { user: guest, online: true, where: 'your_home', homeCount: 0 } },
+      friendsLoaded: true,
+    })
+    render(<PeopleHud />)
+    fireEvent.click(screen.getByTestId('people-button'))
+    expect(screen.getByRole('heading', { name: 'People' })).toBeTruthy()
+    const row = screen.getAllByTestId('visit-friend')[0]
+    expect(row.textContent).toContain('Here with you')
+    expect(screen.queryByLabelText("Visit Sam Guest's room")).toBeNull()
+  })
+
+  it('calls the dock button People, like the panel', () => {
+    useRealtime.setState({ status: 'open', me: guest, friendsLoaded: true })
+    render(<PeopleHud />)
+    expect(screen.getByTestId('people-button').textContent).toContain('People')
+  })
+
+  it('puts a chat line the server turned down back in the box', async () => {
+    online()
+    render(<PeopleHud />)
+    fireEvent.click(screen.getByTestId('chat-button'))
+    const input = (await screen.findByTestId('chat-input')) as HTMLInputElement
+    act(() => {
+      useRealtime.setState({ chatReturned: { text: 'look!', message: "You're sending messages quickly. Wait 3 s, then send it again.", n: 1 } })
+    })
+    expect(input.value).toBe('look!')
+    expect(screen.getByText("You're sending messages quickly. Wait 3 s, then send it again.")).toBeTruthy()
+    expect(useRealtime.getState().chatReturned).toBeNull()
+  })
+
+  it('shows a reconnecting chip while the connection is down', () => {
+    online()
+    useRealtime.setState({ status: 'reconnecting' })
+    render(<PeopleHud />)
+    expect(screen.getByTestId('connection-chip').textContent).toContain('Reconnecting')
+  })
+
+  it('keeps the touch chat hint short', () => {
+    online()
+    useStore.setState({ isTouch: true })
+    render(<PeopleHud />)
+    fireEvent.click(screen.getByTestId('chat-button'))
+    expect(screen.getByText('Never saved')).toBeTruthy()
+    expect(screen.queryByText(/Enter sends/)).toBeNull()
+  })
+
+  it('tells the room hints when a panel is open', () => {
+    online()
+    render(<PeopleHud />)
+    fireEvent.click(screen.getByTestId('people-button'))
+    expect(useShell.getState().hudPanelOpen).toBe(true)
   })
 
   it('opens the chat with T and sends a line', async () => {

@@ -36,6 +36,8 @@ export type ConnectionStatus =
   | 'reconnecting'
   /** Another tab or device took over (too many open at once); not retrying. */
   | 'replaced'
+  /** The server closed it after a long time without activity; back on the next key, tap or tab switch. */
+  | 'paused'
 
 /** The part of the browser WebSocket this client uses. */
 export interface SocketLike {
@@ -69,8 +71,12 @@ export const BACKOFF_MS = [1000, 2000, 4000, 8000, 15_000, 30_000] as const
 /** After this many attempts in a row that never opened (signed out, server down), wait longer. */
 export const NEVER_OPENED_LIMIT = 3
 export const NEVER_OPENED_WAIT_MS = 60_000
-/** Ping cadence (clock sync, and keeps the socket from looking idle). */
+/** Ping cadence (clock sync). Pings don't count as activity for the server's idle timeout. */
 export const PING_MS = 20_000
+/** Waits before asking again after the server could not answer a join (a cold database after a deploy). */
+export const JOIN_RETRY_MS = [2000, 3500, 5000, 10_000, 20_000] as const
+/** Join errors that mean "not now", not "never": the client keeps trying. */
+const RETRY_JOIN_CODES = new Set(['rate_limited', 'unavailable'])
 const STATE_INTERVAL_MS = Math.ceil(1000 / REALTIME_LIMITS.STATE_HZ)
 /** The client keeps a little under the server's chat and emote limits. */
 const CHAT_LIMIT = { burst: REALTIME_LIMITS.CHAT_BURST, windowMs: REALTIME_LIMITS.CHAT_WINDOW_MS + 250 }
@@ -131,6 +137,7 @@ export class RealtimeClient {
   private pingTimer: unknown = null
   private stateTimer: unknown = null
   private joinRetryTimer: unknown = null
+  private joinAttempt = 0
   private pendingState: PlayerState | null = null
   private lastStateAt = -Infinity
   private pingSeq = 0
@@ -178,9 +185,9 @@ export class RealtimeClient {
     this.currentHome = null
   }
 
-  /** Skip the wait and try now (the network came back, the tab became visible). */
+  /** Skip the wait and try now (the network came back, the tab became visible, the person is back). */
   reconnectNow(): void {
-    if (this.status !== 'reconnecting') return
+    if (this.status !== 'reconnecting' && this.status !== 'paused') return
     if (this.retryTimer !== null) this.opts.timers.clearTimeout(this.retryTimer)
     this.retryTimer = null
     this.attempt = 0
@@ -209,6 +216,7 @@ export class RealtimeClient {
   /** Be in `handle`'s home (now, and again after every reconnect). */
   join(handle: string): void {
     this.wantedHome = handle
+    this.joinAttempt = 0
     this.sendJoin()
   }
 
@@ -346,6 +354,12 @@ export class RealtimeClient {
         this.setStatus('replaced')
         return
       }
+      // Closed for being away: don't walk straight back in; the app calls reconnectNow() on activity.
+      if (ev.code === CLOSE_CODES.IDLE) {
+        this.attempt = 0
+        this.setStatus('paused')
+        return
+      }
       this.scheduleReconnect(opened)
     }
   }
@@ -396,6 +410,7 @@ export class RealtimeClient {
       case 'joined':
         this.currentHome = msg.home.handle
         this.wantedHome = msg.home.handle
+        this.joinAttempt = 0
         if (!this.clock.synced) this.clock.seed(msg.serverTime, now)
         // A pose that waited for the join goes out now.
         if (this.pendingState) this.sendState(this.pendingState)
@@ -407,13 +422,20 @@ export class RealtimeClient {
         break
       case 'error':
         if (msg.about === 'join') {
-          if (msg.code === 'rate_limited' && msg.retryAfterMs && this.wantedHome) {
-            if (this.joinRetryTimer !== null) this.opts.timers.clearTimeout(this.joinRetryTimer)
-            this.joinRetryTimer = this.opts.timers.setTimeout(() => {
-              this.joinRetryTimer = null
-              this.sendJoin()
-            }, msg.retryAfterMs)
-          } else if (msg.code !== 'rate_limited') {
+          if (RETRY_JOIN_CODES.has(msg.code)) {
+            // Busy or a passing server problem: try again shortly, a little later each time.
+            if (this.wantedHome) {
+              const step = JOIN_RETRY_MS[Math.min(this.joinAttempt, JOIN_RETRY_MS.length - 1)]
+              const wait = Math.max(msg.retryAfterMs ?? 0, Math.round(step * (0.8 + this.opts.random() * 0.4)))
+              this.joinAttempt++
+              if (this.joinRetryTimer !== null) this.opts.timers.clearTimeout(this.joinRetryTimer)
+              this.joinRetryTimer = this.opts.timers.setTimeout(() => {
+                this.joinRetryTimer = null
+                this.sendJoin()
+              }, wait)
+            }
+          } else {
+            // not_found, not_friends, forbidden, home_full ...: asking again won't change the answer.
             this.wantedHome = null
           }
         }

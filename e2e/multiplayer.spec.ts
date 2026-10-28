@@ -78,7 +78,8 @@ test('friends meet in a room, chat, wave and visit each other', async ({ browser
     // The guest opens the host's room: read-only, with the visiting banner.
     await guest.goto(`/home/${A.handle}?autostart=1&gate=off`)
     await waitRoom(guest)
-    await expect(guest.getByTestId('visit-banner')).toContainText("Robin Host's room")
+    // Phones show the first name so the banner fits.
+    await expect(guest.getByTestId('visit-banner')).toContainText(phone ? "Robin's room" : "Robin Host's room")
     await expect(guest.getByTestId('record-button')).toHaveCount(0)
     await expect(guest.getByTestId('wishlist-button')).toHaveCount(0)
     expect(await guest.evaluate(() => window.__ESCAPE__!.store.getState().visiting?.handle)).toBe(A.handle)
@@ -132,7 +133,10 @@ test('friends meet in a room, chat, wave and visit each other', async ({ browser
     await expect(host.getByTestId('people-panel')).toBeVisible()
     await expect(host.locator(`[data-testid="person-row"][data-handle="${B.handle}"]`)).toBeVisible()
     await expect(host.locator(`[data-testid="visit-friend"][data-handle="${B.handle}"]`)).toHaveAttribute('data-online', 'true', { timeout: SLOW })
-    await expect(host.locator(`[data-testid="visit-friend"][data-handle="${B.handle}"]`)).toContainText('In your room')
+    const guestRow = host.locator(`[data-testid="visit-friend"][data-handle="${B.handle}"]`)
+    await expect(guestRow).toContainText('Here with you')
+    // No Visit button for someone already in your room (it would take you to their empty one).
+    await expect(guestRow.getByTestId('visit-friend-button')).toHaveCount(0)
     await host.screenshot({ path: info.outputPath('host-people-panel.png') })
     await host.keyboard.press('Escape')
 

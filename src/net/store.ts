@@ -61,6 +61,8 @@ export interface RealtimeState {
   /** My friends and where they are, by user id. */
   friends: Record<string, FriendPresence>
   friendsLoaded: boolean
+  /** Chat the server turned down (too fast), for the chat box to offer again. `n` changes each time. */
+  chatReturned: { text: string; message: string; n: number } | null
 }
 
 export const initialRealtimeState: RealtimeState = {
@@ -76,6 +78,7 @@ export const initialRealtimeState: RealtimeState = {
   unread: 0,
   friends: {},
   friendsLoaded: false,
+  chatReturned: null,
 }
 
 export const useRealtime = create<RealtimeState>()(() => ({ ...initialRealtimeState }))

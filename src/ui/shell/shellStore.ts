@@ -11,6 +11,8 @@ export interface ShellState {
   toast: { id: number; text: string } | null
   serverStatus: ServerStatus | null
   serverStatusError: boolean
+  /** A HUD panel (people, chat, emotes) is open over the room: hints that would cover it stay away. */
+  hudPanelOpen: boolean
   openHint(): void
   closeHint(): void
   showToast(text: string): void
@@ -25,6 +27,7 @@ export const useShell = create<ShellState>()((set, get) => ({
   toast: null,
   serverStatus: null,
   serverStatusError: false,
+  hudPanelOpen: false,
   openHint: () => set((s) => ({ hintOpen: true, hintNonce: s.hintNonce + 1 })),
   closeHint: () => set({ hintOpen: false }),
   showToast: (text) => set({ toast: { id: ++toastId, text } }),

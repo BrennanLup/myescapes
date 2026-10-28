@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CLOSE_CODES, REALTIME_LIMITS, type PlayerState, type ServerMessage } from '@/contracts/realtime'
-import { backoffDelay, BACKOFF_MS, NEVER_OPENED_WAIT_MS, RealtimeClient, realtimeUrl, WindowLimiter, type SocketLike } from './client'
+import { backoffDelay, BACKOFF_MS, JOIN_RETRY_MS, NEVER_OPENED_WAIT_MS, RealtimeClient, realtimeUrl, WindowLimiter, type SocketLike } from './client'
 
 class FakeSocket implements SocketLike {
   static all: FakeSocket[] = []
@@ -246,6 +246,50 @@ describe('RealtimeClient', () => {
     expect(joins()).toBe(1)
     vi.advanceTimersByTime(1)
     expect(joins()).toBe(2)
+  })
+
+  it('keeps asking, a little slower each time, when the server could not answer a join', () => {
+    const c = make()
+    c.join('mia')
+    c.start()
+    last().open()
+    last().serverSays(hello())
+    const joins = () => last().sent.filter((m) => m.type === 'join').length
+    const fail = () => last().serverSays({ type: 'error', code: 'unavailable', message: 'Something went wrong', about: 'join' })
+    fail()
+    expect(c.wantedHome).toBe('mia')
+    vi.advanceTimersByTime(JOIN_RETRY_MS[0] - 1)
+    expect(joins()).toBe(1)
+    vi.advanceTimersByTime(1)
+    expect(joins()).toBe(2)
+    fail()
+    vi.advanceTimersByTime(JOIN_RETRY_MS[0])
+    expect(joins()).toBe(2)
+    vi.advanceTimersByTime(JOIN_RETRY_MS[1] - JOIN_RETRY_MS[0])
+    expect(joins()).toBe(3)
+    last().serverSays(joined('mia'))
+    expect(c.currentHome).toBe('mia')
+    // A refusal that won't change still ends it.
+    last().serverSays({ type: 'error', code: 'home_full', message: 'Full', about: 'join' })
+    expect(c.wantedHome).toBeNull()
+  })
+
+  it('pauses instead of reconnecting when closed for being idle, and comes back when asked', () => {
+    const c = make()
+    c.join('robin')
+    c.start()
+    last().open()
+    last().serverSays(hello())
+    last().drop(CLOSE_CODES.IDLE)
+    expect(c.status).toBe('paused')
+    vi.advanceTimersByTime(120_000)
+    expect(FakeSocket.all).toHaveLength(1)
+    c.reconnectNow()
+    expect(FakeSocket.all).toHaveLength(2)
+    last().open()
+    last().serverSays(hello('s2'))
+    expect(c.status).toBe('open')
+    expect(last().sent.some((m) => m.type === 'join' && m.home === 'robin')).toBe(true)
   })
 
   it('pings regularly while open', () => {

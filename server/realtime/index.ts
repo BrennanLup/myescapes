@@ -15,7 +15,7 @@ import { CLOSE_CODES, REALTIME_PATH, type RealtimeOutfit } from '../../src/contr
 import type { AppContext } from '../context'
 import { httpError } from '../http'
 import { outfitForUser } from '../routes/avatar.lib'
-import { acceptedFriendIds, homeOwnerByHandle, visitAccess } from './access'
+import { acceptedFriendIds, blockedIdsFor, homeOwnerByHandle, visitAccess } from './access'
 import { RealtimeHub, type HubAccess, type HubLimits } from './hub'
 
 const hubs = new WeakMap<AppContext, RealtimeHub>()
@@ -42,6 +42,7 @@ export function dbAccess(ctx: AppContext): HubAccess {
     friendIds: (userId) => acceptedFriendIds(ctx.db(), userId),
     // Others only ever see the look you saved (and so own), never one a client made up.
     outfitFor: async (userId) => ({ ...(await outfitForUser(ctx.db(), userId)).outfit }) as RealtimeOutfit,
+    blockedIds: (userId) => blockedIdsFor(ctx.db(), userId),
   }
 }
 

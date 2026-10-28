@@ -15,7 +15,7 @@ import { ROUTES } from '../../src/contracts/routes'
 import type { AppContext } from '../context'
 import { datasetForUser } from '../db/dataset'
 import { httpError, defineRoute } from '../http'
-import { homeOwnerByHandle, visitAccess } from '../realtime/access'
+import { blockedIdsFor, homeOwnerByHandle, visitAccess } from '../realtime/access'
 import { existingHub } from '../realtime'
 import { friendIds, publicUsers } from './friends.lib'
 import { wantsSpoilers } from './reviews.lib'
@@ -36,9 +36,12 @@ export async function homesRoutes(app: FastifyInstance, ctx: AppContext): Promis
       if (access === 'not_found') throw httpError('not_found', 'There is no room with that @handle.')
       if (access === 'not_friends') throw httpError('forbidden', `Only @${owner.handle}'s friends can visit their room.`)
       const hub = existingHub(ctx)
+      const inHome = (hub?.peopleInHome(owner.id) ?? []).filter((u) => u.id !== user.id)
+      // A block with another guest hides them here too, as it does in the room itself.
+      const blocked = inHome.length ? await blockedIdsFor(db, user.id) : new Set<string>()
       const presence = {
         ownerOnline: hub?.isOnline(owner.id) ?? false,
-        visitors: (hub?.peopleInHome(owner.id) ?? []).filter((u) => u.id !== user.id),
+        visitors: inHome.filter((u) => !blocked.has(u.id)),
       }
       if (access === 'owner') {
         return { owner: owner.user, isOwner: true, readOnly: false, dataset: await datasetForUser(db, owner.id), spoilersHidden: false, presence }

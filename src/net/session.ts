@@ -6,11 +6,17 @@
  * - Shares your pose (feet, body yaw, look pitch, camera mode, walk/run/emote) up to 10 times a
  *   second while it changes, and your look whenever the wardrobe changes it.
  * - Feeds `useRealtime` (who is here, chat, emotes, friends' presence) and the pose buffers.
- * - Presence toasts: "Mia is in your room", "Mia left".
- * - Retries when the network comes back or the tab is shown again.
+ * - Presence toasts: "Mia is in your room", "Mia left", with soft sounds on the `sfx` bus
+ *   (an arrival plucks a string, a chat line from someone else clicks, your own emote pops).
+ * - Forgets everyone in the room the moment the connection drops (the `joined` after a reconnect
+ *   brings them back), so nobody stands frozen while it reconnects or after it gives up.
+ * - Chat lines the server turns down come back to the chat box (`chatReturned`) to send again.
+ * - Retries when the network comes back, the tab is shown again, or (after an idle close) the
+ *   person presses a key or touches the screen.
  */
 import { getSessionState, refreshSession } from '@/auth/session'
-import type { PlayerState, RealtimeOutfit, ServerMessage, Emote } from '@/contracts/realtime'
+import { REALTIME_LIMITS, type PlayerState, type RealtimeOutfit, type ServerMessage, type Emote } from '@/contracts/realtime'
+import { bus, type SfxName } from '@/contracts/events'
 import { callApi, ROUTES } from '@/contracts/routes'
 import { runtime } from '@/contracts/runtime'
 import { playerView, useCameraMode } from '@/player/view'
@@ -32,6 +38,8 @@ const PRESENCE_REFRESH_MS = 60_000
 
 let client: RealtimeClient | null = null
 let localEmote: { emote: Emote; at: number } | null = null
+/** Chat lines sent and not yet answered (the server echoes each one, or refuses it), oldest first. */
+const chatInFlight: string[] = []
 
 /** The running client (null when signed out or not installed). */
 export function realtimeClient(): RealtimeClient | null {
@@ -89,6 +97,33 @@ function toast(text: string) {
   useShell.getState().showToast(text)
 }
 
+function sfx(name: SfxName) {
+  bus.emit('sfx', { name })
+}
+
+/** Forget who is in the room (connection lost, replaced or given up): nobody stays on as a statue. */
+export function clearRoom(): void {
+  poses.clear()
+  justReplaced.clear()
+  chatInFlight.length = 0
+  const st = useRealtime.getState()
+  if (st.home || Object.keys(st.players).length || Object.keys(st.bubbles).length || Object.keys(st.emotes).length) {
+    useRealtime.setState({ home: null, players: {}, bubbles: {}, emotes: {} })
+  }
+}
+
+/** A chat line the server turned down goes back to the chat box, joined to any others. */
+function returnChat(text: string, message: string): void {
+  const prev = useRealtime.getState().chatReturned
+  const joined = prev ? `${prev.text} ${text}` : text
+  useRealtime.setState({ chatReturned: { text: Array.from(joined).slice(0, REALTIME_LIMITS.CHAT_MAX_LENGTH).join(''), message, n: (prev?.n ?? 0) + 1 } })
+}
+
+/** The words for a chat refused by the limit (shared by the client-side and server-side limit). */
+export function chatSlowDown(retryAfterMs: number | undefined): string {
+  return `You're sending messages quickly. Wait ${Math.max(1, Math.ceil((retryAfterMs ?? 1000) / 1000))} s, then send it again.`
+}
+
 const toPlayer = (p: { sid: string; user: Player['user']; isOwner: boolean; outfit: unknown; joinedAt: number }): Player => ({
   sid: p.sid,
   user: p.user,
@@ -108,6 +143,7 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
     case 'joined': {
       poses.clear()
       justReplaced.clear()
+      chatInFlight.length = 0
       const players: Record<string, Player> = {}
       for (const p of msg.players) {
         players[p.sid] = toPlayer(p)
@@ -145,6 +181,7 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       if (!already && p.user.id !== rt.me?.id) {
         const name = firstName(p.user)
         toast(rt.home?.isOwner ? `${name} is in your room` : p.isOwner ? `${name} is home` : `${name} came in`)
+        sfx('string')
       }
       return
     }
@@ -174,6 +211,8 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       return
     case 'chat': {
       const mine = msg.sid === (c.sid ?? rt.sid)
+      if (mine) chatInFlight.shift()
+      else sfx('click')
       const line: ChatLine = { id: msg.id, sid: msg.sid, user: msg.user, text: msg.text, at: now, mine }
       set({ chat: [...rt.chat, line].slice(-CHAT_LOG_MAX), bubbles: { ...rt.bubbles, [msg.sid]: line }, unread: mine ? rt.unread : rt.unread + 1 })
       return
@@ -185,12 +224,23 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       return
     }
     case 'visitor':
-      if (msg.joined) toast(`${firstName(msg.user)} is in your room`)
+      if (msg.joined) {
+        toast(`${firstName(msg.user)} is in your room`)
+        sfx('string')
+      }
+      return
+    case 'friends_changed':
+      void loadPresence()
       return
     case 'error':
-      if (msg.about === 'join' && msg.code !== 'rate_limited') {
+      // rate_limited and unavailable joins are retried by the client: nothing to tell yet.
+      if (msg.about === 'join' && msg.code !== 'rate_limited' && msg.code !== 'unavailable') {
         set({ joinError: { code: msg.code, message: msg.message } })
         toast(msg.message)
+      }
+      if (msg.about === 'chat') {
+        const text = chatInFlight.shift()
+        if (text && msg.code === 'rate_limited') returnChat(text, chatSlowDown(msg.retryAfterMs))
       }
       return
     case 'pong':
@@ -212,7 +262,12 @@ export async function loadPresence(): Promise<void> {
 
 /** Send a chat line from the chat box. */
 export function sendChat(text: string): SendResult {
-  return client?.sendChat(text) ?? { ok: false, reason: 'offline' }
+  const r = client?.sendChat(text) ?? { ok: false, reason: 'offline' as const }
+  if (r.ok) {
+    chatInFlight.push(text.trim())
+    if (chatInFlight.length > 20) chatInFlight.shift()
+  }
+  return r
 }
 
 /** Play an emote: you see it on your character, others see it on theirs. */
@@ -221,6 +276,7 @@ export function sendEmote(emote: Emote): SendResult {
   if (r.ok) {
     const now = Date.now()
     localEmote = { emote, at: now }
+    sfx('pin')
     const sid = useRealtime.getState().sid
     if (sid) useRealtime.setState((s) => ({ emotes: { ...s.emotes, [sid]: { emote, at: now } } }))
   }
@@ -274,7 +330,13 @@ export async function installRealtime(opts: InstallOptions = {}): Promise<() => 
     })
   client = c
   const offs: (() => void)[] = []
-  offs.push(c.onStatus((status) => useRealtime.setState({ status })))
+  offs.push(
+    c.onStatus((status) => {
+      // Lost, replaced or paused: the people on screen are no longer live. `joined` refills them.
+      if (status !== 'open') clearRoom()
+      useRealtime.setState({ status })
+    }),
+  )
   offs.push(
     c.onMessage((msg) => {
       applyMessage(msg, c)
@@ -320,15 +382,21 @@ export async function installRealtime(opts: InstallOptions = {}): Promise<() => 
   const retry = () => {
     if (document.visibilityState !== 'hidden') c.reconnectNow()
   }
+  // Back from being away (the server closed an idle socket): any key or touch reconnects.
+  const back = () => {
+    if (c.status === 'paused') c.reconnectNow()
+  }
   window.addEventListener('online', retry)
   document.addEventListener('visibilitychange', retry)
+  window.addEventListener('keydown', back, true)
+  window.addEventListener('pointerdown', back, true)
   const bye = () => c.stop()
   // Back from the back/forward cache: the old socket is gone, open a new one.
-  const back = (e: PageTransitionEvent) => {
+  const restored = (e: PageTransitionEvent) => {
     if (e.persisted) c.start()
   }
   window.addEventListener('pagehide', bye)
-  window.addEventListener('pageshow', back)
+  window.addEventListener('pageshow', restored)
 
   c.join(target)
   c.start()
@@ -340,8 +408,10 @@ export async function installRealtime(opts: InstallOptions = {}): Promise<() => 
     clearInterval(presence)
     window.removeEventListener('online', retry)
     document.removeEventListener('visibilitychange', retry)
+    window.removeEventListener('keydown', back, true)
+    window.removeEventListener('pointerdown', back, true)
     window.removeEventListener('pagehide', bye)
-    window.removeEventListener('pageshow', back)
+    window.removeEventListener('pageshow', restored)
     c.stop()
     if (client === c) client = null
   }

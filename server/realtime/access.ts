@@ -9,10 +9,10 @@
  *
  * Homes are addressed by @handle (case-insensitive). A user without a handle has no home address.
  */
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, or, sql } from 'drizzle-orm'
 import type { PublicUser } from '../../src/contracts/models'
 import type { Db } from '../db/client'
-import { users } from '../db/schema'
+import { friendships, users } from '../db/schema'
 import { toPublicUser } from '../db/util'
 import { friendIds, friendshipBetween } from '../routes/friends.lib'
 
@@ -51,4 +51,16 @@ export async function visitAccess(db: Db, viewerId: string, ownerId: string): Pr
 /** Ids of the user's accepted friends. */
 export async function acceptedFriendIds(db: Db, userId: string): Promise<Set<string>> {
   return friendIds(db, userId)
+}
+
+/**
+ * Ids of everyone with a block between them and `userId`, in either direction. Two guests in a
+ * shared friend's home never see each other when one blocked the other (server/realtime/hub.ts).
+ */
+export async function blockedIdsFor(db: Db, userId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ a: friendships.userA, b: friendships.userB })
+    .from(friendships)
+    .where(and(eq(friendships.status, 'blocked'), or(eq(friendships.userA, userId), eq(friendships.userB, userId))))
+  return new Set(rows.map((r) => (r.a === userId ? r.b : r.a)))
 }
