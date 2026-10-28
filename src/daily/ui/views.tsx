@@ -14,7 +14,11 @@ export const MARK_STYLE: Record<GridMark, { bg: string; fg: string; label: strin
   hint: { bg: '#fff7ec', fg: '#3b2a26', label: 'hint' },
 }
 
-export const btn = 'min-h-12 rounded-full px-5 font-display text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40'
+/** Keyboard focus: the app's teal ring, offset from the button so it reads on the orange primary too. */
+export const focusRing = 'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-teal focus-visible:ring-offset-2 focus-visible:ring-offset-panel'
+/** Text fields: the border turns teal with a soft halo (the border colour alone was too subtle). */
+export const fieldFocus = 'outline-none focus:border-teal focus:ring-4 focus:ring-teal/30'
+export const btn = `min-h-12 rounded-full px-5 font-display text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`
 export const btnPrimary = `${btn} bg-accent text-accent-ink shadow hover:brightness-105`
 export const btnGhost = `${btn} border-2 border-panel-edge bg-white/70 text-ink hover:border-accent`
 
@@ -164,7 +168,7 @@ function TextGuess({ c, disabled, onGuess }: InputProps<CombinationChallenge | C
         disabled={disabled}
         placeholder={Array(c.slots).fill(digits ? '0' : 'A').join('')}
         maxLength={c.slots}
-        className="w-full max-w-[16rem] rounded-2xl border-2 border-panel-edge bg-white px-4 py-3 text-center font-mono text-2xl font-semibold uppercase tracking-[0.4em] text-ink outline-none placeholder:text-ink-soft/30 focus:border-accent"
+        className={`w-full max-w-[16rem] rounded-2xl border-2 border-panel-edge bg-white px-4 py-3 text-center font-mono text-2xl font-semibold uppercase tracking-[0.4em] text-ink placeholder:text-ink-soft/30 ${fieldFocus}`}
       />
       <button type="submit" data-testid="daily-submit" className={btnPrimary} disabled={disabled || value.length !== c.slots}>
         Try it
@@ -195,7 +199,7 @@ function NumberSequenceGuess({ c, disabled, onGuess }: InputProps<SequenceDailyC
             inputMode="numeric"
             autoComplete="off"
             disabled={disabled}
-            className="w-20 rounded-2xl border-2 border-panel-edge bg-white px-2 py-3 text-center font-mono text-xl font-semibold text-ink outline-none focus:border-accent"
+            className={`w-20 rounded-2xl border-2 border-panel-edge bg-white px-2 py-3 text-center font-mono text-xl font-semibold text-ink ${fieldFocus}`}
           />
         ))}
       </div>
@@ -229,7 +233,7 @@ function ShapeSequenceGuess({ c, disabled, onGuess }: InputProps<SequenceDailyCh
               aria-label={t ? `Tile ${i + 1}: ${t.colorName} ${t.shape}. Tap to clear.` : `Tile ${i + 1}: empty`}
               disabled={disabled}
               onClick={() => setSlots((old) => old.map((x, j) => (j === i ? null : x)))}
-              className="grid h-14 w-14 place-items-center rounded-xl border-2 border-dashed border-accent bg-white/70"
+              className={`grid h-14 w-14 place-items-center rounded-xl border-2 border-dashed border-accent bg-white/70 ${focusRing}`}
             >
               {t ? <ShapeIcon shape={t.shape} color={t.color} size={34} /> : <span className="font-display text-xl text-accent">{i + 1}</span>}
             </button>
@@ -245,7 +249,7 @@ function ShapeSequenceGuess({ c, disabled, onGuess }: InputProps<SequenceDailyCh
             aria-label={`${t.colorName} ${t.shape}`}
             disabled={disabled || ready}
             onClick={() => pick(t.id)}
-            className="grid h-12 w-12 place-items-center rounded-xl border-2 border-panel-edge bg-white/70 transition hover:border-accent active:scale-95 disabled:opacity-50"
+            className={`grid h-12 w-12 place-items-center rounded-xl border-2 border-panel-edge bg-white/70 transition hover:border-accent active:scale-95 disabled:opacity-50 ${focusRing}`}
           >
             <ShapeIcon shape={t.shape} color={t.color} size={30} />
           </button>
