@@ -275,7 +275,23 @@ export class RealtimeHub {
     } catch (err) {
       this.log(`[realtime] friend list for ${user.id} failed: ${(err as Error).message}`)
     }
-    if (firstSocket && !conn.closed) this.announce(user)
+    if (conn.closed) return
+    if (firstSocket) this.announce(user)
+    // And tell this socket who is already online: a friend whose own list loaded before ours
+    // skipped us in their announce, and nothing else would tell us about them.
+    this.presenceSnapshot(conn)
+  }
+
+  /** Send `conn` one presence line per online friend (mutual in both loaded lists). */
+  private presenceSnapshot(conn: Connection): void {
+    const { user } = conn
+    for (const friendId of this.friendsOf.get(user.id) ?? []) {
+      const conns = this.byUser.get(friendId)
+      if (!conns?.size || !this.friendsOf.get(friendId)?.has(user.id)) continue
+      const friend = [...conns][0].user
+      const where = this.whereFor(friendId, user.id)
+      if (where !== 'offline') this.send(conn, { type: 'presence', user: friend, online: true, where })
+    }
   }
 
   /** The socket closed (or errored). */
@@ -395,14 +411,18 @@ export class RealtimeHub {
     if (access === 'not_found') return this.error(conn, 'not_found', 'There is no room with that @handle.', 'join')
     if (access === 'not_friends') return this.error(conn, 'not_friends', `Only @${owner.handle}'s friends can visit their room.`, 'join')
 
-    if (outfit) conn.outfit = outfit
-    if (state) {
-      conn.state = state
-      conn.stateDirty = false
-    }
     let home = this.homes.get(owner.id)
     if (conn.home && conn.home === home) {
-      // Already there: answer again so a reconnecting client can resync.
+      // Already there: take the pose and outfit it sent, let the others see them, and answer
+      // again so a reconnecting client can resync.
+      if (outfit) {
+        conn.outfit = outfit
+        this.broadcast(home, { type: 'outfit', sid: conn.sid, outfit }, conn)
+      }
+      if (state) {
+        conn.state = state
+        conn.stateDirty = true
+      }
       this.send(conn, this.joinedMessage(home, conn))
       return
     }
@@ -420,6 +440,12 @@ export class RealtimeHub {
     if (!home) {
       home = new Home(owner.id, owner.handle, owner.user)
       this.homes.set(owner.id, home)
+    }
+    // Only now that the join can't fail: a refused join must not change the pose used where it is.
+    if (outfit) conn.outfit = outfit
+    if (state) {
+      conn.state = state
+      conn.stateDirty = false
     }
     conn.home = home
     conn.joinedAt = now
