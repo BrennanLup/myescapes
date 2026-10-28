@@ -14,6 +14,7 @@ import { getMaterial } from '@/world/materials'
 import type { SearchSymbol } from '../../gate/generators'
 import { useRoomPlay } from './playStore'
 import { HIDING_SPOTS, type HidingSpot, type SpotKind } from './search'
+import { MergeStatic } from './MergeStatic'
 
 /** Solid furniture the player bumps into (world-space AABBs). */
 export function furnitureColliders(): AABB[] {
@@ -36,7 +37,10 @@ export function Furniture({ searchSymbol }: { searchSymbol: SearchSymbol | null 
   useColliders(boxes)
   return (
     <group>
-      <StaticDecor />
+      {/* The decor never moves: one draw per material. The hiding spots move and stay separate. */}
+      <MergeStatic>
+        <StaticDecor />
+      </MergeStatic>
       {HIDING_SPOTS.map((spot) => (
         <Spot key={spot.id} spot={spot} symbol={searchSymbol} />
       ))}

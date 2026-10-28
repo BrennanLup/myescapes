@@ -46,11 +46,20 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
   // Reach still works from the character: aim at the door from 2.5 m and open it.
   await aimAt(page, [0, 1.6, 5.5], GATE_DOOR)
   await waitHover(page, 'gate:door')
+  // On a phone the Tap button moves off your character, to the bottom right.
+  if (phone) await expect(page.getByTestId('interact-tap-corner')).toBeVisible()
   if (phone) await page.getByTestId('interact-tap').tap()
   else await page.keyboard.press('e')
   await waitOverlay(page, 'gate')
   await page.keyboard.press('Escape')
   await waitOverlay(page, null)
+
+  // Phone (centred camera): looking down through yourself fades your character so you can see
+  // past it. (The laptop camera is over your shoulder, so the reticle never crosses you.)
+  if (phone) {
+    await page.evaluate(() => window.__ESCAPE__!.requestTeleport([0, 1.6, 2], 0, -0.6))
+    await page.waitForFunction(() => window.__ESCAPE_VIEW__!.playerView.avatarOpacity < 0.8, null, { timeout: SLOW })
+  }
 
   // Too far away is still too far (reach is not measured from the camera).
   await aimAt(page, [0, 1.6, 1.5], GATE_DOOR)

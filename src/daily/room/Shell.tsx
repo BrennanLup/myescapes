@@ -13,6 +13,7 @@ import { LIGHT, PALETTE } from '@/contracts/style'
 import { useStore } from '@/state/store'
 import { getMaterial } from '@/world/materials'
 import { DOOR_HINGE, DOOR_LEAF_T, DR, isThroughExit, roomColliders } from './layout'
+import { MergeStatic } from './MergeStatic'
 import { useRoomPlay } from './playStore'
 
 const W = DR.maxX - DR.minX
@@ -43,7 +44,8 @@ export function RoomShell() {
   const sideW = (W - DR.doorW) / 2
 
   return (
-    <group>
+    // Never moves: one draw per material (MergeStatic). HomeGlow's material is its own, so it stays live.
+    <MergeStatic>
       {/* Floor and ceiling */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, CZ]} material={floor} receiveShadow>
         <planeGeometry args={[W, D]} />
@@ -108,7 +110,7 @@ export function RoomShell() {
       <Box position={[-cw - T / 2, H / 2, corridorMidZ]} size={[T, H, corridorLen + T]} material={plaster} />
       <Box position={[cw + T / 2, H / 2, corridorMidZ]} size={[T, H, corridorLen + T]} material={plaster} />
       <HomeGlow />
-    </group>
+    </MergeStatic>
   )
 }
 
