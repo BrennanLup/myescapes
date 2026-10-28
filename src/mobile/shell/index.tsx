@@ -232,18 +232,27 @@ function MobileSignIn() {
   )
 }
 
+/** Footer links: at least 44 px tall and wide (phone tap targets), padded instead of bare text. */
+const FOOTER_LINK = 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 active:bg-white/60'
+
 function MobileFooter({ signedIn }: { signedIn: boolean }) {
   return (
-    <footer className="mx-auto max-w-xl space-y-3 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 text-sm text-ink-soft">
-      <button type="button" data-testid="view-on-desktop" className="font-semibold text-teal underline" onClick={viewOnDesktop}>
+    <footer className="mx-auto max-w-xl space-y-1 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 text-sm text-ink-soft">
+      <button type="button" data-testid="view-on-desktop" className="-ml-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-teal underline active:bg-white/60" onClick={viewOnDesktop}>
         View on desktop (3D room)
       </button>
-      <nav className="flex flex-wrap gap-4 underline">
-        <a href="/about">About</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
+      <nav className="-ml-2 flex flex-wrap gap-x-2 underline">
+        <a href="/about" className={FOOTER_LINK}>
+          About
+        </a>
+        <a href="/privacy" className={FOOTER_LINK}>
+          Privacy
+        </a>
+        <a href="/terms" className={FOOTER_LINK}>
+          Terms
+        </a>
         {signedIn && (
-          <button type="button" className="underline" onClick={() => void signOut().then(() => window.location.assign('/m'))}>
+          <button type="button" data-testid="mobile-signout" className={`${FOOTER_LINK} underline`} onClick={() => void signOut().then(() => window.location.assign('/m'))}>
             Sign out
           </button>
         )}

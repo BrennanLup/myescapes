@@ -193,6 +193,12 @@ describe('MobileApp', () => {
     expect((await screen.findByTestId('pending-tags')).textContent).toContain('2 visits to confirm')
   })
 
+  it('footer links are full-size tap targets (at least 44 px)', () => {
+    render(<MobileApp rest="/" />)
+    const targets = [screen.getByTestId('view-on-desktop'), screen.getByRole('link', { name: 'About' }), screen.getByRole('link', { name: 'Privacy' }), screen.getByRole('link', { name: 'Terms' })]
+    for (const el of targets) expect(el.className).toMatch(/\bmin-h-11\b/)
+  })
+
   it('"View on desktop" remembers the choice and opens the 3D room', async () => {
     const assign = vi.fn()
     const orig = window.location
