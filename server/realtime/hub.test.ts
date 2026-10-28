@@ -352,6 +352,31 @@ describe('realtime hub: state, chat, emotes', () => {
 })
 
 describe('realtime hub: presence, idle and revalidation', () => {
+  it('two friends connecting at the same time both see each other online', async () => {
+    const { hub } = setup()
+    const pa = new FakePeer()
+    const pb = new FakePeer()
+    // Neither friend list has loaded when the second socket arrives.
+    const a = hub.connect(U.alice, pa)
+    const b = hub.connect(U.bob, pb)
+    await Promise.all([a.ready, b.ready])
+    expect(pa.of('presence').some((m) => (m as { user: PublicUser }).user.id === 'bob')).toBe(true)
+    expect(pb.of('presence').some((m) => (m as { user: PublicUser }).user.id === 'alice')).toBe(true)
+  })
+
+  it('a refused join leaves the pose used in the current home alone', async () => {
+    const { connect, send } = setup({ MAX_PLAYERS_PER_HOME: 2 })
+    const a = await connect(U.alice)
+    const m = await connect(U.mia)
+    const b = await connect(U.bob)
+    await send(a.conn, { type: 'join', home: 'alice' })
+    await send(m.conn, { type: 'join', home: 'alice' })
+    await send(b.conn, { type: 'join', home: 'bob', state: pose(1) })
+    await send(b.conn, { type: 'join', home: 'alice', state: pose(9) })
+    expect(b.peer.last('error')).toMatchObject({ code: 'home_full' })
+    expect(b.conn.state).toEqual(pose(1))
+  })
+
   it('tells online friends (only) when someone comes online, moves and leaves', async () => {
     const { connect, send, hub } = setup()
     const a = await connect(U.alice)
