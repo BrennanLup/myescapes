@@ -12,6 +12,7 @@ import { RecordOverlay } from './ui/record'
 import { ConfirmOverlay } from './ui/confirm'
 import { WishlistOverlay } from './world/wishlist'
 import { DailyOverlay } from './daily/ui/overlay'
+import { DailyWelcome } from './daily/ui/welcome'
 import { WrapOverlay } from './ui/wrap'
 import { LoadingScreen, Hud, SettingsOverlay } from './ui/shell'
 import { Reticle } from './interaction'
@@ -64,6 +65,7 @@ export function App() {
       <MobileControls />
       <Overlays />
       <LoadingScreen />
+      <DailyWelcome />
       <AudioSystem />
     </div>
   )

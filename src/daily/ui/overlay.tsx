@@ -3,6 +3,7 @@
  * (overlay kind `gate`, event `gate:open`). Unlike the Phase 1 gate it never blocks entry: it
  * never opens on its own, and Esc, the close button or a click outside closes it at any time.
  * Solving today's puzzle swings the door open (the Phase 1 door reads `useGateSession`).
+ * "Play in 3D" at the top leads through the door into today's puzzle room (/daily/room).
  */
 import { useCallback, useEffect } from 'react'
 import { bus } from '../../contracts/events'
@@ -10,6 +11,7 @@ import { todayKey, writeLastSolved } from '../../gate/daily'
 import { useGateSession } from '../../gate/session'
 import { useStore } from '../../state/store'
 import { DailyGame } from './DailyGame'
+import { PlayIn3D } from './Play3D'
 
 /** Marks today's door as solved, so it swings open in the room. */
 export function markDoorSolved(now: Date = new Date()) {
@@ -62,6 +64,9 @@ export function DailyOverlay() {
           ×
         </button>
         <div className="overflow-y-auto px-4 py-5 sm:px-7" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+          <div className="mb-4 pr-10">
+            <PlayIn3D compact onNavigate={close} />
+          </div>
           <DailyGame compact onSolved={onSolved} />
         </div>
       </div>

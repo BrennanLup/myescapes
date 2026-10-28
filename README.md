@@ -32,6 +32,7 @@ Locally the database is PGlite (a WebAssembly Postgres in `DATA_DIR/pglite`), so
 | `/m` | The phone app: log a room (voice, captions or typing), the rooms table, review detail, visits to confirm, Escape of the Day card. Never downloads three.js. |
 | `/games/:slug`, `/venues/:slug`, `/cities/:slug` | Public directory pages: aggregates, puzzle highlights behind "Show spoilers", public reviews by @handle (never email), "played together" links, a report button, source attribution. |
 | `/daily` | Escape of the Day. Also behind the door of the 3D room and on the phone's home screen. |
+| `/daily/room` | Escape of the Day as a small 3D puzzle room (clues on the walls, a lock by the door, hidden keys on search days). Finishing opens the door; walking out takes you into your own room. Linked as **Play in 3D** from `/daily` and the room's door. |
 | `/settings` | Profile, inbox (tags and guest-name claims), friends, invite links and QR code, data download (JSON), account deletion, and links to the legal pages. |
 | `/invite/:code` | An invite link: sign in, become friends, claim visits logged under a guest name. |
 | `/welcome` | The landing page directly (also where a failed sign-in explains itself). |
@@ -58,7 +59,7 @@ The round buttons at the top right open the wish list, the year wrap, the voice 
 - **Shared visits.** A visit (game, date, escaped, time, puzzles, photos) is logged once; each person writes their own review. Friends are mutual; only friends can tag you; tags wait in your inbox unless you turned on auto-accept for that friend. A joining friend's review starts as a copy that is left out of public averages until they change a score. Any accepted participant can edit the shared facts, with history.
 - **Review form.** Every question on one scrolling page (phone keyboards never hide the field you're typing in), the room found in the directory as you type (nearest first with **Near me**, or add a new one), and photos added while you write: resized in the browser, uploaded with progress right after you save, with Retry. Photos can also be added later from the review in the 3D room or the room's page on the phone.
 - **Reviews.** Public by default, or friends only, or private. Comments can be marked as spoilers. Admins can hide reviews, photos, games and venues that were reported.
-- **Escape of the Day.** Six guesses, hints that cost points, a spoiler-free share grid, streaks counted against the server's record of your day, and a friends leaderboard.
+- **Escape of the Day.** Six guesses, hints that cost points, a spoiler-free share grid, streaks counted against the server's record of your day, and a friends leaderboard. Play it on `/daily` or walk through it in 3D at `/daily/room` (src/daily/room/README.md).
 - **Wish list** and the **Year in Escape Rooms** wrap (now with your #1 teammate).
 
 ## Configuration
@@ -133,7 +134,7 @@ src/
   mobile/               shell, log (record, confirm, crew chips, upload queue), match, list
   public/               landing, game, venue, city, reviews
   social/               invites, QR, friends, inbox, settings
-  daily/                Escape of the Day engine and UI
+  daily/                Escape of the Day engine, 2D UI and the 3D puzzle room (daily/room)
   world/ player/ interaction/ ui/ state/ audio/ gate/   The 3D room (Phase 1, now on per-user data)
 scripts/
   import/               Foursquare importer, de-duplication, Google place-ID linker, OSM stub
