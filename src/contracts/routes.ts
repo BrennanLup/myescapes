@@ -44,6 +44,8 @@ import {
   PublicUserSchema,
   RelationSchema,
   SpoilerFilterSchema,
+  EnrichStartSchema,
+  EnrichStatusSchema,
   ReportInputSchema,
   ReportSchema,
   ReviewInputSchema,
@@ -473,6 +475,16 @@ export const ROUTES = {
     method: 'POST', path: '/api/admin/reports/:id/resolve', auth: 'admin', ws: 25,
     summary: 'Hide the target or dismiss the report.',
     params: IdParams, body: z.object({ action: z.enum(['hide', 'dismiss']) }), response: ReportSchema,
+  }),
+  adminEnrichStatus: route({
+    method: 'GET', path: '/api/admin/enrich', auth: 'admin', ws: 25,
+    summary: 'Room crawler: runs, totals, rooms in the directory, and the cost estimate for the rest.',
+    response: EnrichStatusSchema,
+  }),
+  adminEnrichStart: route({
+    method: 'POST', path: '/api/admin/enrich', auth: 'admin', ws: 25,
+    summary: 'Start a room crawler run in the background (one at a time; stops before passing budgetUsd). 409 when one is running.',
+    body: EnrichStartSchema, response: z.object({ id: z.string() }), status: 202,
   }),
   adminHide: route({
     method: 'POST', path: '/api/admin/hide', auth: 'admin', ws: 25,

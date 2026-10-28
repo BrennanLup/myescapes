@@ -176,6 +176,7 @@ export function staticPageMeta(p: string): PageMeta | null {
     return { title: `You're invited to ${SITE_NAME}`, description: 'Join me on My Escapes to log the escape rooms we play together.', path: p, noindex: true, noUrl: true }
   }
   if (p === '/m' || p.startsWith('/m/')) return { title: SITE_NAME, description: DEFAULT_DESCRIPTION, path: '/m', noindex: true }
+  if (p.startsWith('/admin')) return { title: `Admin · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, path: p, noindex: true, noUrl: true }
   if (p === '/settings') return { title: `Settings · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, path: '/settings', noindex: true }
   return null
 }
