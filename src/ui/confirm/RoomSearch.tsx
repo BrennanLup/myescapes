@@ -3,9 +3,26 @@
  * (`src/ui/roompicker`) plus an opt-in "Near me" toggle that sorts results nearest first, and an
  * "Add “…”" row for rooms the directory doesn't have. Light: no three.js, used by the phone too.
  */
-import { forwardRef, useId } from 'react'
-import { RoomPicker, type RoomPick, type RoomPickerProps } from '@/ui/roompicker'
+import { forwardRef, useEffect, useId, useState } from 'react'
+import type { GameSummary } from '@/contracts/models'
+import { RoomPicker, searchDirectory, type RoomPick, type RoomPickerProps } from '@/ui/roompicker'
 import { nearLabel, useNearMe } from './near'
+
+const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+
+/**
+ * The directory game that a draft's room name (and city, when given) names exactly, if any.
+ * Picks a same-city match first; otherwise only an unambiguous name match.
+ */
+export function exactGameMatch(games: readonly GameSummary[], name: string, city?: string | null): GameSummary | null {
+  const named = games.filter((g) => norm(g.name) === norm(name))
+  if (!named.length) return null
+  if (city && norm(city)) {
+    const local = named.find((g) => norm(g.city) === norm(city))
+    if (local) return local
+  }
+  return named.length === 1 ? named[0] : null
+}
 
 export interface RoomSearchProps {
   onPick(pick: RoomPick): void
@@ -14,6 +31,10 @@ export interface RoomSearchProps {
   label?: string
   hint?: string
   inputProps?: RoomPickerProps['inputProps']
+  /** data-testid for the text input. */
+  inputTestId?: string
+  /** Look this room up once and offer "Is it …?" when the directory has it exactly. */
+  suggestFor?: { name: string; city?: string | null } | null
   /** Tests: swap the search and the geolocation. */
   search?: RoomPickerProps['search']
   geolocation?: Geolocation
@@ -21,13 +42,25 @@ export interface RoomSearchProps {
 }
 
 export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function RoomSearch(
-  { onPick, onCreate, initialQuery = '', label = 'Find the room', hint = 'Type the room or venue name. Pick it from the list, or add it if it’s new.', inputProps, search, geolocation, debounceMs },
+  { onPick, onCreate, initialQuery = '', inputTestId = 'room-search-input', label = 'Find the room', hint = 'Type the room or venue name. Pick it from the list, or add it if it’s new.', inputProps, suggestFor = null, search, geolocation, debounceMs },
   ref,
 ) {
   const near = useNearMe(geolocation)
   const labelId = useId()
   const hintId = useId()
   const on = near.status === 'on'
+  const [suggestion, setSuggestion] = useState<GameSummary | null>(null)
+  const sName = suggestFor?.name?.trim() ?? ''
+  const sCity = suggestFor?.city ?? null
+  useEffect(() => {
+    setSuggestion(null)
+    if (sName.length < 2) return
+    const ctl = new AbortController()
+    ;(search ?? searchDirectory)({ q: sName, limit: 8 }, ctl.signal)
+      .then((r) => setSuggestion(exactGameMatch(r.games, sName, sCity)))
+      .catch(() => {})
+    return () => ctl.abort()
+  }, [sName, sCity, search])
   return (
     <div className="flex flex-col gap-1.5" data-testid="room-search">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -65,9 +98,27 @@ export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function
           placeholder: 'e.g. The Lost Observatory',
           'aria-labelledby': labelId,
           'aria-describedby': hintId,
+          ...({ 'data-testid': inputTestId } as Record<string, string>),
           ...inputProps,
         }}
       />
+      {suggestion && (
+        <button
+          type="button"
+          data-testid="room-search-suggestion"
+          onClick={() => onPick({ kind: 'game', game: suggestion })}
+          className="flex min-h-12 w-full items-center gap-3 rounded-xl border-2 border-dashed border-teal/50 bg-teal/5 px-3 py-2 text-left transition hover:border-teal hover:bg-teal/10"
+        >
+          <span aria-hidden className="text-lg">✨</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm">
+              Is it <b>{suggestion.name}</b>?
+            </span>
+            <span className="block truncate text-xs text-ink-soft">{[suggestion.venueName, suggestion.city].filter(Boolean).join(' · ')}</span>
+          </span>
+          <span className="shrink-0 rounded-full bg-teal px-3 py-1 text-sm font-bold text-white">Use it</span>
+        </button>
+      )}
       <p id={hintId} className="text-xs text-ink-soft">
         {near.status === 'denied' ? 'Location is blocked for this site, so results are sorted by name.' : hint}
       </p>

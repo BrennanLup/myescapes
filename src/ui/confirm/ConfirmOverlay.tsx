@@ -304,7 +304,9 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                     label="Find it in the room directory"
                     onPick={pickRoom}
                     onCreate={newRoom}
-                    inputProps={{ id: 'cf-room-search', 'data-testid': 'confirm-room-search', className: INPUT }}
+                    inputTestId="confirm-room-search"
+                    suggestFor={{ name: initial.form.room.name, city: initial.form.room.city }}
+                    inputProps={{ id: 'cf-room-search', className: INPUT }}
                   />
                 )}
                 {revisit && (
