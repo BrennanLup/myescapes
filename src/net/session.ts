@@ -21,6 +21,7 @@ import { callApi, ROUTES } from '@/contracts/routes'
 import { runtime } from '@/contracts/runtime'
 import { playerView, useCameraMode } from '@/player/view'
 import { useStore } from '@/state/store'
+import { endVisit } from '@/social/visit/state'
 import { useShell } from '@/ui/shell/shellStore'
 import { useWardrobe } from '@/ui/wardrobe/store'
 import { RealtimeClient, type SendResult } from './client'
@@ -157,16 +158,21 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       justReplaced.clear()
       const home = rt.home
       set({ home: null, players: {}, bubbles: {}, emotes: {} })
-      if (msg.reason === 'kicked' && home) {
-        const message = `${firstName(home.owner)} asked you to leave their room.`
+      const visiting = useStore.getState().visiting
+      const owner = home?.owner ?? visiting?.owner ?? null
+      if (msg.reason === 'kicked') {
+        const message = owner ? `${firstName(owner)} asked you to leave their room.` : 'You were asked to leave this room.'
         set({ joinError: { code: 'forbidden', message } })
-        toast(message)
-      } else if (msg.reason === 'removed' && home) {
-        const message = `You left ${firstName(home.owner)}'s room.`
+        // In a friend's room: it closes (the error page replaces it). Elsewhere, just say so.
+        if (visiting) endVisit({ problem: 'kicked', ownerName: owner ? firstName(owner) : null, retryAfterMs: null })
+        else toast(message)
+      } else if (msg.reason === 'removed') {
+        // Unfriended or blocked while inside: you didn't leave, the room closed to you.
+        const message = owner ? `You can no longer visit ${firstName(owner)}'s room.` : 'You can no longer visit this room.'
         set({ joinError: { code: 'not_friends', message } })
-        toast(message)
-      }
-      else if (msg.reason === 'replaced') toast('You opened this room in another tab, so this one stepped out.')
+        if (visiting) endVisit({ problem: 'removed', ownerName: owner ? firstName(owner) : null, retryAfterMs: null })
+        else toast(message)
+      } else if (msg.reason === 'replaced') toast('You opened this room in another tab, so this one stepped out.')
       return
     }
     case 'player_joined': {
@@ -236,7 +242,14 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       // rate_limited and unavailable joins are retried by the client: nothing to tell yet.
       if (msg.about === 'join' && msg.code !== 'rate_limited' && msg.code !== 'unavailable') {
         set({ joinError: { code: msg.code, message: msg.message } })
-        toast(msg.message)
+        // A friend's room that refuses you (no longer friends, blocked, or still asked to leave):
+        // close it instead of leaving it explorable. A full room stays open to look around.
+        const visiting = useStore.getState().visiting
+        const closed = msg.code === 'not_friends' || msg.code === 'not_found' ? 'removed' : msg.code === 'forbidden' ? 'kicked' : null
+        if (visiting && closed) {
+          const owner = visiting.owner ?? rt.home?.owner ?? null
+          endVisit({ problem: closed, ownerName: owner ? firstName(owner) : null, retryAfterMs: closed === 'kicked' ? (msg.retryAfterMs ?? null) : null })
+        } else toast(msg.message)
       }
       if (msg.about === 'chat') {
         const text = chatInFlight.shift()

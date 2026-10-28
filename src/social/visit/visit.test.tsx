@@ -13,7 +13,7 @@ import { installBridge } from '@/state/bridge'
 import { HomeVisitPage } from './HomeVisitPage'
 import { installVisitNotices } from './notices'
 import { PeopleHud } from './PeopleHud'
-import { installVisit, pageNav, resetVisitForTests, visitHandleFromPath, visitProblem, visitUrl, VISITOR_SPAWN } from './state'
+import { endVisit, installVisit, pageNav, resetVisitForTests, useVisitEnded, visitHandleFromPath, visitProblem, visitUrl, VISITOR_SPAWN } from './state'
 
 vi.mock('../../desktop', () => ({ DesktopApp: () => <div data-testid="desktop-room" /> }))
 
@@ -137,6 +137,49 @@ describe('HomeVisitPage', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, view({ owner: guest, isOwner: true, readOnly: false })))
     render(<HomeVisitPage params={{ handle: 'sam' }} rest="/" />)
     await waitFor(() => expect(go).toHaveBeenCalledWith('/?autostart=1'))
+  })
+
+  it('closes the room when you are removed while inside, and forgets its data', async () => {
+    setSessionUser(me)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, view()))
+    installVisit('robin')
+    useStore.setState({ visiting: { handle: 'robin', owner: host }, reviews: [{ id: 'r1' }] as never, rooms: [{ id: 'room1' }] as never, dataStatus: 'ready', overlay: { kind: 'review', reviewId: 'r1' } as never })
+    render(<HomeVisitPage params={{ handle: 'robin' }} rest="/" />)
+    expect(await screen.findByTestId('desktop-room')).toBeTruthy()
+    act(() => endVisit({ problem: 'removed', ownerName: 'Robin', retryAfterMs: null }))
+    const err = await screen.findByTestId('visit-error')
+    expect(err.dataset.problem).toBe('removed')
+    expect(screen.queryByTestId('desktop-room')).toBeNull()
+    const heading = screen.getByRole('heading', { name: "You can no longer visit Robin's room" })
+    expect(document.activeElement).toBe(heading)
+    expect(screen.getByTestId('visit-back').getAttribute('href')).toBe('/?autostart=1')
+    const st = useStore.getState()
+    expect(st.reviews).toEqual([])
+    expect(st.rooms).toEqual([])
+    expect(st.overlay).toBeNull()
+    expect(st.dataStatus).toBe('idle')
+    // Still read-only, and the friend's data is not fetched again.
+    expect(st.visiting?.handle).toBe('robin')
+    await useStore.getState().loadData()
+    expect(useStore.getState().dataStatus).toBe('error')
+  })
+
+  it('says when the owner asked you to leave, and when you can come back', async () => {
+    setSessionUser(me)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, view()))
+    useStore.setState({ visiting: { handle: 'robin', owner: host } })
+    render(<HomeVisitPage params={{ handle: 'robin' }} rest="/" />)
+    expect(await screen.findByTestId('desktop-room')).toBeTruthy()
+    act(() => endVisit({ problem: 'kicked', ownerName: null, retryAfterMs: 61_000 }))
+    expect((await screen.findByTestId('visit-error')).dataset.problem).toBe('kicked')
+    // No name given: the room's owner from the page's own load.
+    expect(screen.getByRole('heading', { name: 'Robin asked you to leave' })).toBeTruthy()
+    expect(screen.getByText(/visit again in 2 minutes/)).toBeTruthy()
+  })
+
+  it('never ends anything outside a friend\'s room', () => {
+    endVisit({ problem: 'removed', ownerName: 'Robin', retryAfterMs: null })
+    expect(useVisitEnded.getState().ended).toBeNull()
   })
 })
 
