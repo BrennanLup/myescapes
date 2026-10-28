@@ -207,7 +207,8 @@ describe('ConfirmOverlay exact directory match', () => {
     expect(screen.getByTestId('error-room.company').textContent).toMatch(/Use it/)
     expect(document.activeElement).toBe(use)
 
-    screen.getByTestId('confirm-room-search').focus()
+    // (Not the search box: its list closes on a timer after blur.)
+    screen.getByTestId('field-room.name').focus()
     fireEvent.click(screen.getByTestId('confirm-next-missing'))
     expect(document.activeElement).toBe(use)
 
