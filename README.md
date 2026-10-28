@@ -79,6 +79,9 @@ Everything is optional locally. Copy `.env.example` to `.env` and fill in what y
 | `GOOGLE_MAPS_API_KEY` | The place-ID linker does nothing. | `npm run import:google` attaches Google place ids for "Open in Google Maps" links (ids only). Not used by the server. |
 | `DIRECTORY_SEED` | The committed directory seed loads in the background when the directory is empty or the seed changed (off by default under `NODE_ENV=test`). | `off` turns the loader off. |
 | `DIRECTORY_SEED_DIR` | `seed/directory` | Another seed folder. |
+| `ENRICH_SAMPLE` | Off locally and in tests (needs `ANTHROPIC_API_KEY`). | On: once the directory is loaded, a one-off sample run of the room crawler reads a few venue websites. `off` turns it off. |
+| `ENRICH_SAMPLE_VENUES`, `ENRICH_SAMPLE_BUDGET_USD` | 40 venues, $3 (budget capped at $10). | Size of that sample run. Bigger runs are started by an admin at `/admin/rooms`. |
+| `ENRICH_MODEL` | `ANTHROPIC_MODEL`, else the extraction default. | Model the room crawler uses. |
 | `TRUST_PROXY_HOPS` | 3 | How many private-address proxy hops to trust for the client address (rate limits). |
 | `PG_POOL_MAX` | 10 | Postgres pool size. |
 | `MIGRATION_TIMEOUT_MS` | 30000 | How long start-up waits for migrations before listening anyway. |

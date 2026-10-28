@@ -5,6 +5,7 @@
 import type { FastifyInstance } from 'fastify'
 import { authRoutes } from '../auth'
 import type { AppContext } from '../context'
+import { enrichRoutes } from '../enrich'
 import { seoRoutes } from '../seo'
 import { adminRoutes } from './admin'
 import { claimsRoutes } from './claims'
@@ -46,6 +47,7 @@ export const ROUTE_MODULES: readonly RouteModule[] = [
   { ws: 32, name: 'visits', file: 'server/routes/visits.ts', register: visitsRoutes },
   { ws: 33, name: 'reviews', file: 'server/routes/reviews.ts', register: reviewsRoutes },
   { ws: 34, name: 'claims', file: 'server/routes/claims.ts', register: claimsRoutes },
+  { ws: 25, name: 'room crawler', file: 'server/enrich/index.ts', register: enrichRoutes },
 ]
 
 export async function registerRoutes(app: FastifyInstance, ctx: AppContext) {

@@ -51,7 +51,7 @@ export function attributionLines(entries: Attribution[], opts: { fallbackToDefau
   // OSM's licence asks for the "© OpenStreetMap contributors" credit, whatever text the importer stored.
   const osm = bySource.get('osm')
   if (osm && !/openstreetmap contributors/i.test(osm.text)) bySource.set('osm', { ...osm, text: OSM_ATTRIBUTION.text })
-  return [...bySource.values()].filter((a) => a.source === 'foursquare' || a.source === 'osm' || a.source === 'user')
+  return [...bySource.values()].filter((a) => a.source === 'foursquare' || a.source === 'osm' || a.source === 'user' || a.source === 'website')
 }
 
 function safeLink(url: string | undefined): string | undefined {
@@ -71,6 +71,8 @@ export function DirectoryAttribution({ entries, fallbackToDefaults }: { entries:
             <li key={a.source} data-source={a.source}>
               {a.source === 'user' ? (
                 'Some details were added or corrected by players.'
+              ) : a.source === 'website' ? (
+                `${a.text || 'Room details from the venue website'}, summarised by My Escapes.`
               ) : (
                 <>
                   {href ? (
