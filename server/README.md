@@ -32,12 +32,15 @@ npm run serve          # just the server (expects dist/ to exist)
 | `static.ts` | Static serving of `dist/`, caching, br/gzip variants, SPA fallback, JSON 404s, "run npm run build" page |
 | `precompress.ts` | `precompressDist(dir)`: writes `.br`/`.gz` siblings for text assets (post-build step and at startup) |
 | `routes/registry.ts` | The one list of route modules; each workstream owns its module file |
+| `realtime/` | Phase 3: the websocket hub at `/api/realtime` (friends' homes, poses, chat, presence). See `realtime/README.md` |
+| `routes/homes.ts` | Phase 3: `GET /api/homes/:handle` (a friend's room, read-only) and `GET /api/presence` (friends online) |
 
 ## Routes and behaviour
 
 - `GET /health` -> `{ ok: true }`
 - `GET /api/status` -> `ServerStatusV2` (`extraction`, `transcription`, `storage: postgres | pglite | none`, `database: ready | migrating | unavailable | none`, `auth`, `version`). `/health` never touches the database.
 - Everything in `routes/*` (`/api/data`, `/api/extract`, ...).
+- `GET /api/realtime` as a websocket (signed-in, onboarded, same origin; 426 for a plain GET). `@fastify/websocket` is registered in `buildServer` with a 4 KB message limit.
 - Unknown `/api/*` (any method) -> `404 { "error": "not found: ..." }`.
 - `/assets/*` (Vite hashed files): `Cache-Control: public, max-age=31536000, immutable`. A missing asset is a plain 404, never HTML.
 - `index.html` (and the SPA fallback for any other GET): `Cache-Control: no-cache`.

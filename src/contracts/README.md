@@ -8,6 +8,7 @@ Shared shapes every workstream builds against. Owned by the orchestrator (Phase 
 | `api.ts` | Phase 1 HTTP routes (`API`) and `apiClient`, still used by the 3D room |
 | `models.ts` | **Phase 2** domain schemas: Me/PublicUser/handles, City/Venue/Game (+ summaries, matches, attribution), VisitFacts/VisitDetail/Participant/CrewTag/VisitEdit/LogRow, ReviewV2/ReviewInput (visibility, spoiler flag, copied-score flag), PublicReview/Aggregate/PuzzleHighlight, Game/Venue/City pages, Friend/Invite/Notification, WishlistItemV2, Escape of the Day (DailyPuzzle, DailyResult, DailyToday with `serverDay`, Streak, Leaderboard), Report, UsageSummary, AccountExport |
 | `routes.ts` | **Phase 2** route list `ROUTES`: method, path, auth level (`public`/`optional`/`user`/`admin`/`test`), owning workstream, params/query/body/response schemas. `callApi(ROUTES.x, { params, query, body })` is the typed client |
+| `realtime.ts` | **Phase 3 (C)** websocket protocol for `/api/realtime`: client and server messages, `PlayerState`, limits, close codes, presence; `HomeView` (`GET /api/homes/:handle`) and `PresenceList` (`GET /api/presence`); `sanitizeChat` |
 | `errors.ts` | `ApiError` (`{ error, code?, details?, cap?, fallback? }`), `ERROR_CODES` and their HTTP statuses, `SpendingCapError` (429 `spending_cap`, `fallback: typing \| mock`), `ApiCallError` |
 | `scene.ts` | Units, room size, `ANCHORS`, `LAMPS`, `LED_STRIPS`, `WINDOWS`, `anchorToWorld` |
 | `events.ts` | Typed bus: `bus.emit('review:open', { roomId })`, `bus.on(...)` |
