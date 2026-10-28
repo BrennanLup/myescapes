@@ -15,6 +15,7 @@ import type { SearchSymbol } from '../../gate/generators'
 import { useRoomPlay } from './playStore'
 import { HIDING_SPOTS, type HidingSpot, type SpotKind } from './search'
 import { MergeStatic } from './MergeStatic'
+import { ClockRim, DecorStatic, decorColliders, RunClock } from './Decor'
 
 /** Solid furniture the player bumps into (world-space AABBs). */
 export function furnitureColliders(): AABB[] {
@@ -29,6 +30,7 @@ export function furnitureColliders(): AABB[] {
     boxFromCenter('daily:basket', [at('basket')[0], 0.25, at('basket')[2]], [0.66, 0.5, 0.66]),
     boxFromCenter('daily:hatbox', [at('hatbox')[0], 0.15, at('hatbox')[2]], [0.46, 0.3, 0.46]),
     boxFromCenter('daily:lamp', [at('lamp')[0], 0.8, at('lamp')[2]], [0.45, 1.6, 0.45]),
+    ...decorColliders(),
   ]
 }
 
@@ -40,7 +42,10 @@ export function Furniture({ searchSymbol }: { searchSymbol: SearchSymbol | null 
       {/* The decor never moves: one draw per material. The hiding spots move and stay separate. */}
       <MergeStatic>
         <StaticDecor />
+        <DecorStatic />
+        <ClockRim />
       </MergeStatic>
+      <RunClock />
       {HIDING_SPOTS.map((spot) => (
         <Spot key={spot.id} spot={spot} symbol={searchSymbol} />
       ))}
