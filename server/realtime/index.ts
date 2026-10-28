@@ -14,7 +14,7 @@ import type { PublicUser } from '../../src/contracts/models'
 import { CLOSE_CODES, REALTIME_PATH } from '../../src/contracts/realtime'
 import type { AppContext } from '../context'
 import { httpError } from '../http'
-import { acceptedFriendIds, homeOwnerByHandle, visitAccess } from './access'
+import { acceptedFriendIds, blockedIdsFor, homeOwnerByHandle, visitAccess } from './access'
 import { RealtimeHub, type HubAccess, type HubLimits } from './hub'
 
 const hubs = new WeakMap<AppContext, RealtimeHub>()
@@ -39,6 +39,7 @@ export function dbAccess(ctx: AppContext): HubAccess {
     homeOwner: (handle) => homeOwnerByHandle(ctx.db(), handle),
     visitAccess: (viewerId, ownerId) => visitAccess(ctx.db(), viewerId, ownerId),
     friendIds: (userId) => acceptedFriendIds(ctx.db(), userId),
+    blockedIds: (userId) => blockedIdsFor(ctx.db(), userId),
   }
 }
 

@@ -14,8 +14,9 @@
  *   - `chat` at most CHAT_BURST messages per CHAT_WINDOW_MS, CHAT_MAX_LENGTH characters each.
  *   - `emote` at most EMOTE_BURST per EMOTE_WINDOW_MS.
  *   - Anything sustained above FLOOD_MESSAGES_PER_SECOND closes the socket (4008).
- * A socket that sends nothing for IDLE_TIMEOUT_MS is closed (4000); a connection that stops
- * answering transport pings is terminated. Send `ping` now and then while the tab is open.
+ * A socket with no activity (state, chat, emote, join, outfit; `ping` does not count) for
+ * IDLE_TIMEOUT_MS is closed (4000); a connection that stops answering transport pings is
+ * terminated. Send `ping` now and then while the tab is open (clock sync).
  */
 import { z } from 'zod'
 import { PublicUserSchema } from './models'
@@ -33,14 +34,18 @@ export const REALTIME_LIMITS = {
   STATE_HZ: 10,
   STATE_BROADCAST_MS: 100,
   CHAT_MAX_LENGTH: 200,
-  CHAT_BURST: 5,
+  /** Friends send "hi" "hey" "look!" in a row: room for a short burst, about one a second after. */
+  CHAT_BURST: 8,
   CHAT_WINDOW_MS: 10_000,
   EMOTE_BURST: 3,
   EMOTE_WINDOW_MS: 5_000,
   JOIN_BURST: 6,
   JOIN_WINDOW_MS: 10_000,
   FLOOD_MESSAGES_PER_SECOND: 40,
+  /** No activity (moving, chat, emotes; pings don't count) for this long closes the socket. */
   IDLE_TIMEOUT_MS: 10 * 60_000,
+  /** After the owner asks a guest to leave, that guest can't come back in for this long. */
+  KICK_COOLDOWN_MS: 10 * 60_000,
   HEARTBEAT_MS: 20_000,
   /** Guests' right to be in a home (still friends, not blocked) is re-checked this often. */
   REVALIDATE_MS: 60_000,
@@ -184,6 +189,8 @@ export const ServerMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('presence'), user: PublicUserSchema, online: z.boolean(), where: PresenceWhereSchema }),
   /** Someone entered or left your home while you were connected somewhere else ("Mia is in your room"). */
   z.object({ type: z.literal('visitor'), user: PublicUserSchema, joined: z.boolean() }),
+  /** Your friend list changed (a new friend, an unfriend or a block): fetch `GET /api/presence` again. */
+  z.object({ type: z.literal('friends_changed') }),
   z.object({ type: z.literal('error'), code: RealtimeErrorCodeSchema, message: z.string(), retryAfterMs: z.number().optional(), about: z.string().optional() }),
   z.object({ type: z.literal('pong'), n: z.number().optional(), serverTime: z.number() }),
 ])

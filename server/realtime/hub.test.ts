@@ -31,8 +31,22 @@ class Graph implements HubAccess {
   async friendIds(user: string): Promise<Set<string>> {
     return new Set([...this.friends].filter((k) => k.split('|').includes(user)).map((k) => k.split('|').find((x) => x !== user)!))
   }
+  failBlocks = false
+  async blockedIds(user: string): Promise<Set<string>> {
+    if (this.failBlocks) throw new Error('db down')
+    return new Set([...this.blocked].filter((k) => k.split('|').includes(user)).map((k) => k.split('|').find((x) => x !== user)!))
+  }
   unfriend(a: string, b: string) {
     this.friends.delete(this.key(a, b))
+  }
+  befriend(a: string, b: string) {
+    this.friends.add(this.key(a, b))
+  }
+  block(a: string, b: string) {
+    this.blocked.add(this.key(a, b))
+  }
+  unblock(a: string, b: string) {
+    this.blocked.delete(this.key(a, b))
   }
 }
 
@@ -349,6 +363,34 @@ describe('realtime hub: state, chat, emotes', () => {
     expect(hub.peopleInHome('alice').map((u) => u.id)).toEqual(['alice'])
     expect(b.peer.closed).toBeNull()
   })
+
+  it("keeps a guest the owner asked to leave out for a while, until the home empties", async () => {
+    const { a, b, send, hub, advance, connect } = await room()
+    await send(a.conn, { type: 'kick', sid: b.conn.sid })
+    await send(b.conn, { type: 'join', home: 'alice' })
+    const err = b.peer.last('error')!
+    expect(err).toMatchObject({ code: 'forbidden', about: 'join' })
+    expect(err.message).toMatch(/asked you to leave/)
+    // A new tab does not get round it either.
+    const b2 = await connect(U.bob)
+    await send(b2.conn, { type: 'join', home: 'alice' })
+    expect(b2.peer.last('error')).toMatchObject({ code: 'forbidden' })
+    expect(hub.peopleInHome('alice').map((u) => u.id)).toEqual(['alice'])
+    // After the cool-down they are welcome again.
+    advance(REALTIME_LIMITS.KICK_COOLDOWN_MS + 1)
+    await send(b.conn, { type: 'join', home: 'alice' })
+    expect(b.peer.last('joined')).toBeTruthy()
+  })
+
+  it('forgets kicks when the home empties', async () => {
+    const { a, b, send, hub, advance } = await room()
+    await send(a.conn, { type: 'kick', sid: b.conn.sid })
+    hub.disconnect(a.conn)
+    expect(hub.stats().homes).toBe(0)
+    advance(20_000)
+    await send(b.conn, { type: 'join', home: 'alice' })
+    expect(b.peer.last('joined')).toBeTruthy()
+  })
 })
 
 describe('realtime hub: presence, idle and revalidation', () => {
@@ -428,19 +470,21 @@ describe('realtime hub: presence, idle and revalidation', () => {
       hub.tick()
     }
     expect(a.peer.closed).toBeNull()
-    await send(a.conn, { type: 'ping' })
+    // Real activity (joining, moving, chat) resets the idle clock ...
+    await send(a.conn, { type: 'join', home: 'alice' })
     for (let i = 0; i < 7; i++) {
+      // ... but the client's clock-sync pings don't: an AFK tab still counts as idle.
+      await send(a.conn, { type: 'ping' })
       hub.pong(a.conn)
       advance(1000)
       hub.tick()
     }
     expect(a.peer.closed).toBeNull()
-    for (let i = 0; i < 1; i++) {
-      hub.pong(a.conn)
-      advance(1000)
-      hub.tick()
-    }
+    hub.pong(a.conn)
+    advance(1000)
+    hub.tick()
     expect(a.peer.closed?.code).toBe(CLOSE_CODES.IDLE)
+    expect(hub.stats().homes).toBe(0)
   })
 
   it('removes a guest within one revalidation after an unfriend', async () => {
@@ -490,11 +534,129 @@ describe('realtime hub: presence, idle and revalidation', () => {
     expect(late.closed?.code).toBe(CLOSE_CODES.SERVER_SHUTDOWN)
   })
 
+  it('keeps friend lists only for people still connected, and tells both sides when friendships change', async () => {
+    const { connect, hub, graph } = setup()
+    const a = await connect(U.alice)
+    const c = await connect(U.carol)
+    // Bob disconnects while his friend list is being reloaded.
+    const b = await connect(U.bob)
+    const slow = graph.friendIds.bind(graph)
+    graph.friendIds = async (user) => {
+      if (user === 'bob') hub.disconnect(b.conn)
+      return slow(user)
+    }
+    a.peer.clear()
+    c.peer.clear()
+    graph.befriend('alice', 'carol')
+    await hub.revalidate()
+    expect((hub as unknown as { friendsOf: Map<string, Set<string>> }).friendsOf.has('bob')).toBe(false)
+    expect(a.peer.of('friends_changed')).toHaveLength(1)
+    expect(c.peer.of('friends_changed')).toHaveLength(1)
+    // The new friends hear each other online without waiting for the presence poll.
+    expect(a.peer.of('presence').some((m) => m.user.id === 'carol' && m.online)).toBe(true)
+    expect(c.peer.of('presence').some((m) => m.user.id === 'alice' && m.online)).toBe(true)
+  })
+
+  it('one failed friend list does not skip the rest of the revalidation', async () => {
+    const { connect, send, hub, graph } = setup()
+    const a = await connect(U.alice)
+    await send(a.conn, { type: 'join', home: 'alice' })
+    const b = await connect(U.bob)
+    await send(b.conn, { type: 'join', home: 'alice' })
+    const real = graph.friendIds.bind(graph)
+    graph.friendIds = async (user) => {
+      if (user === 'alice') throw new Error('db hiccup')
+      return real(user)
+    }
+    graph.unfriend('alice', 'bob')
+    await hub.revalidate()
+    expect(b.peer.last('left')).toMatchObject({ reason: 'removed' })
+  })
+
   it('reports an unavailable database as an error message, not a crash', async () => {
     const { connect, send, graph } = setup()
     graph.homeOwner = async () => {
       throw new Error('db down')
     }
+    const b = await connect(U.bob)
+    await send(b.conn, { type: 'join', home: 'alice' })
+    expect(b.peer.last('error')).toMatchObject({ code: 'unavailable', about: 'join' })
+  })
+})
+
+describe('realtime hub: blocks between guests', () => {
+  /** Mia hosts; Alice and Eve are both her friends, and Alice has blocked Eve. */
+  async function shared() {
+    const s = setup()
+    s.graph.befriend('mia', 'eve')
+    const m = await s.connect(U.mia)
+    await s.send(m.conn, { type: 'join', home: 'mia' })
+    const a = await s.connect(U.alice)
+    await s.send(a.conn, { type: 'join', home: 'mia', state: pose(1) })
+    const e = await s.connect(U.eve)
+    await s.send(e.conn, { type: 'join', home: 'mia', state: pose(2) })
+    return { ...s, m, a, e }
+  }
+
+  it('lets both in, but neither sees the other', async () => {
+    const { m, a, e } = await shared()
+    expect(e.peer.last('joined')!.players.map((p) => p.user.id)).toEqual(['mia'])
+    expect(a.peer.of('player_joined').map((x) => x.player.user.id)).not.toContain('eve')
+    // The host sees both.
+    expect(m.peer.of('player_joined').map((x) => x.player.user.id)).toEqual(['alice', 'eve'])
+  })
+
+  it('hides poses, chat, emotes and looks both ways', async () => {
+    const { hub, send, m, a, e } = await shared()
+    for (const p of [m, a, e]) p.peer.clear()
+    await send(e.conn, { type: 'state', s: pose(5) })
+    await send(a.conn, { type: 'state', s: pose(6) })
+    hub.flushStates()
+    expect(a.peer.of('states').flatMap((x) => x.players.map((p) => p.sid))).not.toContain(e.conn.sid)
+    expect(e.peer.of('states').flatMap((x) => x.players.map((p) => p.sid))).not.toContain(a.conn.sid)
+    expect(m.peer.last('states')!.players.map((p) => p.sid).sort()).toEqual([a.conn.sid, e.conn.sid].sort())
+    await send(e.conn, { type: 'chat', text: 'hello all' })
+    await send(e.conn, { type: 'emote', emote: 'wave' })
+    await send(e.conn, { type: 'outfit', outfit: { hat: 'cap' } })
+    await send(a.conn, { type: 'chat', text: 'hi mia' })
+    expect(a.peer.of('chat').map((c) => c.text)).toEqual(['hi mia'])
+    expect(e.peer.of('chat').map((c) => c.text)).toEqual(['hello all'])
+    expect(a.peer.of('emote')).toHaveLength(0)
+    expect(a.peer.of('outfit')).toHaveLength(0)
+    expect(m.peer.of('chat')).toHaveLength(2)
+    hub.disconnect(e.conn)
+    expect(a.peer.of('player_left')).toHaveLength(0)
+    expect(m.peer.last('player_left')).toMatchObject({ userId: 'eve' })
+  })
+
+  it('a block made while both are in the room takes effect at the next revalidation, and so does an unblock', async () => {
+    const { hub, graph, send, connect } = setup()
+    graph.befriend('mia', 'carol')
+    const m = await connect(U.mia)
+    await send(m.conn, { type: 'join', home: 'mia' })
+    const a = await connect(U.alice)
+    await send(a.conn, { type: 'join', home: 'mia' })
+    const c = await connect(U.carol)
+    await send(c.conn, { type: 'join', home: 'mia' })
+    expect(a.peer.last('player_joined')!.player.user.id).toBe('carol')
+    graph.block('alice', 'carol')
+    await hub.revalidate()
+    expect(a.peer.last('player_left')).toMatchObject({ sid: c.conn.sid })
+    expect(c.peer.last('player_left')).toMatchObject({ sid: a.conn.sid })
+    m.peer.clear()
+    a.peer.clear()
+    await send(c.conn, { type: 'chat', text: 'still here' })
+    expect(a.peer.of('chat')).toHaveLength(0)
+    expect(m.peer.of('chat')).toHaveLength(1)
+    graph.unblock('alice', 'carol')
+    await hub.revalidate()
+    expect(a.peer.last('player_joined')!.player.sid).toBe(c.conn.sid)
+    expect(c.peer.last('player_joined')!.player.sid).toBe(a.conn.sid)
+  })
+
+  it('a failing block lookup refuses the join as unavailable', async () => {
+    const { connect, send, graph } = setup()
+    graph.failBlocks = true
     const b = await connect(U.bob)
     await send(b.conn, { type: 'join', home: 'alice' })
     expect(b.peer.last('error')).toMatchObject({ code: 'unavailable', about: 'join' })

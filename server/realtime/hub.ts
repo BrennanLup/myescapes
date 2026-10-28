@@ -10,13 +10,16 @@
  *   - each connection is a signed-in, onboarded user; it joins at most one home at a time;
  *   - only the owner and accepted friends may join (checked on join, and again every
  *     REVALIDATE_MS for guests, so an unfriend or block removes them within a minute);
+ *   - a block between two guests of the same home hides them from each other completely (no
+ *     poses, chat, emotes, looks or arrivals either way), like everywhere else in the app;
+ *   - a guest the owner asked to leave can't come back for KICK_COOLDOWN_MS;
  *   - caps: MAX_PLAYERS_PER_HOME (the owner always gets in), MAX_SOCKETS_PER_USER;
  *   - rate limits: state at STATE_HZ (excess dropped), chat, emotes and joins per window
  *     (`error rate_limited`), and a flood ceiling that closes the socket;
  *   - poses are coalesced and broadcast every STATE_BROADCAST_MS as one `states` message;
  *   - presence: friends hear when you come online, move or go offline; the owner hears when
  *     someone enters their home while they are elsewhere ("visitor");
- *   - idle sockets are closed, dead ones (no pong) terminated.
+ *   - idle sockets (no activity: pings don't count) are closed, dead ones (no pong) terminated.
  *
  * Single instance only: homes live in this process's memory. Scaling out to several instances
  * needs a shared pub/sub (see DECISIONS.md).
@@ -55,6 +58,8 @@ export interface HubAccess {
   homeOwner(handle: string): Promise<HomeOwner | null>
   visitAccess(viewerId: string, ownerId: string): Promise<VisitAccess>
   friendIds(userId: string): Promise<Set<string>>
+  /** Everyone with a block between them and `userId`, either direction. */
+  blockedIds(userId: string): Promise<Set<string>>
 }
 
 export type HubLimits = { -readonly [K in keyof typeof REALTIME_LIMITS]: number }
@@ -113,7 +118,10 @@ export class Connection {
   readonly user: PublicUser
   readonly peer: Peer
   readonly openedAt: number
+  /** Any message at all (liveness). */
   lastMessageAt: number
+  /** The last real activity: join, leave, state, outfit, emote, chat, kick. Pings don't count. */
+  lastActivityAt: number
   alive = true
   closed = false
   home: Home | null = null
@@ -140,6 +148,7 @@ export class Connection {
     this.peer = peer
     this.openedAt = now
     this.lastMessageAt = now
+    this.lastActivityAt = now
     this.floodWindowStart = now
     this.chat = new Window(limits.CHAT_BURST, limits.CHAT_WINDOW_MS)
     this.emote = new Window(limits.EMOTE_BURST, limits.EMOTE_WINDOW_MS)
@@ -152,6 +161,8 @@ export class Connection {
 
 export class Home {
   readonly members = new Map<string, Connection>()
+  /** Guests the owner asked to leave, by user id, until when they may come back. */
+  readonly kicked = new Map<string, number>()
   constructor(
     readonly ownerId: string,
     readonly handle: string,
@@ -168,6 +179,8 @@ export class RealtimeHub {
   private readonly byUser = new Map<string, Set<Connection>>()
   /** Accepted friends of each online user, refreshed on connect and every REVALIDATE_MS. */
   private readonly friendsOf = new Map<string, Set<string>>()
+  /** Blocks (either direction) of each user in a home, loaded on join and every REVALIDATE_MS. */
+  private readonly blockedOf = new Map<string, Set<string>>()
   private readonly homes = new Map<string, Home>()
   private timer: NodeJS.Timeout | null = null
   private lastHeartbeat: number
@@ -332,6 +345,7 @@ export class RealtimeHub {
       const t = (json as { type?: unknown } | null)?.type
       return this.error(conn, 'invalid', `Invalid message: ${parsed.error.issues[0]?.path.join('.') || 'type'} ${parsed.error.issues[0]?.message ?? ''}`.trim(), typeof t === 'string' ? t.slice(0, 20) : undefined)
     }
+    if (parsed.data.type !== 'ping') conn.lastActivityAt = now
     try {
       await this.handle(conn, parsed.data, now)
     } catch (err) {
@@ -361,14 +375,14 @@ export class RealtimeHub {
         const wait = conn.outfitWindow.take(now)
         if (wait) return this.error(conn, 'rate_limited', 'Changing clothes too fast.', 'outfit', wait)
         conn.outfit = msg.outfit
-        if (conn.home) this.broadcast(conn.home, { type: 'outfit', sid: conn.sid, outfit: msg.outfit }, conn)
+        if (conn.home) this.broadcast(conn.home, { type: 'outfit', sid: conn.sid, outfit: msg.outfit }, conn, conn)
         return
       }
       case 'emote': {
         if (!conn.home) return this.error(conn, 'not_joined', 'Join a home first.', 'emote')
         const wait = conn.emote.take(now)
-        if (wait) return this.error(conn, 'rate_limited', 'Slow down a little.', 'emote', wait)
-        this.broadcast(conn.home, { type: 'emote', sid: conn.sid, emote: msg.emote, at: now }, conn)
+        if (wait) return this.error(conn, 'rate_limited', 'Easy! Try that again in a moment.', 'emote', wait)
+        this.broadcast(conn.home, { type: 'emote', sid: conn.sid, emote: msg.emote, at: now }, conn, conn)
         return
       }
       case 'chat': {
@@ -376,8 +390,8 @@ export class RealtimeHub {
         const text = sanitizeChat(msg.text)
         if (!text) return this.error(conn, 'invalid', 'Say something first.', 'chat')
         const wait = conn.chat.take(now)
-        if (wait) return this.error(conn, 'rate_limited', 'You are sending messages too fast.', 'chat', wait)
-        this.broadcast(conn.home, { type: 'chat', id: `c${++this.chatSeq}`, sid: conn.sid, user: conn.user, text, at: now })
+        if (wait) return this.error(conn, 'rate_limited', `You're sending messages quickly. Wait ${Math.ceil(wait / 1000)} s, then send it again.`, 'chat', wait)
+        this.broadcast(conn.home, { type: 'chat', id: `c${++this.chatSeq}`, sid: conn.sid, user: conn.user, text, at: now }, undefined, conn)
         return
       }
       case 'kick': {
@@ -385,8 +399,13 @@ export class RealtimeHub {
         if (!home || home.ownerId !== conn.user.id) return this.error(conn, 'forbidden', 'Only the owner can ask someone to leave.', 'kick')
         const target = home.members.get(msg.sid)
         if (!target || target.user.id === conn.user.id) return this.error(conn, 'not_found', 'That player is not here.', 'kick')
-        target.joinSeq++
-        this.leaveHome(target, 'kicked')
+        // Not straight back in (a reload or a scripted join): the home remembers for a while.
+        home.kicked.set(target.user.id, now + this.limits.KICK_COOLDOWN_MS)
+        for (const m of [...home.members.values()]) {
+          if (m.user.id !== target.user.id) continue
+          m.joinSeq++
+          this.leaveHome(m, 'kicked')
+        }
         return
       }
       case 'ping':
@@ -410,14 +429,23 @@ export class RealtimeHub {
     if (conn.closed || seq !== conn.joinSeq) return
     if (access === 'not_found') return this.error(conn, 'not_found', 'There is no room with that @handle.', 'join')
     if (access === 'not_friends') return this.error(conn, 'not_friends', `Only @${owner.handle}'s friends can visit their room.`, 'join')
+    // Who this person must not meet in there (a block with another guest).
+    const blocked = await this.access.blockedIds(conn.user.id)
+    if (conn.closed || seq !== conn.joinSeq) return
+    if (this.byUser.has(conn.user.id)) this.blockedOf.set(conn.user.id, blocked)
 
     let home = this.homes.get(owner.id)
+    const kickedUntil = home?.kicked.get(conn.user.id) ?? 0
+    if (access !== 'owner' && kickedUntil > now) {
+      const mins = Math.max(1, Math.ceil((kickedUntil - now) / 60_000))
+      return this.error(conn, 'forbidden', `${owner.user.displayName} asked you to leave. You can come back in ${mins} min.`, 'join', kickedUntil - now)
+    }
     if (conn.home && conn.home === home) {
       // Already there: take the pose and outfit it sent, let the others see them, and answer
       // again so a reconnecting client can resync.
       if (outfit) {
         conn.outfit = outfit
-        this.broadcast(home, { type: 'outfit', sid: conn.sid, outfit }, conn)
+        this.broadcast(home, { type: 'outfit', sid: conn.sid, outfit }, conn, conn)
       }
       if (state) {
         conn.state = state
@@ -451,7 +479,7 @@ export class RealtimeHub {
     conn.joinedAt = now
     home.members.set(conn.sid, conn)
     this.send(conn, this.joinedMessage(home, conn))
-    this.broadcast(home, { type: 'player_joined', player: this.remote(conn) }, conn)
+    this.broadcast(home, { type: 'player_joined', player: this.remote(conn) }, conn, conn)
     if (home.ownerId !== conn.user.id) this.notifyOwner(home, conn.user, true)
     this.announce(conn.user)
   }
@@ -464,7 +492,7 @@ export class RealtimeHub {
     conn.home = null
     conn.stateDirty = false
     if (!conn.closed) this.send(conn, { type: 'left', home: home.handle, reason })
-    this.broadcast(home, { type: 'player_left', sid: conn.sid, userId: conn.user.id, reason })
+    this.broadcast(home, { type: 'player_left', sid: conn.sid, userId: conn.user.id, reason }, undefined, conn)
     if (!home.members.size) this.homes.delete(home.ownerId)
     if (home.ownerId !== conn.user.id && ![...home.members.values()].some((m) => m.user.id === conn.user.id)) this.notifyOwner(home, conn.user, false)
     this.announce(conn.user)
@@ -476,7 +504,7 @@ export class RealtimeHub {
       home: { handle: home.handle, owner: home.owner },
       sid: conn.sid,
       isOwner: home.ownerId === conn.user.id,
-      players: [...home.members.values()].filter((m) => m !== conn).map((m) => this.remote(m)),
+      players: [...home.members.values()].filter((m) => m !== conn && !this.hidden(m, conn)).map((m) => this.remote(m)),
       serverTime: this.now(),
     }
   }
@@ -507,14 +535,14 @@ export class RealtimeHub {
   flushStates(): void {
     const at = this.now()
     for (const home of this.homes.values()) {
-      const changed: { sid: string; s: PlayerState }[] = []
+      const changed: { from: Connection; sid: string; s: PlayerState }[] = []
       for (const m of home.members.values()) {
-        if (m.stateDirty && m.state) changed.push({ sid: m.sid, s: m.state })
+        if (m.stateDirty && m.state) changed.push({ from: m, sid: m.sid, s: m.state })
         m.stateDirty = false
       }
       if (!changed.length) continue
       for (const m of home.members.values()) {
-        const others = changed.filter((c) => c.sid !== m.sid)
+        const others = changed.filter((c) => c.from !== m && !this.hidden(c.from, m)).map(({ sid, s }) => ({ sid, s }))
         if (others.length) this.send(m, { type: 'states', at, players: others }, true)
       }
     }
@@ -533,7 +561,7 @@ export class RealtimeHub {
         }
         continue
       }
-      if (now - conn.lastMessageAt >= this.limits.IDLE_TIMEOUT_MS) {
+      if (now - conn.lastActivityAt >= this.limits.IDLE_TIMEOUT_MS) {
         this.close(conn, CLOSE_CODES.IDLE, 'idle', 'idle')
         continue
       }
@@ -560,14 +588,58 @@ export class RealtimeHub {
   }
 
   private async doRevalidate(): Promise<void> {
+    // Friend lists: keep only people still connected, and tell anyone whose list changed.
+    const changed: string[] = []
     for (const userId of [...this.byUser.keys()]) {
+      let next: Set<string>
       try {
-        this.friendsOf.set(userId, await this.access.friendIds(userId))
+        next = await this.access.friendIds(userId)
       } catch (err) {
         this.log(`[realtime] revalidate friends failed: ${(err as Error).message}`)
-        return
+        continue
+      }
+      if (!this.byUser.has(userId)) continue
+      const prev = this.friendsOf.get(userId)
+      this.friendsOf.set(userId, next)
+      if (prev && !sameSet(prev, next)) changed.push(userId)
+    }
+    for (const userId of changed) {
+      const conns = this.byUser.get(userId)
+      if (!conns?.size) continue
+      for (const c of conns) this.send(c, { type: 'friends_changed' })
+      // New friends hear where this person is now (each side's snapshot covers the other way).
+      this.announce([...conns][0].user)
+    }
+
+    // Blocks between people sharing a home: hide new pairs from each other, show unblocked ones.
+    const before = new Map<Home, Set<string>>()
+    for (const home of this.homes.values()) before.set(home, this.hiddenPairs(home))
+    const inHomes = new Set<string>()
+    for (const home of this.homes.values()) for (const m of home.members.values()) inHomes.add(m.user.id)
+    for (const userId of inHomes) {
+      try {
+        const blocked = await this.access.blockedIds(userId)
+        if (this.byUser.has(userId)) this.blockedOf.set(userId, blocked)
+      } catch (err) {
+        this.log(`[realtime] revalidate blocks failed: ${(err as Error).message}`)
       }
     }
+    for (const home of [...this.homes.values()]) {
+      const was = before.get(home) ?? new Set<string>()
+      const hiddenNow = this.hiddenPairs(home)
+      for (const [x, y] of pairs(home)) {
+        const key = pairKey(x, y)
+        if (hiddenNow.has(key) && !was.has(key)) {
+          this.send(x, { type: 'player_left', sid: y.sid, userId: y.user.id, reason: 'left' })
+          this.send(y, { type: 'player_left', sid: x.sid, userId: x.user.id, reason: 'left' })
+        } else if (!hiddenNow.has(key) && was.has(key)) {
+          this.send(x, { type: 'player_joined', player: this.remote(y) })
+          this.send(y, { type: 'player_joined', player: this.remote(x) })
+        }
+      }
+    }
+
+    // Guests' right to be in each home.
     for (const home of [...this.homes.values()]) {
       for (const m of [...home.members.values()]) {
         if (m.user.id === home.ownerId) continue
@@ -583,6 +655,19 @@ export class RealtimeHub {
         }
       }
     }
+  }
+
+  /** True when a block stands between these two people (they must not see each other). */
+  private hidden(a: Connection, b: Connection): boolean {
+    if (a.user.id === b.user.id) return false
+    return Boolean(this.blockedOf.get(a.user.id)?.has(b.user.id) || this.blockedOf.get(b.user.id)?.has(a.user.id))
+  }
+
+  /** Keys of the member pairs of `home` that are hidden from each other. */
+  private hiddenPairs(home: Home): Set<string> {
+    const out = new Set<string>()
+    for (const [x, y] of pairs(home)) if (this.hidden(x, y)) out.add(pairKey(x, y))
+    return out
   }
 
   // -------------------------------------------------------------------------
@@ -663,12 +748,17 @@ export class RealtimeHub {
       this.byUser.delete(conn.user.id)
       this.announce(conn.user)
       this.friendsOf.delete(conn.user.id)
+      this.blockedOf.delete(conn.user.id)
     }
   }
 
-  private broadcast(home: Home, msg: ServerMessage, except?: Connection): void {
+  /** Send to everyone in `home` but `except`, and to nobody a block hides `from` from. */
+  private broadcast(home: Home, msg: ServerMessage, except?: Connection, from?: Connection): void {
     const data = JSON.stringify(msg)
-    for (const m of home.members.values()) if (m !== except) this.sendRaw(m, data, false)
+    for (const m of home.members.values()) {
+      if (m === except || (from && this.hidden(from, m))) continue
+      this.sendRaw(m, data, false)
+    }
   }
 
   private send(conn: Connection, msg: ServerMessage, droppable = false): void {
@@ -703,4 +793,22 @@ export class RealtimeHub {
   private error(conn: Connection, code: RealtimeErrorCode, message: string, about?: string, retryAfterMs?: number): void {
     this.send(conn, { type: 'error', code, message, ...(about ? { about } : {}), ...(retryAfterMs ? { retryAfterMs: Math.ceil(retryAfterMs) } : {}) })
   }
+}
+
+function sameSet(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false
+  for (const x of a) if (!b.has(x)) return false
+  return true
+}
+
+/** Every unordered pair of members of a home. */
+function pairs(home: Home): [Connection, Connection][] {
+  const list = [...home.members.values()]
+  const out: [Connection, Connection][] = []
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) out.push([list[i], list[j]])
+  return out
+}
+
+function pairKey(a: Connection, b: Connection): string {
+  return a.sid < b.sid ? `${a.sid}|${b.sid}` : `${b.sid}|${a.sid}`
 }

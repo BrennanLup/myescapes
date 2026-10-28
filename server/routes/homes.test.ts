@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { HomeViewSchema, PresenceListSchema, SPOILER_PLACEHOLDER } from '../../src/contracts/realtime'
-import { reviews } from '../db/schema'
+import { friendships, reviews } from '../db/schema'
 import { hubFor } from '../realtime'
 import type { Peer } from '../realtime/hub'
 import { buildTestApp, type TestApp } from '../testing'
@@ -135,6 +135,22 @@ describe('GET /api/homes/:handle', () => {
       expect(asMia.presence.visitors).toEqual([])
     } finally {
       hub.disconnect(alice)
+      hub.disconnect(mia)
+    }
+  })
+
+  it('leaves out a visitor who has a block with the viewer', async () => {
+    const hub = hubFor(t.ctx)
+    const mia = hub.connect({ id: t.fx.users.mia, handle: 'mia', displayName: 'Mia', image: null }, silentPeer())
+    await mia.ready
+    await hub.message(mia, JSON.stringify({ type: 'join', home: 'alice' }))
+    const [userA, userB] = [t.fx.users.bob, t.fx.users.mia].sort()
+    await t.db.insert(friendships).values({ userA, userB, status: 'blocked', requestedBy: t.fx.users.mia, blockedBy: t.fx.users.mia })
+    try {
+      const view = HomeViewSchema.parse((await home('alice', t.fx.users.bob)).json())
+      expect(view.presence.visitors).toEqual([])
+    } finally {
+      await t.db.delete(friendships).where(and(eq(friendships.userA, userA), eq(friendships.userB, userB)))
       hub.disconnect(mia)
     }
   })
