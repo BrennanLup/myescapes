@@ -69,6 +69,33 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     await expect(pp.getByTestId('confirm-score-overall')).toBeVisible()
   })
 
+  await test.step('phone: an unset score shows an empty track until it is tapped', async () => {
+    // The transcript gave no setting score: no thumb, a "Tap to rate" hint, the box empty.
+    await expect(pp.getByTestId('confirm-score-setting-slider-hint')).toHaveText('Tap to rate')
+    await expect(pp.getByTestId('confirm-score-setting')).toHaveValue('')
+    await pp.getByTestId('confirm-score-setting-slider').click()
+    await expect(pp.getByTestId('confirm-score-setting-slider-hint')).toHaveCount(0)
+    await expect(pp.getByTestId('confirm-score-setting')).not.toHaveValue('')
+    // Scores the transcript did give show as normal sliders.
+    await expect(pp.getByTestId('confirm-score-overall-slider-hint')).toHaveCount(0)
+  })
+
+  await test.step('phone: a keyboard that shrinks the page itself never puts the Save bar over the field', async () => {
+    const field = pp.getByTestId('confirm-comment-difficulty')
+    await field.focus()
+    // Firefox for Android (or interactive-widget=resizes-content): the layout viewport shrinks.
+    await pp.setViewportSize({ width: 390, height: 480 })
+    await expect(pp.getByTestId('log-confirm')).toHaveAttribute('data-keyboard', 'open')
+    await expect
+      .poll(async () => {
+        const box = await field.boundingBox()
+        return box ? box.y >= 0 && box.y + box.height <= 480 : false
+      })
+      .toBe(true)
+    await pp.setViewportSize({ width: 390, height: 844 })
+    await expect(pp.getByTestId('log-confirm')).toHaveAttribute('data-keyboard', 'closed')
+  })
+
   await test.step('phone: change the room with the directory search', async () => {
     await pp.getByTestId('confirm-change-game').click()
     await pp.getByTestId('confirm-room-search').fill('Golden Gate')
@@ -80,6 +107,10 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     await pp.getByTestId('photo-input').setInputFiles([await pngFile(pp, 'one.png', '#e07b39'), await pngFile(pp, 'two.png', '#2f8f8a')])
     await expect(pp.getByTestId('photo-status')).toHaveText(/2 photos will upload when you save/, { timeout: 30_000 })
     await expect(pp.getByTestId('confirm-photos').getByTestId('photo-tile')).toHaveCount(2)
+    // A file that isn't a photo is skipped, and the status line says so.
+    await pp.getByTestId('photo-input').setInputFiles([{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('not a photo') }])
+    await expect(pp.getByTestId('photo-status')).toContainText("notes.txt isn't a photo, so it was skipped.")
+    await expect(pp.getByTestId('photo-status')).toContainText('2 photos will upload when you save')
     // Remove one before saving.
     await pp.getByTestId('confirm-photos').getByRole('button', { name: 'Remove photo 2' }).click()
     await expect(pp.getByTestId('confirm-photos').getByTestId('photo-tile')).toHaveCount(1)
@@ -122,6 +153,14 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     await attach.getByTestId('photo-input').setInputFiles([await pngFile(lp, 'three.png', '#6d3b5c')])
     await expect(attach.getByTestId('photo-status')).toHaveText('1 photo added.', { timeout: SLOW })
     await lp.waitForFunction((v) => (window.__ESCAPE__!.store.getState().reviews.find((r) => r.id === v)?.photos.length ?? 0) === 2, visitId, { timeout: SLOW })
+    // Removing an uploaded photo can be undone: nothing is deleted on the server.
+    await attach.getByRole('button', { name: 'Remove photo 2' }).click()
+    await expect(attach.getByTestId('photo-undo')).toContainText('Photo removed')
+    await expect(attach.getByTestId('photo-tile')).toHaveCount(1)
+    await attach.getByTestId('photo-undo-button').click()
+    await expect(attach.getByTestId('photo-tile')).toHaveCount(2)
+    const detail = await (await lp.request.get(`/api/visits/${encodeURIComponent(visitId)}`)).json()
+    expect(detail.photos).toHaveLength(2)
     await lp.keyboard.press('Escape')
     await waitOverlay(lp, null)
   })
@@ -145,6 +184,10 @@ test('review form: room search, photos while reviewing, on the phone and in the 
       } as never)
     })
     await expect(lp.getByTestId('confirm-overlay')).toBeVisible()
+    // Genre is optional, as on the phone; an unset score would show "Tap to rate" (all are set here).
+    await expect(lp.getByTestId('field-room.genre')).toHaveValue('')
+    await expect(lp.getByTestId('error-room.genre')).toHaveCount(0)
+    await expect(lp.getByTestId('field-review.ratings.overall.score-slider-hint')).toHaveCount(0)
     await lp.getByTestId('room-search-suggestion').click()
     await expect(lp.getByTestId('confirm-room-linked')).toContainText('The Last Lighthouse Keeper')
     await expect(lp.getByTestId('field-room.company')).toHaveValue('Fog City Escapes')

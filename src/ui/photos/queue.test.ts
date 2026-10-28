@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiCallError } from '@/contracts/errors'
 import type { PhotoV2 } from '@/contracts/models'
-import { configurePhotoQueue, MAX_PHOTOS_PER_VISIT, onPhotoUploaded, resetPhotoQueueForTests, summarize, usePhotoQueue } from './queue'
+import { configurePhotoQueue, MAX_PHOTOS_PER_VISIT, onPhotoUploaded, resetPhotoQueueForTests, summarize, usePhotoQueue, watchTarget } from './queue'
 import type { ResizedPhoto } from './resize'
 import type { UploadOptions } from './upload'
 
@@ -29,6 +29,7 @@ afterEach(() => resetPhotoQueueForTests())
 
 describe('photo queue', () => {
   it('resizes picked photos at once but waits for a visit before uploading', async () => {
+    watchTarget('visit:vis_1') // shown somewhere, so finished items stay
     const res = q().addFiles('draft:1', [file(), file('b.png', 'image/png')])
     expect(res).toEqual({ added: 2, rejected: [] })
     await flush()
@@ -55,7 +56,7 @@ describe('photo queue', () => {
     const res = q().addFiles('draft:2', [file('notes.txt', 'text/plain'), file('big.jpg', 'image/jpeg', 41 * 1024 * 1024), file('1.jpg'), file('2.jpg')], { slots: 1 })
     expect(res.added).toBe(1)
     expect(res.rejected).toHaveLength(3)
-    expect(res.rejected[0]).toMatch(/isn't a photo/)
+    expect(res.rejected[0]).toBe("notes.txt isn't a photo, so it was skipped.")
     expect(res.rejected[1]).toMatch(/40 MB/)
     expect(res.rejected[2]).toMatch(new RegExp(`${MAX_PHOTOS_PER_VISIT} photos`))
   })
@@ -63,6 +64,7 @@ describe('photo queue', () => {
   it('marks a failed upload, retries it, and tells listeners when it lands', async () => {
     const seen = vi.fn()
     onPhotoUploaded(seen)
+    watchTarget('visit:vis_1')
     q().addFiles('visit:vis_1', [file()])
     await flush()
     uploads[0].reject(new TypeError('Failed to fetch'))
@@ -109,5 +111,33 @@ describe('photo queue', () => {
     expect(q().items).toHaveLength(1)
     q().clear('visit:vis_1')
     expect(q().items).toHaveLength(0)
+  })
+
+  it('lets finished photos go once nobody shows them, keeping failed ones for Retry', async () => {
+    const revoked: string[] = []
+    let n = 0
+    configurePhotoQueue({ createUrl: () => `blob:${++n}`, revokeUrl: (u) => revoked.push(u) })
+    const release = watchTarget('visit:vis_1')
+    const second = watchTarget('visit:vis_1')
+    q().addFiles('visit:vis_1', [file(), file()])
+    await flush()
+    uploads[0].resolve(photo('pho_1'))
+    await flush()
+    uploads[1].reject(new TypeError('Failed to fetch'))
+    await flush()
+    expect(statuses('visit:vis_1')).toEqual(['done', 'error'])
+    release()
+    expect(statuses('visit:vis_1')).toEqual(['done', 'error']) // still shown by the second watcher
+    second()
+    second() // a second call does nothing
+    expect(statuses('visit:vis_1')).toEqual(['error'])
+    expect(revoked.length).toBeGreaterThan(0)
+
+    // An upload that finishes after everyone stopped watching is dropped as it lands.
+    q().retry(q().items[0].key)
+    await flush()
+    uploads[2].resolve(photo('pho_2'))
+    await flush()
+    expect(statuses('visit:vis_1')).toEqual([])
   })
 })

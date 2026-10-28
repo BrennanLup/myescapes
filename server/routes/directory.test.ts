@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { and, eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { CityPageSchema, GamePageSchema, GameSchema, VenuePageSchema, VenueSchema } from '../../src/contracts/models'
 import { ROUTES } from '../../src/contracts/routes'
@@ -56,6 +56,43 @@ describe('search', () => {
   it('matches a city name', async () => {
     const r = ROUTES.directorySearch.response.parse((await get('/api/directory/search?q=toronto')).body)
     expect(r.venues.map((v) => v.id)).toContain(t.fx.venues.maple)
+  })
+
+  it('ranks the given city first and ignores leading quote marks when names tie', async () => {
+    const vIds = ['ven_t_quoted', 'ven_t_alpha', 'ven_t_zeta']
+    const gIds = ['gam_t_abandoned', 'gam_t_zany', 'gam_t_quoted']
+    const base = { brand: null, address: '', region: '', postalCode: null, lat: null, lng: null, website: null, phone: null, googlePlaceId: null, fsqId: null }
+    await t.db.insert(venues).values([
+      { ...base, id: vIds[0], slug: 'my-escape-krakow', name: '"MY Escape" Rooms', city: 'Krakow', citySlug: t.fx.cities.toronto, country: 'PL' },
+      { ...base, id: vIds[1], slug: 'alpha-escape-club', name: 'Alpha Escape Club', city: 'Austin', citySlug: t.fx.cities.toronto, country: 'US' },
+      { ...base, id: vIds[2], slug: 'zeta-escape-lab', name: 'Zeta Escape Lab', city: 'San Francisco', citySlug: t.fx.cities.sf, country: 'US' },
+    ])
+    await t.db.insert(games).values([
+      { id: gIds[0], venueId: vIds[1], slug: 'abandoned-escape', name: 'Abandoned Escape', genre: 'horror' },
+      { id: gIds[1], venueId: vIds[2], slug: 'zany-escape', name: 'Zany Escape', genre: 'comedy' },
+      { id: gIds[2], venueId: vIds[0], slug: 'mysterium-escape', name: '"Mysterium" Escape', genre: 'mystery' },
+    ])
+    try {
+      for (const trgm of [null, false] as const) {
+        setTrgmForTests(t.db, trgm)
+        const plain = ROUTES.directorySearch.response.parse((await get('/api/directory/search?q=escape&limit=20')).body)
+        const vNames = plain.venues.map((v) => v.name)
+        expect(vNames.indexOf('Alpha Escape Club')).toBeLessThan(vNames.indexOf('"MY Escape" Rooms'))
+        const gNames = plain.games.map((g) => g.name)
+        expect(gNames.indexOf('Abandoned Escape')).toBeLessThan(gNames.indexOf('Zany Escape'))
+        expect(gNames.indexOf('"Mysterium" Escape')).toBeGreaterThan(gNames.indexOf('Abandoned Escape'))
+
+        const sf = ROUTES.directorySearch.response.parse((await get('/api/directory/search?q=escape&limit=20&city=san%20francisco')).body)
+        expect(sf.venues[0].city).toBe('San Francisco')
+        expect(sf.games[0].name).toBe('Zany Escape')
+        // Soft: the other cities still show.
+        expect(sf.venues.map((v) => v.name)).toContain('Alpha Escape Club')
+      }
+    } finally {
+      setTrgmForTests(t.db, null)
+      await t.db.delete(games).where(inArray(games.id, gIds))
+      await t.db.delete(venues).where(inArray(venues.id, vIds))
+    }
   })
 
   it('works without pg_trgm (ILIKE fallback)', async () => {

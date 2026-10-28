@@ -10,6 +10,7 @@ import { ensureRoomPhotoSync } from '@/ui/review/photoSync'
 import { useKeyboardInset, useRevealFocusedField } from './keyboard'
 import { followUploads } from './photosAfterSave'
 import { RoomSearch } from './RoomSearch'
+import { ScoreSlider } from './ScoreSlider'
 import {
   BOOL_FEATURES,
   FEATURE_LABELS,
@@ -309,6 +310,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                     onCreate={newRoom}
                     inputTestId="confirm-room-search"
                     suggestFor={{ name: initial.form.room.name, city: initial.form.room.city }}
+                    city={form.room.city || initial.form.room.city}
                     inputProps={{ id: 'cf-room-search', className: INPUT }}
                   />
                 )}
@@ -330,10 +332,10 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                     <input id={inputId('room.city')} data-testid="field-room.city" className={INPUT} list="cf-cities" value={f.room.city} placeholder="Which city?"
                       onChange={(e) => edit('room.city', (n) => void (n.room.city = e.target.value))} />
                   </Field>
-                  <Field label="Genre" {...fieldProps('room.genre')}>
+                  <Field label="Genre (optional)" {...fieldProps('room.genre')}>
                     <select id={inputId('room.genre')} data-testid="field-room.genre" className={INPUT + ' capitalize'} value={f.room.genre}
                       onChange={(e) => edit('room.genre', (n) => void (n.room.genre = e.target.value as FormState['room']['genre']))}>
-                      <option value="">Choose…</option>
+                      <option value="">Not sure</option>
                       {GENRES.map((g) => (
                         <option key={g} value={g}>{g}</option>
                       ))}
@@ -410,19 +412,11 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                     <div key={k} className="grid gap-4">
                       <Field label={RATING_LABELS[k]} path={sp} flagged={isFlagged(sp)} error={errors[sp]} labelFor={inputId(sp)}>
                         <div className="flex items-center gap-3">
-                          <input
-                            type="range"
-                            min={1}
-                            max={100}
-                            aria-label={`${RATING_LABELS[k]} slider`}
-                            data-testid={`field-${sp}-slider`}
-                            value={score ?? 50}
-                            className={'h-10 flex-1 cursor-pointer accent-accent ' + (score === null ? 'opacity-40' : '')}
-                            onChange={(e) => edit(sp, (n) => void (n.review.ratings[k].score = Number(e.target.value)))}
-                            onPointerUp={(e) => {
-                              const v = Number(e.currentTarget.value)
-                              if (score === null) edit(sp, (n) => void (n.review.ratings[k].score = v))
-                            }}
+                          <ScoreSlider
+                            label={`${RATING_LABELS[k]} slider`}
+                            testId={`field-${sp}-slider`}
+                            value={score}
+                            onChange={(v) => edit(sp, (n) => void (n.review.ratings[k].score = v))}
                           />
                           <input
                             id={inputId(sp)}

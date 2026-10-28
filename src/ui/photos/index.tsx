@@ -18,6 +18,8 @@ export {
   visitOf,
   newDraftTarget,
   onPhotoUploaded,
+  watchTarget,
+  removeUndoMs,
   summarize,
   configurePhotoQueue,
   resetPhotoQueueForTests,

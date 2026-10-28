@@ -190,12 +190,14 @@ export const ROUTES = {
   // -------------------------------------------------------------------------
   directorySearch: route({
     method: 'GET', path: '/api/directory/search', auth: 'public', ws: 5,
-    summary: 'Fuzzy (pg_trgm) search over venues and games. Optional point biases by distance.',
+    summary: 'Fuzzy (pg_trgm) search over venues and games. Optional point biases by distance; optional city ranks that city first.',
     query: z.object({
       q: z.string().trim().min(1).max(120),
       lat: z.coerce.number().min(-90).max(90).optional(),
       lng: z.coerce.number().min(-180).max(180).optional(),
       country: z.string().length(2).optional(),
+      /** Soft: rooms and venues in this city rank first; others still show (Phase 3, workstream A). */
+      city: z.string().trim().max(120).optional(),
       limit: z.coerce.number().int().min(1).max(50).optional(),
     }),
     response: z.object({ venues: z.array(VenueSummarySchema), games: z.array(GameSummarySchema) }),

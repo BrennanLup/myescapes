@@ -11,6 +11,7 @@ import type { CrewSuggestion, CrewTag, GameSummary, VenueSummary, Visibility } f
 import { PUZZLE_TYPES, PUZZLE_TYPE_LABELS, RATING_KEYS, type PuzzleType } from '../../contracts/types'
 import { useKeyboardOpen, useRevealFocusedField } from '../../ui/confirm/keyboard'
 import { RoomSearch } from '../../ui/confirm/RoomSearch'
+import { ScoreSlider } from '../../ui/confirm/ScoreSlider'
 import { PhotoAttach } from '../../ui/photos'
 import type { RoomPick } from '../../ui/roompicker'
 import { CrewPicker } from './crew'
@@ -126,6 +127,7 @@ export function ConfirmStep(p: ConfirmProps) {
               label="Search the room directory"
               inputTestId="confirm-room-search"
               inputProps={{ id: 'm-room-search', autoFocus: true }}
+              city={p.venue.city || p.game.city}
               onPick={(pick) => {
                 setChangingRoom(false)
                 p.onChangeRoom?.(pick)
@@ -187,14 +189,11 @@ export function ConfirmStep(p: ConfirmProps) {
           return (
             <Field key={k} label={`${RATING_LABELS[k]} (1-100)`} flag={flagged(path)} error={errors[path]}>
               <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={1}
-                  max={100}
-                  aria-label={`${RATING_LABELS[k]} slider`}
-                  className="flex-1 accent-[var(--color-accent)]"
-                  value={r.score ?? 50}
-                  onChange={(e) => set('ratings', { ...form.ratings, [k]: { ...r, score: Number(e.target.value) } })}
+                <ScoreSlider
+                  label={`${RATING_LABELS[k]} slider`}
+                  testId={`confirm-score-${k}-slider`}
+                  value={r.score}
+                  onChange={(v) => set('ratings', { ...form.ratings, [k]: { ...r, score: v } })}
                 />
                 <input
                   type="number"
@@ -341,6 +340,7 @@ export function ConfirmStep(p: ConfirmProps) {
 
       <div
         data-testid="confirm-footer"
+        data-reveal-avoid
         className={
           keyboardOpen
             ? 'rounded-2xl border border-panel-edge bg-panel px-4 pt-3 pb-4'

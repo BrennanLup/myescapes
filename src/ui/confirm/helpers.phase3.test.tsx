@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { GameSummary } from '@/contracts/models'
-import { isTypingField, keyboardInset, needsReveal } from './keyboard'
+import { isTypingField, keyboardInset, layoutShrunk, needsReveal, noteViewport, resetViewportMemory } from './keyboard'
 import { roundCoord } from './near'
 import { exactGameMatch, RoomSearch } from './RoomSearch'
 import { draftToForm, draftToEntry, linkGame, linkMatches, linkVenue, newRoomNamed } from './form'
@@ -22,6 +22,22 @@ describe('keyboard helpers', () => {
     expect(keyboardInset({ innerHeight: 800, visualViewport: { height: 480, offsetTop: 0 } as VisualViewport })).toBe(320)
     expect(keyboardInset({ innerHeight: 800, visualViewport: { height: 740, offsetTop: 0 } as VisualViewport })).toBe(0)
     expect(keyboardInset({ innerHeight: 800, visualViewport: null })).toBe(0)
+  })
+  it('counts a page the keyboard made shorter (Firefox for Android) as keyboard-open while typing', () => {
+    resetViewportMemory()
+    const field = document.createElement('input')
+    const button = document.createElement('button')
+    noteViewport({ innerWidth: 390, innerHeight: 844 })
+    // The keyboard took 364 px of the layout viewport; the visual viewport matches it, so the inset is 0.
+    noteViewport({ innerWidth: 390, innerHeight: 480 })
+    expect(keyboardInset({ innerHeight: 480, visualViewport: { height: 480, offsetTop: 0 } as VisualViewport })).toBe(0)
+    expect(layoutShrunk({ innerWidth: 390, innerHeight: 480 }, field)).toBe(true)
+    // Not while a button has focus, not for URL-bar wobble, and a rotation starts over.
+    expect(layoutShrunk({ innerWidth: 390, innerHeight: 480 }, button)).toBe(false)
+    expect(layoutShrunk({ innerWidth: 390, innerHeight: 790 }, field)).toBe(false)
+    noteViewport({ innerWidth: 844, innerHeight: 300 })
+    expect(layoutShrunk({ innerWidth: 844, innerHeight: 300 }, field)).toBe(false)
+    resetViewportMemory()
   })
   it('reveals fields under the keyboard or above the top only', () => {
     expect(needsReveal({ top: 500, bottom: 540 }, 480)).toBe(true)
@@ -70,6 +86,25 @@ describe('room search', () => {
     expect(localStorage.getItem('myescapes.nearMe')).toBe('1')
     await user.click(screen.getByTestId('room-search-near'))
     expect(localStorage.getItem('myescapes.nearMe')).toBeNull()
+  })
+
+  it('ranks the draft city first while Near me is off, and drops the city once it is on', async () => {
+    const user = userEvent.setup()
+    const search = vi.fn(async () => ({ games: [], venues: [] }))
+    const geo = { getCurrentPosition: vi.fn((ok: PositionCallback) => ok({ coords: { latitude: 37.77, longitude: -122.42 } } as GeolocationPosition)) } as unknown as Geolocation
+    render(<RoomSearch onPick={() => {}} onCreate={() => {}} search={search} geolocation={geo} city="San Francisco" debounceMs={0} />)
+    await user.type(screen.getByTestId('room-search-input'), 'escape')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'escape', city: 'San Francisco' }), expect.anything())
+    await user.click(screen.getByTestId('room-search-near'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+    const last = search.mock.calls.at(-1) as unknown as [Record<string, unknown>]
+    expect(last[0]).toMatchObject({ q: 'escape', lat: 37.77, lng: -122.42 })
+    expect(last[0].city).toBeUndefined()
   })
 
   it('says so when location is blocked', async () => {

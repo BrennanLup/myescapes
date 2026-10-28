@@ -91,7 +91,9 @@ export function VenueGameMatcher({ hints, onPick, onCancel, initialMode, fetch: 
     if (!q) return
     setLoading(true)
     try {
-      const r = await callApi(ROUTES.directorySearch, { query: { q, limit: 20 } }, opts)
+      // The transcript's city ranks rooms there first (soft: other cities still show).
+      const city = clean(hints.city)
+      const r = await callApi(ROUTES.directorySearch, { query: { q, limit: 20, ...(city ? { city: city.slice(0, 120) } : {}) } }, opts)
       // Search results have no match score: keep the server's order.
       const n = Math.max(r.games.length, 1)
       setGames(rankGames(r.games.map((game, i) => ({ game, score: Math.max(0, 0.7 - (i / n) * 0.7) }))))
