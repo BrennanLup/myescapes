@@ -36,7 +36,7 @@ export function windowCorners(w: (typeof WINDOWS)[number]): [Vec3, Vec3, Vec3, V
 
 const INWARD: Record<string, Vec3> = { north: [0, 0, 1], south: [0, 0, -1], east: [-1, 0, 0], west: [1, 0, 0] }
 
-/** Moonlight shafts for every window the moon actually shines into. */
+/** Moonlight shafts for every window the moon shines into whose beam lands on this room's floor. */
 export function moonShafts(dir: Vec3 = moonDirection()): Shaft[] {
   const out: Shaft[] = []
   WINDOWS.forEach((w, i) => {
@@ -48,6 +48,8 @@ export function moonShafts(dir: Vec3 = moonDirection()): Shaft[] {
       const t = p[1] / -dir[1]
       return [p[0] + dir[0] * t, 0, p[2] + dir[2] * t] as Vec3
     }) as Shaft['floor']
+    // A grazing beam that would end beyond another wall is mostly blocked: skip it.
+    if (floor.some((p) => Math.abs(p[0]) > HALF_W || Math.abs(p[2]) > HALF_D)) return
     out.push({ id: `${w.wall}-${i}`, window: win, floor })
   })
   return out

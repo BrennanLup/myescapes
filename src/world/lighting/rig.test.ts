@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ANCHORS, HALF_D, HALF_W, LAMPS, LED_STRIPS, ROOM } from '@/contracts/scene'
 import { lightRig, shadowCasterCount, type PointLightSpec, type SpotLightSpec } from './rig'
 import { stripTransforms, STRIP_THICKNESS } from './strips'
+import { moonShafts, shaftBounds } from './atmosphere'
 
 const presets = ['low', 'medium', 'high'] as const
 
@@ -20,10 +21,24 @@ describe('lightRig', () => {
     }
   })
 
-  it('casts exactly one shadow at medium/high and none at low', () => {
+  it('casts no shadows at low, board + moon at medium, plus one pendant at high', () => {
     expect(shadowCasterCount(lightRig('low'))).toBe(0)
-    expect(shadowCasterCount(lightRig('medium'))).toBe(1)
-    expect(shadowCasterCount(lightRig('high'))).toBe(1)
+    expect(shadowCasterCount(lightRig('medium'))).toBe(2)
+    expect(shadowCasterCount(lightRig('high'))).toBe(3)
+  })
+
+  it('only adds the environment map, shafts, haze and dust above low', () => {
+    const low = lightRig('low').atmosphere
+    expect(low.envIntensity).toBe(0)
+    expect(low.shafts || low.lampHaze || low.dustCount > 0).toBe(false)
+    for (const q of ['medium', 'high'] as const) {
+      const a = lightRig(q).atmosphere
+      expect(a.envIntensity).toBeGreaterThan(0)
+      expect(a.shafts && a.lampHaze).toBe(true)
+    }
+    expect(lightRig('high').atmosphere.dustCount).toBeGreaterThan(lightRig('medium').atmosphere.dustCount)
+    expect(lightRig('low').post.ao.enabled).toBe(false)
+    expect(lightRig('medium').post.ao.halfRes).toBe(true)
   })
 
   it('puts a warm lamp at every LAMPS point', () => {
@@ -74,5 +89,24 @@ describe('stripTransforms', () => {
       expect(t[i].position[0]).toBeCloseTo((s.from[0] + s.to[0]) / 2)
       expect(t[i].position[2]).toBeCloseTo((s.from[2] + s.to[2]) / 2)
     })
+  })
+})
+
+describe('moonShafts', () => {
+  it('lights the two south windows (the moon is south-south-east)', () => {
+    const ids = moonShafts().map((s) => s.id.split('-')[0])
+    expect(ids).toEqual(['south', 'south'])
+  })
+
+  it('runs each shaft from its window down to a floor patch inside the room', () => {
+    for (const s of moonShafts()) {
+      for (const p of s.floor) {
+        expect(p[1]).toBe(0)
+        expect(Math.abs(p[0])).toBeLessThan(HALF_W)
+        expect(Math.abs(p[2])).toBeLessThan(HALF_D)
+      }
+      const b = shaftBounds(s)
+      expect(b.size.every((v) => v > 0)).toBe(true)
+    }
   })
 })
