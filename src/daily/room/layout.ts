@@ -79,11 +79,12 @@ export function isThroughExit(pos: Vec3 | readonly number[], doorOpen: boolean):
   return doorOpen && pos[2] < EXIT_Z && Math.abs(pos[0]) < DR.corridorHalfW + 0.1
 }
 
-/** Wall slots for clue posters on the west wall (centre of each poster, world space). */
+/** Wall slots for clue posters on the west wall (centre of each poster, world space), in reading order. */
 export function clueSlots(n: number): Vec3[] {
   const span = Math.min(6.4, 1.55 * n)
   const z0 = (DR.minZ + DR.maxZ) / 2 - span / 2 + span / (2 * n)
-  return Array.from({ length: n }, (_, i) => [DR.minX + 0.03, 1.65, z0 + (i * span) / n] as Vec3)
+  // Facing the west wall, south (+Z) is on your left: clue 1 hangs furthest south so they read left to right.
+  return Array.from({ length: n }, (_, i) => [DR.minX + 0.03, 1.65, z0 + ((n - 1 - i) * span) / n] as Vec3)
 }
 
 /** The guess board (chalkboard) on the east wall. */

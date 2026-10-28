@@ -71,7 +71,8 @@ describe('puzzle room layout', () => {
         expect(s[2] - 0.5).toBeGreaterThan(DR.minZ)
         expect(s[2] + 0.5).toBeLessThan(DR.maxZ)
       }
-      for (let i = 1; i < n; i++) expect(slots[i][2] - slots[i - 1][2]).toBeGreaterThan(1.0)
+      // Reading order left to right while facing west: decreasing z.
+      for (let i = 1; i < n; i++) expect(slots[i - 1][2] - slots[i][2]).toBeGreaterThan(1.0)
     }
     expect(BOARD_POS[0]).toBeCloseTo(DR.maxX, 1)
   })
