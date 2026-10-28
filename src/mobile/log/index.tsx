@@ -20,6 +20,7 @@ import { createVisit, extract, transcribe, type ExtractResult } from './api'
 import { ConfirmStep, revealFirstError } from './confirm'
 import { tagsFromNames } from './crew/logic'
 import { useCrewSuggestions } from './crew'
+import { KeysEarned } from './keys'
 import { draftToForm, hintsFrom, memorableIds, reviewOf, toCreateVisitBody, validateLogForm, type FormErrors, type LogForm } from './form'
 import { enqueueRecording, errorMessage, getRecording, removeRecording, uploadRecording, waitingLabel } from './queue'
 import { usePhoneRecorder } from './recorder'
@@ -429,6 +430,7 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
               See the public page
             </a>
           )}
+          <KeysEarned fetch={fetchImpl} />
           <PhotoDone target={photoTarget} visitId={step.visitId} />
           <button type="button" data-testid="log-done-home" className={btnPrimary} onClick={() => onDone(step.visitId)}>
             Back to my rooms

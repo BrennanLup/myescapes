@@ -29,7 +29,7 @@ Locally the database is PGlite (a WebAssembly Postgres in `DATA_DIR/pglite`), so
 | Path | What |
 | --- | --- |
 | `/` | Signed out on a laptop: the landing page with **Continue with Google**. Signed in: the 3D room (after a one-time display name and @handle step). Phones are sent to `/m`. `/?desktop=1` keeps a phone on the 3D room; `/?demo=1` opens the signed-out demo room. |
-| `/m` | The phone app: log a room (voice, captions or typing), the rooms table, review detail, visits to confirm, Escape of the Day card. Never downloads three.js. |
+| `/m` | The phone app: log a room (voice, captions or typing), the rooms table, review detail, visits to confirm, Escape of the Day card, friends online with "Visit in 3D", and the keys each logged room earns ("+10 keys" on the Saved screen, with the way to the wardrobe). Never downloads three.js. |
 | `/games/:slug`, `/venues/:slug`, `/cities/:slug` | Public directory pages: aggregates, puzzle highlights behind "Show spoilers", public reviews by @handle (never email), "played together" links, a report button, source attribution. |
 | `/daily` | Escape of the Day. Also behind the door of the 3D room and on the phone's home screen. |
 | `/daily/room` | Escape of the Day as a small 3D puzzle room (clues on the walls, a lock by the door, hidden keys on search days). Finishing opens the door; walking out takes you into your own room. Linked as **Play in 3D** from `/daily` and the room's door. |

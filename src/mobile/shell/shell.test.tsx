@@ -180,6 +180,23 @@ describe('MobileApp', () => {
     expect((await screen.findByTestId('pending-tags')).textContent).toContain('2 visits to confirm')
   })
 
+  it('home: friends online, with a "Visit in 3D" link into their room', async () => {
+    session.current = { status: 'signed-in', user: ME }
+    const mia = { id: 'usr_mia', handle: 'mia', displayName: 'Mia', image: null }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => (url === '/api/presence' ? json({ friends: [{ user: mia, online: true, where: 'own_home', homeCount: 1 }], here: [], realtime: true }) : json({ error: 'x', code: 'not_implemented' }, 501))),
+    )
+    try {
+      render(<MobileApp rest="/" fetch={(async () => json({ error: 'x', code: 'not_implemented' }, 501)) as unknown as typeof fetch} />)
+      const row = await screen.findByTestId('friend-online')
+      expect(row.textContent).toContain('In their room')
+      expect(screen.getByTestId('friend-online-visit').getAttribute('href')).toBe('/home/mia')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('"View on desktop" remembers the choice and opens the 3D room', async () => {
     const assign = vi.fn()
     const orig = window.location

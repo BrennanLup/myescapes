@@ -1,7 +1,8 @@
 /**
  * Mobile app shell (workstream 13): routing inside /m, sign-in and onboarding gates, the home
  * screen (big "Log an escape room" button, visits to confirm, recordings waiting to upload,
- * Escape of the Day card, the rooms table), "View on desktop" and add-to-home-screen.
+ * Escape of the Day card, friends online with "Visit in 3D", the rooms table), "View on desktop"
+ * and add-to-home-screen.
  *
  * Must never import three.js or anything under src/world (src/mobile/shell/bundle.test.ts checks).
  *
@@ -22,6 +23,7 @@ import { LogFlow } from '../log'
 import { readyLabel, waitingLabel } from '../log/queue'
 import { useUploadQueue } from '../log/useQueue'
 import { applyMobileManifest, DESKTOP_URL, setDesktopPreference } from './device'
+import { FriendsOnline } from './friends'
 import { Onboarding } from './onboarding'
 
 export interface MobileAppProps extends Partial<RouteProps> {
@@ -186,6 +188,7 @@ function Home({ fetch: fetchImpl, meId }: { fetch?: typeof fetch; meId: string }
       <button type="button" data-testid="log-room" className="w-full rounded-3xl bg-accent px-6 py-8 font-display text-2xl text-accent-ink shadow-[var(--shadow-cozy)] active:scale-[0.99]" onClick={() => navigate('/m/log')}>
         Log an escape room
       </button>
+      <FriendsOnline />
       <DailyCard />
       <section className="space-y-2">
         <h2 className="font-display text-xl">My rooms</h2>
