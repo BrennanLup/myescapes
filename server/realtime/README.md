@@ -47,7 +47,8 @@ Rules worth knowing:
   `GET /api/homes/:handle` leaves them out. A block or unblock made while both are inside applies at
   the next revalidation (`player_left` / `player_joined` to just those two).
 - A guest the owner asked to leave can't rejoin that home for 10 minutes (`forbidden`, any tab);
-  the home forgets it when it empties.
+  the cool-down is kept on the hub (owner -> guest -> until), so it holds even when the home
+  empties in between, and expired entries are pruned on the heartbeat.
 - Revalidation keeps going past a failed lookup, keeps friend lists only for connected users, and
   sends `friends_changed` to anyone whose friend list changed (the client refetches presence).
 - Chat is never stored or logged. Server logs only say things like "closed for flooding".

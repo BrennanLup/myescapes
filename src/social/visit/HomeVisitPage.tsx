@@ -3,13 +3,14 @@
  * in, friends), with a friendly page when not, then opens the 3D room with their data, read-only.
  * Your own handle goes to your own room.
  */
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { setSessionUser, useSession } from '@/auth'
 import type { HomeView } from '@/contracts/realtime'
 import type { RouteProps } from '@/router'
 import { useDocumentTitle } from '@/public/shared/useApi'
 import { OnboardingScreen, SignInScreen } from '@/public/landing'
-import { homeUrl, pageNav, preloadHome, visitHandleFromPath, visitProblem, type VisitProblem } from './state'
+import { REALTIME_LIMITS } from '@/contracts/realtime'
+import { homeUrl, pageNav, preloadHome, useVisitEnded, visitHandleFromPath, visitProblem, type VisitProblem } from './state'
 
 const DesktopApp = lazy(async () => ({ default: (await import('../../desktop')).DesktopApp }))
 
@@ -32,6 +33,8 @@ export function HomeVisitPage({ params }: Partial<RouteProps>) {
   const handle = visitHandleFromPath(`/home/${encodeURIComponent(params?.handle ?? '')}`) ?? ''
   const [load, setLoad] = useState<Load>({ state: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  // Unfriended, blocked or asked to leave while inside: the room closes (src/net/session.ts).
+  const ended = useVisitEnded((st) => st.ended)
   useDocumentTitle(load.state === 'ok' ? `${load.view.owner.displayName}'s room · My Escapes` : 'A friend’s room · My Escapes')
 
   const signedIn = session.status === 'signed-in'
@@ -64,6 +67,7 @@ export function HomeVisitPage({ params }: Partial<RouteProps>) {
   if (!handle) return <VisitError problem="not_found" handle={params?.handle ?? ''} onRetry={() => setAttempt((n) => n + 1)} />
   if (load.state === 'loading') return <Blank label={`Opening @${handle}'s room…`} />
   if (load.state === 'error') return <VisitError problem={load.problem} handle={handle} onRetry={() => setAttempt((n) => n + 1)} />
+  if (ended) return <VisitError problem={ended.problem} handle={handle} ownerName={ended.ownerName ?? load.view.owner.displayName} retryAfterMs={ended.retryAfterMs} focus onRetry={() => pageNav.go(homeUrl())} />
   return (
     <Suspense fallback={<Blank label={`Opening ${load.view.owner.displayName}'s room…`} />}>
       <DesktopApp />
@@ -71,7 +75,20 @@ export function HomeVisitPage({ params }: Partial<RouteProps>) {
   )
 }
 
-const COPY: Record<VisitProblem, { title: (h: string) => string; body: string }> = {
+const minutes = (ms: number) => Math.max(1, Math.ceil(ms / 60_000))
+
+const COPY: Record<VisitProblem, { title: (h: string, name: string | null) => string; body: string | ((retryAfterMs: number | null) => string) }> = {
+  removed: {
+    title: (h, name) => `You can no longer visit ${name ? `${name}'s` : `@${h}'s`} room`,
+    body: "Rooms are for friends, and you aren't connected any more, so their room closed. Nothing you saw there was changed.",
+  },
+  kicked: {
+    title: (h, name) => `${name ?? `@${h}`} asked you to leave`,
+    body: (ms) => {
+      const n = minutes(ms ?? REALTIME_LIMITS.KICK_COOLDOWN_MS)
+      return `You can visit again in ${n} ${n === 1 ? 'minute' : 'minutes'}. Your own room is just a click away.`
+    },
+  },
   forbidden: {
     title: (h) => `Only @${h}'s friends can come in`,
     body: 'Rooms are for friends. Send them an invite link, or ask them to add you, then come back.',
@@ -90,14 +107,38 @@ const COPY: Record<VisitProblem, { title: (h: string) => string; body: string }>
   },
 }
 
-export function VisitError({ problem, handle, onRetry }: { problem: VisitProblem; handle: string; onRetry(): void }) {
+export function VisitError({
+  problem,
+  handle,
+  ownerName = null,
+  retryAfterMs = null,
+  focus = false,
+  onRetry,
+}: {
+  problem: VisitProblem
+  handle: string
+  /** Whose room (display name), for the wording of a visit that ended. */
+  ownerName?: string | null
+  /** Asked to leave: how long until they may come back. */
+  retryAfterMs?: number | null
+  /** Move focus to the heading (the page replaced a room the person was in). */
+  focus?: boolean
+  onRetry(): void
+}) {
   const copy = COPY[problem]
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (focus) heading.current?.focus()
+  }, [focus])
+  const name = ownerName?.trim().split(/\s+/)[0] || null
   return (
     <main data-testid="visit-error" data-problem={problem} className="flex min-h-full items-center justify-center bg-[linear-gradient(180deg,#4a2f48,var(--color-night)_420px)] bg-no-repeat px-4 py-10">
       <div className="w-full max-w-md rounded-[var(--radius-cozy)] bg-panel p-6 text-center text-ink shadow-[var(--shadow-cozy)]">
         <DoorIcon />
-        <h1 className="m-0 mt-3 font-display text-2xl font-semibold [overflow-wrap:anywhere] [text-wrap:balance]">{copy.title(handle)}</h1>
-        <p className="m-0 mt-2 text-ink-soft">{copy.body}</p>
+        <h1 ref={heading} tabIndex={-1} className="m-0 mt-3 font-display text-2xl font-semibold outline-none [overflow-wrap:anywhere] [text-wrap:balance]">
+          {copy.title(handle, name)}
+        </h1>
+        <p className="m-0 mt-2 text-ink-soft">{typeof copy.body === 'function' ? copy.body(retryAfterMs) : copy.body}</p>
         <div className="mt-5 flex flex-wrap justify-center gap-3">
           <a href={homeUrl()} data-testid="visit-back" className="inline-flex min-h-11 items-center rounded-full bg-accent px-5 font-display text-base font-semibold text-accent-ink shadow-sm">
             Back to my room

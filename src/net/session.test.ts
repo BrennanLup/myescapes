@@ -7,6 +7,8 @@ import { ServerClock } from './clock'
 import { bus, type AppEvent } from '@/contracts/events'
 import { RealtimeClient, type SocketLike } from './client'
 import { activeLocalEmote, applyMessage, chatSlowDown, clearRoom, installRealtime, localState, poseChanged, sendChat } from './session'
+import { useStore } from '@/state/store'
+import { resetVisitForTests, useVisitEnded } from '@/social/visit/state'
 import { BUBBLE_MS, firstName, friendsInOrder, outfitFor, playersInOrder, poses, resetRealtime, useRealtime } from './store'
 
 const host = { id: 'u-host', handle: 'robin', displayName: 'Robin Host', image: null }
@@ -125,6 +127,43 @@ describe('applyMessage', () => {
     expect(useRealtime.getState().home).toBeNull()
     expect(toast()).toBe('Robin asked you to leave their room.')
     expect(useRealtime.getState().joinError?.message).toBe('Robin asked you to leave their room.')
+  })
+
+  describe("in a friend's room", () => {
+    beforeEach(() => {
+      resetVisitForTests()
+      useStore.setState({ visiting: { handle: 'robin', owner: host }, reviews: [{ id: 'r1' }] as never })
+      apply({ type: 'joined', home: { handle: 'robin', owner: host }, sid: 's-guest', isOwner: false, serverTime: 5000, players: [] })
+    })
+    afterEach(() => {
+      resetVisitForTests()
+      useStore.setState({ visiting: null, reviews: [] })
+    })
+
+    it('closes the room when you are removed (unfriended or blocked), without saying you left', () => {
+      apply({ type: 'left', home: 'robin', reason: 'removed' })
+      expect(useVisitEnded.getState().ended).toEqual({ problem: 'removed', ownerName: 'Robin', retryAfterMs: null })
+      expect(useRealtime.getState().joinError?.message).toBe("You can no longer visit Robin's room.")
+      expect(toast()).toBeNull()
+      expect(useStore.getState().reviews).toEqual([])
+    })
+
+    it('closes the room when the owner asks you to leave', () => {
+      apply({ type: 'left', home: 'robin', reason: 'kicked' })
+      expect(useVisitEnded.getState().ended?.problem).toBe('kicked')
+    })
+
+    it('closes the room when a rejoin is refused, but not when it is only full', () => {
+      apply({ type: 'error', code: 'home_full', message: 'Full', about: 'join' })
+      expect(useVisitEnded.getState().ended).toBeNull()
+      apply({ type: 'error', code: 'forbidden', message: 'Robin Host asked you to leave. You can come back in 4 min.', about: 'join', retryAfterMs: 200_000 })
+      expect(useVisitEnded.getState().ended).toEqual({ problem: 'kicked', ownerName: 'Robin', retryAfterMs: 200_000 })
+    })
+
+    it('treats a not_found rejoin (a block) like being removed', () => {
+      apply({ type: 'error', code: 'not_found', message: 'There is no room with that @handle.', about: 'join' })
+      expect(useVisitEnded.getState().ended?.problem).toBe('removed')
+    })
   })
 })
 

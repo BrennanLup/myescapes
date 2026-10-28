@@ -12,7 +12,8 @@
  *     REVALIDATE_MS for guests, so an unfriend or block removes them within a minute);
  *   - a block between two guests of the same home hides them from each other completely (no
  *     poses, chat, emotes, looks or arrivals either way), like everywhere else in the app;
- *   - a guest the owner asked to leave can't come back for KICK_COOLDOWN_MS;
+ *   - a guest the owner asked to leave can't come back for KICK_COOLDOWN_MS, even if the home
+ *     empties in between (the cool-downs live on the hub, not on the in-memory Home);
  *   - caps: MAX_PLAYERS_PER_HOME (the owner always gets in), MAX_SOCKETS_PER_USER;
  *   - rate limits: state at STATE_HZ (excess dropped), chat, emotes and joins per window
  *     (`error rate_limited`), and a flood ceiling that closes the socket;
@@ -169,8 +170,6 @@ export class Connection {
 
 export class Home {
   readonly members = new Map<string, Connection>()
-  /** Guests the owner asked to leave, by user id, until when they may come back. */
-  readonly kicked = new Map<string, number>()
   constructor(
     readonly ownerId: string,
     readonly handle: string,
@@ -190,6 +189,11 @@ export class RealtimeHub {
   /** Blocks (either direction) of each user in a home, loaded on join and every REVALIDATE_MS. */
   private readonly blockedOf = new Map<string, Set<string>>()
   private readonly homes = new Map<string, Home>()
+  /**
+   * "Ask to leave" cool-downs: owner id -> guest id -> until when. Kept on the hub so they outlive
+   * the Home (which is deleted when it empties); expired entries are pruned by `heartbeat()`.
+   */
+  private readonly kicks = new Map<string, Map<string, number>>()
   private timer: NodeJS.Timeout | null = null
   private lastHeartbeat: number
   private lastRevalidate: number
@@ -412,7 +416,9 @@ export class RealtimeHub {
         const target = home.members.get(msg.sid)
         if (!target || target.user.id === conn.user.id) return this.error(conn, 'not_found', 'That player is not here.', 'kick')
         // Not straight back in (a reload or a scripted join): the home remembers for a while.
-        home.kicked.set(target.user.id, now + this.limits.KICK_COOLDOWN_MS)
+        let kicks = this.kicks.get(home.ownerId)
+        if (!kicks) this.kicks.set(home.ownerId, (kicks = new Map()))
+        kicks.set(target.user.id, now + this.limits.KICK_COOLDOWN_MS)
         for (const m of [...home.members.values()]) {
           if (m.user.id !== target.user.id) continue
           m.joinSeq++
@@ -467,7 +473,7 @@ export class RealtimeHub {
     if (this.byUser.has(conn.user.id)) this.blockedOf.set(conn.user.id, blocked)
 
     let home = this.homes.get(owner.id)
-    const kickedUntil = home?.kicked.get(conn.user.id) ?? 0
+    const kickedUntil = this.kicks.get(owner.id)?.get(conn.user.id) ?? 0
     if (access !== 'owner' && kickedUntil > now) {
       const mins = Math.max(1, Math.ceil((kickedUntil - now) / 60_000))
       return this.error(conn, 'forbidden', `${owner.user.displayName} asked you to leave. You can come back in ${mins} min.`, 'join', kickedUntil - now)
@@ -583,6 +589,7 @@ export class RealtimeHub {
   /** Terminate peers that missed the last ping, close idle ones, ping the rest. */
   heartbeat(): void {
     const now = this.now()
+    this.pruneKicks(now)
     for (const conn of [...this.connections.values()]) {
       if (!conn.alive) {
         this.drop(conn, 'disconnected')
@@ -603,6 +610,14 @@ export class RealtimeHub {
       } catch {
         /* the close event will follow */
       }
+    }
+  }
+
+  /** Forget "ask to leave" cool-downs that have run out. */
+  private pruneKicks(now: number): void {
+    for (const [ownerId, kicks] of this.kicks) {
+      for (const [userId, until] of kicks) if (until <= now) kicks.delete(userId)
+      if (!kicks.size) this.kicks.delete(ownerId)
     }
   }
 
@@ -734,8 +749,10 @@ export class RealtimeHub {
   }
 
   /** Counts for tests and the status line. */
-  stats(): { connections: number; users: number; homes: number } {
-    return { connections: this.connections.size, users: this.byUser.size, homes: this.homes.size }
+  stats(): { connections: number; users: number; homes: number; kicks: number } {
+    let kicks = 0
+    for (const k of this.kicks.values()) kicks += k.size
+    return { connections: this.connections.size, users: this.byUser.size, homes: this.homes.size, kicks }
   }
 
   /** Tell each online friend of `userId` where they are now. */

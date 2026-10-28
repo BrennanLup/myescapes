@@ -204,7 +204,7 @@ describe('realtime hub: connecting and joining', () => {
     await send(b.conn, { type: 'leave' })
     expect(b.peer.last('error')).toMatchObject({ code: 'not_joined' })
     hub.disconnect(a.conn)
-    expect(hub.stats()).toEqual({ connections: 1, users: 1, homes: 0 })
+    expect(hub.stats()).toEqual({ connections: 1, users: 1, homes: 0, kicks: 0 })
   })
 
   it('closes the oldest socket past the per-user cap', async () => {
@@ -409,7 +409,7 @@ describe('realtime hub: state, chat, emotes', () => {
     expect(b.peer.closed).toBeNull()
   })
 
-  it("keeps a guest the owner asked to leave out for a while, until the home empties", async () => {
+  it('keeps a guest the owner asked to leave out for a while', async () => {
     const { a, b, send, hub, advance, connect } = await room()
     await send(a.conn, { type: 'kick', sid: b.conn.sid })
     await send(b.conn, { type: 'join', home: 'alice' })
@@ -427,15 +427,42 @@ describe('realtime hub: state, chat, emotes', () => {
     expect(b.peer.last('joined')).toBeTruthy()
   })
 
-  it('forgets kicks when the home empties', async () => {
-    const { a, b, send, hub, advance } = await room()
+  it('remembers kicks after the home empties (the owner left or visited someone else)', async () => {
+    const { a, b, send, hub, advance, connect } = await room()
     await send(a.conn, { type: 'kick', sid: b.conn.sid })
     hub.disconnect(a.conn)
     expect(hub.stats().homes).toBe(0)
     advance(20_000)
     await send(b.conn, { type: 'join', home: 'alice' })
+    expect(b.peer.last('error')).toMatchObject({ code: 'forbidden', about: 'join' })
+    expect(hub.stats().homes).toBe(0)
+    // The owner is back: still not yet.
+    const a2 = await connect(U.alice)
+    await send(a2.conn, { type: 'join', home: 'alice' })
+    advance(60_000)
+    await send(b.conn, { type: 'join', home: 'alice' })
+    expect(b.peer.last('error')).toMatchObject({ code: 'forbidden' })
+    expect(hub.peopleInHome('alice').map((u) => u.id)).toEqual(['alice'])
+    // Other guests are not affected, and the owner can still get in.
+    const m = await connect(U.mia)
+    await send(m.conn, { type: 'join', home: 'alice' })
+    expect(m.peer.last('joined')).toBeTruthy()
+    advance(REALTIME_LIMITS.KICK_COOLDOWN_MS)
+    await send(b.conn, { type: 'join', home: 'alice' })
     expect(b.peer.last('joined')).toBeTruthy()
   })
+
+  it('prunes expired kicks on the heartbeat', async () => {
+    const { a, b, send, hub, advance } = await room()
+    await send(a.conn, { type: 'kick', sid: b.conn.sid })
+    hub.disconnect(a.conn)
+    hub.heartbeat()
+    expect(hub.stats().kicks).toBe(1)
+    advance(REALTIME_LIMITS.KICK_COOLDOWN_MS + 1)
+    hub.heartbeat()
+    expect(hub.stats().kicks).toBe(0)
+  })
+
 })
 
 describe('realtime hub: presence, idle and revalidation', () => {
@@ -573,7 +600,7 @@ describe('realtime hub: presence, idle and revalidation', () => {
     hub.shutdown()
     expect(a.peer.closed?.code).toBe(CLOSE_CODES.SERVER_SHUTDOWN)
     expect(a.peer.last('left')).toMatchObject({ reason: 'shutdown' })
-    expect(hub.stats()).toEqual({ connections: 0, users: 0, homes: 0 })
+    expect(hub.stats()).toEqual({ connections: 0, users: 0, homes: 0, kicks: 0 })
     const late = new FakePeer()
     hub.connect(U.bob, late)
     expect(late.closed?.code).toBe(CLOSE_CODES.SERVER_SHUTDOWN)
