@@ -43,7 +43,12 @@ export function CityPageView({ data }: { data: CityPageData }) {
       <Card>
         <p className="m-0 text-sm text-ink-soft">{placeLine(city.region, city.country)}</p>
         <h1 className="m-0 mt-1 font-display text-3xl font-semibold sm:text-4xl">Escape rooms in {city.name}</h1>
-        <p className="m-0 mt-2 text-ink-soft">{plural(visible.length, 'venue')} in the directory.</p>
+        <p className="m-0 mt-2 text-ink-soft">
+          {plural(visible.length, 'venue')} in the directory.{' '}
+          <Link to={`/reviews?city=${encodeURIComponent(city.slug)}`} data-testid="city-reviews-link" className="font-semibold text-[#b9561f]">
+            Read reviews in {city.name}
+          </Link>
+        </p>
 
         {visible.length > 6 && (
           <label className="mt-4 block">

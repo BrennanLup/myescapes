@@ -5,14 +5,15 @@
  * Everything here renders only `PublicReview` / `PublicUser` shapes, which carry no email and no
  * transcript, so neither can reach a public page.
  */
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { ROUTES, callApi } from '../../contracts/routes'
 import { ApiCallError } from '../../contracts/errors'
-import { REPORT_REASONS, type Aggregate, type PublicReview, type PublicUser, type ReportInput, type ReviewPage } from '../../contracts/models'
-import { RATING_KEYS } from '../../contracts/types'
+import { REPORT_REASONS, type Aggregate, type PublicReview, type PublicUser, type ReportInput, type ReviewPage, type SpoilerFilter } from '../../contracts/models'
+import { RATING_KEYS, type Ratings } from '../../contracts/types'
 import { useSession } from '../../auth'
 import { formatDate, formatMinutes, formatPercent, formatScore, initials, plural, publicName, RATING_LABELS } from '../shared/format'
 import { SpoilerReveal } from '../shared/Spoiler'
+import { Link } from '../../router'
 
 export { computeAggregate, type AggregateInput } from './aggregate'
 
@@ -224,10 +225,14 @@ export function reviewAnchor(reviewId: string): string {
   return `review-${reviewId}`
 }
 
-function Comments({ review }: { review: PublicReview }) {
-  const comments = RATING_KEYS.map((k) => ({ key: k, text: review.ratings[k].comment.trim() })).filter((c) => c.text)
-  if (!comments.length) return null
-  const body = (
+function commentList(ratings: Ratings) {
+  return RATING_KEYS.map((k) => ({ key: k, text: ratings[k].comment.trim() })).filter((c) => c.text)
+}
+
+function CommentBody({ ratings }: { ratings: Ratings }) {
+  const comments = commentList(ratings)
+  if (!comments.length) return <p className="m-0 text-ink-soft">No written comments.</p>
+  return (
     <div data-testid="review-comments" className="space-y-1">
       {comments.map((c) => (
         <p key={c.key} className="m-0 whitespace-pre-line">
@@ -237,18 +242,59 @@ function Comments({ review }: { review: PublicReview }) {
       ))}
     </div>
   )
-  if (!review.containsSpoilers) return body
+}
+
+/**
+ * Comments of a spoiler-flagged review. Public lists send them blank, so they're loaded from
+ * /api/reviews/:id?spoilers=1 only once the reader asks for them.
+ */
+function SpoilerComments({ review, loadSpoilers }: { review: PublicReview; loadSpoilers: (id: string) => Promise<Ratings> }) {
+  const [state, setState] = useState<{ step: 'loading' } | { step: 'ready'; ratings: Ratings } | { step: 'error' }>(() =>
+    commentList(review.ratings).length ? { step: 'ready', ratings: review.ratings } : { step: 'loading' },
+  )
+  useEffect(() => {
+    if (state.step !== 'loading') return
+    let live = true
+    loadSpoilers(review.id).then(
+      (ratings) => live && setState({ step: 'ready', ratings }),
+      () => live && setState({ step: 'error' }),
+    )
+    return () => {
+      live = false
+    }
+  }, [state.step, review.id, loadSpoilers])
+  if (state.step === 'loading') return <p className="m-0 text-sm text-ink-soft">Loading…</p>
+  if (state.step === 'error') return <p className="m-0 text-sm text-bad">Couldn't load this review's comments.</p>
+  return <CommentBody ratings={state.ratings} />
+}
+
+const defaultLoadSpoilers = async (id: string) => (await callApi(ROUTES.review, { params: { id }, query: { spoilers: '1' } })).ratings
+
+function Comments({ review, loadSpoilers = defaultLoadSpoilers }: { review: PublicReview; loadSpoilers?: (id: string) => Promise<Ratings> }) {
+  if (!review.containsSpoilers) return commentList(review.ratings).length ? <CommentBody ratings={review.ratings} /> : null
   return (
     <SpoilerReveal testId="review-spoiler" hint="This review has spoilers">
-      {body}
+      <SpoilerComments review={review} loadSpoilers={loadSpoilers} />
     </SpoilerReveal>
   )
 }
 
-export function ReviewCard({ review }: { review: PublicReview }) {
+export function ReviewCard({ review, loadSpoilers }: { review: PublicReview; loadSpoilers?: (id: string) => Promise<Ratings> }) {
   const time = formatMinutes(review.escapeTimeMinutes)
   return (
     <article id={reviewAnchor(review.id)} data-testid="review-card" data-review-id={review.id} className="rounded-xl border border-panel-edge bg-white/60 p-4">
+      {review.game && (
+        <p data-testid="review-game" className="m-0 mb-2 text-sm text-ink-soft">
+          <Link to={`/games/${review.game.slug}`} className="font-display text-lg font-semibold text-ink">
+            {review.game.name}
+          </Link>
+          {' · '}
+          <Link to={`/venues/${review.game.venueSlug}`} className="text-[#b9561f]">
+            {review.game.venueName}
+          </Link>
+          {review.game.city ? ` · ${review.game.city}` : ''}
+        </p>
+      )}
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <AuthorCard user={review.author} />
         <span className="text-sm text-ink-soft">{formatDate(review.date)}</span>
@@ -277,7 +323,7 @@ export function ReviewCard({ review }: { review: PublicReview }) {
       )}
 
       <div className="mt-3">
-        <Comments review={review} />
+        <Comments review={review} loadSpoilers={loadSpoilers} />
       </div>
 
       {review.photos.length > 0 && (
@@ -315,44 +361,129 @@ export function ReviewCard({ review }: { review: PublicReview }) {
   )
 }
 
+export const SPOILER_FILTER_LABELS: Record<SpoilerFilter, string> = {
+  all: 'All reviews',
+  free: 'Spoiler-free',
+  only: 'Spoilers only',
+}
+
+/** "All reviews · Spoiler-free · Spoilers only" toggle. */
+export function SpoilerFilterChips({ value, onChange }: { value: SpoilerFilter; onChange: (f: SpoilerFilter) => void }) {
+  return (
+    <div role="group" aria-label="Spoiler filter" data-testid="spoiler-filter" className="flex flex-wrap gap-2">
+      {(Object.keys(SPOILER_FILTER_LABELS) as SpoilerFilter[]).map((f) => (
+        <button
+          key={f}
+          type="button"
+          aria-pressed={value === f}
+          data-testid={`spoiler-filter-${f}`}
+          onClick={() => onChange(f)}
+          className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+            value === f ? 'border-teal bg-teal text-white' : 'border-panel-edge bg-white/70 text-ink hover:border-teal'
+          }`}
+        >
+          {SPOILER_FILTER_LABELS[f]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const EMPTY_TEXT: Record<SpoilerFilter, string> = {
+  all: 'No public reviews yet.',
+  free: 'No spoiler-free reviews yet.',
+  only: 'No reviews with spoilers yet.',
+}
+
 export function ReviewList({
   gameSlug,
   initial,
-  fetchPage = (cursor) => callApi(ROUTES.gameReviews, { params: { slug: gameSlug }, query: { cursor } }),
+  fetchPage = (cursor, filter) =>
+    callApi(ROUTES.gameReviews, { params: { slug: gameSlug ?? '' }, query: { cursor, ...(filter !== 'all' ? { filter } : {}) } }),
+  loadSpoilers,
+  showFilter = true,
 }: {
-  gameSlug: string
-  initial: ReviewPage
-  /** Loads the page after `cursor` (injectable for tests). */
-  fetchPage?: (cursor: string) => Promise<ReviewPage>
+  gameSlug?: string
+  /** First page for the "all" filter (from the game page), or null to load it here. */
+  initial: ReviewPage | null
+  /** Loads a page (`cursor` undefined = first page) for a filter (injectable; the feed passes its own). */
+  fetchPage?: (cursor: string | undefined, filter: SpoilerFilter) => Promise<ReviewPage>
+  loadSpoilers?: (id: string) => Promise<Ratings>
+  showFilter?: boolean
 }) {
-  const [reviews, setReviews] = useState(initial.reviews)
-  const [cursor, setCursor] = useState(initial.nextCursor)
-  const [loading, setLoading] = useState(false)
+  const [filter, setFilter] = useState<SpoilerFilter>('all')
+  const [reviews, setReviews] = useState(initial?.reviews ?? [])
+  const [cursor, setCursor] = useState(initial?.nextCursor ?? null)
+  const [loading, setLoading] = useState(!initial)
   const [error, setError] = useState<string | null>(null)
+  // Bumped on every filter change so a slow response for an old filter is dropped.
+  const generation = useRef(0)
+
+  const loadFirst = (f: SpoilerFilter) => {
+    const gen = generation.current
+    setLoading(true)
+    setError(null)
+    fetchPage(undefined, f).then(
+      (page) => {
+        if (gen !== generation.current) return
+        setReviews(page.reviews)
+        setCursor(page.nextCursor)
+        setLoading(false)
+      },
+      () => {
+        if (gen !== generation.current) return
+        setError("Couldn't load reviews.")
+        setLoading(false)
+      },
+    )
+  }
+
+  useEffect(() => {
+    if (!initial) loadFirst('all')
+    // First mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const changeFilter = (f: SpoilerFilter) => {
+    if (f === filter) return
+    generation.current += 1
+    setFilter(f)
+    setReviews([])
+    setCursor(null)
+    loadFirst(f)
+  }
 
   const more = async () => {
     if (!cursor) return
+    const gen = generation.current
     setLoading(true)
     setError(null)
     try {
-      const page = await fetchPage(cursor)
+      const page = await fetchPage(cursor, filter)
+      if (gen !== generation.current) return
       setReviews((prev) => {
         const seen = new Set(prev.map((r) => r.id))
         return [...prev, ...page.reviews.filter((r) => !seen.has(r.id))]
       })
       setCursor(page.nextCursor)
     } catch {
-      setError("Couldn't load more reviews.")
+      if (gen === generation.current) setError("Couldn't load more reviews.")
     } finally {
-      setLoading(false)
+      if (gen === generation.current) setLoading(false)
     }
   }
 
   return (
     <div data-testid="review-list" className="space-y-3">
-      {reviews.length === 0 && <p className="m-0 text-ink-soft">No public reviews yet.</p>}
+      {showFilter && <SpoilerFilterChips value={filter} onChange={changeFilter} />}
+      {!loading && !error && reviews.length === 0 && <p className="m-0 text-ink-soft">{EMPTY_TEXT[filter]}</p>}
+      {loading && reviews.length === 0 && (
+        <p className="m-0 text-ink-soft" aria-busy="true">
+          Loading reviews…
+        </p>
+      )}
       {reviews.map((r) => (
-        <ReviewCard key={r.id} review={r} />
+        <ReviewCard key={r.id} review={r} loadSpoilers={loadSpoilers} />
       ))}
       {error && (
         <p role="alert" className="m-0 text-bad">

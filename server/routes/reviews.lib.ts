@@ -20,7 +20,7 @@
  * caller passes `?spoilers=1`. Puzzle details (`puzzleHighlights`) are blanked the same way.
  */
 import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm'
-import type { Aggregate, GameSummary, PublicReview, PuzzleHighlight, ReviewInput, ReviewV2, Visibility } from '../../src/contracts/models'
+import type { Aggregate, GameSummary, PublicReview, PuzzleHighlight, ReviewInput, ReviewV2, SpoilerFilter, Visibility } from '../../src/contracts/models'
 import { GENRES, RATING_KEYS, type Genre, type PuzzleType, type Ratings } from '../../src/contracts/types'
 import type { Db } from '../db/client'
 import { games, reviews, users, venues, visitPhotos, visitPuzzles, visits } from '../db/schema'
@@ -400,16 +400,34 @@ export async function publicReviewPage(
   db: Db,
   gameId: string,
   viewer: string | null,
-  opts: { cursor?: string; limit?: number; revealSpoilers?: boolean },
+  opts: { cursor?: string; limit?: number; revealSpoilers?: boolean; filter?: SpoilerFilter },
 ): Promise<{ reviews: PublicReview[]; nextCursor: string | null }> {
+  return publicReviewList(db, viewer, { ...opts, gameId })
+}
+
+/**
+ * The public review list: one game's (`gameId`) or every room's (the /reviews feed, which also
+ * carries each review's `game`). Same visibility rule either way; reviews of hidden games or
+ * venues stay out of the feed. `filter` keeps all reviews, only spoiler-free ones, or only ones
+ * flagged as spoilers. `citySlug` narrows the feed to one city.
+ */
+export async function publicReviewList(
+  db: Db,
+  viewer: string | null,
+  opts: { gameId?: string; citySlug?: string; cursor?: string; limit?: number; revealSpoilers?: boolean; filter?: SpoilerFilter },
+): Promise<{ reviews: PublicReview[]; nextCursor: string | null }> {
+  const gameId = opts.gameId
   const limit = Math.min(Math.max(opts.limit ?? PAGE, 1), 50)
   const friends = [...(await friendIds(db, viewer))]
   const visibleCond = friends.length
     ? sql`(${reviews.visibility} = 'public' and ${authorIsPublic(users)}) or (${reviews.visibility} in ('public', 'friends') and ${inArray(reviews.authorId, friends)})`
     : sql`${reviews.visibility} = 'public' and ${authorIsPublic(users)}`
   const cursor = decodeCursor(opts.cursor)
+  const feed = !gameId
   const where = and(
-    eq(visits.gameId, gameId),
+    gameId ? eq(visits.gameId, gameId) : undefined,
+    feed ? sql`${visits.gameId} in (select ${games.id} from ${games} join ${venues} on ${venues.id} = ${games.venueId} where ${games.status} <> 'hidden' and ${venues.status} <> 'hidden'${opts.citySlug ? sql` and ${venues.citySlug} = ${opts.citySlug}` : sql``})` : undefined,
+    opts.filter === 'free' ? eq(reviews.containsSpoilers, false) : opts.filter === 'only' ? eq(reviews.containsSpoilers, true) : undefined,
     sql`${reviews.hiddenAt} is null`,
     sql`(${visibleCond})`,
     cursor ? sql`(${reviews.createdAt}, ${reviews.id}) < (${cursor.ts}::timestamptz, ${cursor.id})` : undefined,
@@ -447,6 +465,7 @@ export async function publicReviewPage(
     .where(and(inArray(visitPhotos.visitId, photoVisits), sql`${visitPhotos.hiddenAt} is null`))
     .orderBy(visitPhotos.createdAt)
 
+  const summaries = feed ? await gameSummaries(db, page.map((r) => r.visit.gameId)) : null
   const out: PublicReview[] = page.flatMap(({ review, visit }) => {
     const author = people.get(review.authorId)
     if (!author) return []
@@ -469,6 +488,7 @@ export async function publicReviewPage(
           .filter((p) => p.visitId === visit.id)
           .map((p) => ({ ...p, url: `/api/photos/${p.id}`, createdAt: p.createdAt.toISOString() })),
         createdAt: review.createdAt.toISOString(),
+        ...(summaries?.get(visit.gameId) ? { game: summaries.get(visit.gameId)! } : {}),
       },
     ]
   })
