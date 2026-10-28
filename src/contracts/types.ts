@@ -40,6 +40,11 @@ export const RoomSchema = z.object({
   address: z.string().default(''),
   website: z.string().default(''),
   photos: z.array(PhotoSchema).default([]),
+  /**
+   * Directory venue picked in the review form's room search (no specific room picked). Only sent
+   * when saving: the server adds the room at that venue instead of matching the venue by name.
+   */
+  venueId: Id.optional(),
 })
 export type Room = z.infer<typeof RoomSchema>
 

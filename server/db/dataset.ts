@@ -106,7 +106,8 @@ export async function datasetForUser(db: Db, userId: string): Promise<Dataset> {
 }
 
 /**
- * Save a Phase 1 entry for a user: find or create the venue (by name + city) and game, then
+ * Save a Phase 1 entry for a user: find or create the venue (the picked game's or venue's, else by
+ * name or brand + city) and game, then
  * upsert the visit (keyed by `legacyId` = the entry's review id, or by visit id when the review
  * id already is one of this user's visits), the user's review and the puzzles.
  * Crew names become guest participants. Returns the entry as `datasetForUser` would show it.
@@ -124,11 +125,26 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
     const picked = room.id.startsWith('gam_')
       ? (await tx.select({ game: games, venue: venues }).from(games).innerJoin(venues, eq(venues.id, games.venueId)).where(and(eq(games.id, room.id), ne(games.status, 'hidden'))).limit(1))[0]
       : undefined
-    let venue = picked?.venue ?? (
+    // A venue picked in the room search (no specific room): use it and find or add the room there.
+    const pickedVenue =
+      !picked && room.venueId?.startsWith('ven_')
+        ? (await tx.select().from(venues).where(and(eq(venues.id, room.venueId), ne(venues.status, 'hidden'))).limit(1))[0]
+        : undefined
+    // Otherwise match by name (or brand) and city. Imported venues keep a country-suffixed city
+    // slug ("oostduinkerke-be") while the form only knows the city, so the city name counts too.
+    // Directory venues (a real country) win over ones a user typed in before ("ZZ").
+    let venue = picked?.venue ?? pickedVenue ?? (
       await tx
         .select()
         .from(venues)
-        .where(and(sql`lower(${venues.name}) = lower(${venueName})`, eq(venues.citySlug, cslug)))
+        .where(
+          and(
+            sql`(lower(${venues.name}) = lower(${venueName}) or lower(${venues.brand}) = lower(${venueName}))`,
+            sql`(${venues.citySlug} = ${cslug} or lower(${venues.city}) = lower(${room.city.trim()}))`,
+            ne(venues.status, 'hidden'),
+          ),
+        )
+        .orderBy(sql`case when ${venues.country} = 'ZZ' then 1 else 0 end`, venues.createdAt)
         .limit(1)
     )[0]
     if (!venue) {

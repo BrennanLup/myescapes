@@ -16,9 +16,13 @@ export interface ScoreSliderProps {
   testId?: string
   /** Hint shown on the empty track. */
   hint?: string
+  /** The field's error is showing: marks the slider invalid and points it at the error text. */
+  invalid?: boolean
+  /** id of the error text that describes the slider. */
+  describedBy?: string
 }
 
-export function ScoreSlider({ value, onChange, label, testId, hint = 'Tap to rate' }: ScoreSliderProps) {
+export function ScoreSlider({ value, onChange, label, testId, hint = 'Tap to rate', invalid, describedBy }: ScoreSliderProps) {
   const unset = value === null
   return (
     <div
@@ -39,6 +43,8 @@ export function ScoreSlider({ value, onChange, label, testId, hint = 'Tap to rat
         max={100}
         aria-label={label}
         aria-valuetext={unset ? 'Not rated yet' : undefined}
+        aria-invalid={invalid || undefined}
+        aria-describedby={describedBy}
         data-testid={testId}
         // Unset: the thumb waits in the middle, invisible, so any tap or drag lands on a value.
         value={value ?? 50}
