@@ -2,7 +2,9 @@
  * Connects the 3D room to the realtime socket (Phase 3, workstream C). Installed once by
  * src/desktop.tsx for signed-in, onboarded people (signed-out demo visitors get no socket).
  *
- * - Joins the room on screen: your own, or the friend's you are visiting (`store.visiting`).
+ * - Joins the room on screen: your own, or the friend's you are visiting (`store.visiting`), and
+ *   only while that room is mounted (`holdRoom`): an in-app move to another page leaves the home
+ *   and coming back joins it again.
  * - Shares your pose (feet, body yaw, look pitch, camera mode, walk/run/emote) up to 10 times a
  *   second while it changes, and your look whenever the wardrobe changes it.
  * - Feeds `useRealtime` (who is here, chat, emotes, friends' presence) and the pose buffers.
@@ -14,6 +16,7 @@
  * - Retries when the network comes back, the tab is shown again, or (after an idle close) the
  *   person presses a key or touches the screen.
  */
+import { useEffect } from 'react'
 import { getSessionState, refreshSession } from '@/auth/session'
 import { REALTIME_LIMITS, type PlayerState, type RealtimeOutfit, type ServerMessage, type Emote } from '@/contracts/realtime'
 import { bus, type SfxName } from '@/contracts/events'
@@ -34,6 +37,8 @@ const PUBLISH_MS = 100
 const justReplaced = new Map<string, number>()
 /** The hub sends the new tab's join straight after the replace; anything later is a real arrival. */
 const REPLACE_WINDOW_MS = 5_000
+/** How long the room may be gone before the socket leaves the home (see `holdRoom`). */
+const ROOM_LEAVE_DELAY_MS = 250
 /** Presence list refresh (the socket keeps it live in between). */
 const PRESENCE_REFRESH_MS = 60_000
 
@@ -41,6 +46,38 @@ let client: RealtimeClient | null = null
 let localEmote: { emote: Emote; at: number } | null = null
 /** Chat lines sent and not yet answered (the server echoes each one, or refuses it), oldest first. */
 const chatInFlight: string[] = []
+
+/** How many mounted views hold the main 3D room on screen (see `holdRoom`). */
+let roomHolds = 0
+const roomListeners = new Set<(onScreen: boolean) => void>()
+
+/** True while the main 3D room (your home or a friend's) is mounted. */
+export function roomOnScreen(): boolean {
+  return roomHolds > 0
+}
+
+/**
+ * The main 3D room is on screen; call the returned function when it goes away. The socket is in
+ * a home (and shares your pose there) only while someone holds the room, so an in-app move to
+ * another page that also draws a 3D scene (the puzzle room at /daily/room) leaves the home
+ * instead of walking your character through it with that page's coordinates.
+ */
+export function holdRoom(): () => void {
+  roomHolds++
+  if (roomHolds === 1) roomListeners.forEach((fn) => fn(true))
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    roomHolds--
+    if (roomHolds === 0) roomListeners.forEach((fn) => fn(false))
+  }
+}
+
+/** Hold the main room for as long as the calling component is mounted (PeopleHud, in App). */
+export function useRoomHold(): void {
+  useEffect(() => holdRoom(), [])
+}
 
 /** The running client (null when signed out or not installed). */
 export function realtimeClient(): RealtimeClient | null {
@@ -332,7 +369,8 @@ export async function installRealtime(opts: InstallOptions = {}): Promise<() => 
   const target = useStore.getState().visiting?.handle ?? myHandle
 
   let lastSent: PlayerState | null = null
-  const canShare = () => useStore.getState().worldReady
+  // `worldReady` alone is not enough: the puzzle room sets it too, and moves the same player view.
+  const canShare = () => roomOnScreen() && useStore.getState().worldReady
   const c =
     opts.client ??
     new RealtimeClient({
@@ -412,10 +450,44 @@ export async function installRealtime(opts: InstallOptions = {}): Promise<() => 
   window.addEventListener('pagehide', bye)
   window.addEventListener('pageshow', restored)
 
-  c.join(target)
+  // In the home only while the main room is on screen. Leaving waits a moment, so a quick
+  // unmount and remount (React's development double effects) doesn't step out and back in.
+  let inHome = false
+  let leaveTimer: ReturnType<typeof setTimeout> | null = null
+  const enterHome = () => {
+    inHome = true
+    lastSent = null
+    // The handle may have moved on since install (a friend's or your own @handle change).
+    const session = getSessionState()
+    const mine = opts.handle ?? (session.status === 'signed-in' && session.user.handle ? session.user.handle : myHandle)
+    c.join(useStore.getState().visiting?.handle ?? mine ?? target)
+  }
+  const onRoom = (onScreen: boolean) => {
+    if (leaveTimer !== null) clearTimeout(leaveTimer)
+    leaveTimer = null
+    if (onScreen) {
+      if (!inHome) enterHome()
+      return
+    }
+    leaveTimer = setTimeout(() => {
+      leaveTimer = null
+      if (roomOnScreen() || !inHome) return
+      inHome = false
+      c.leave()
+      clearRoom()
+    }, ROOM_LEAVE_DELAY_MS)
+  }
+  roomListeners.add(onRoom)
+
+  if (roomOnScreen()) {
+    inHome = true
+    c.join(target)
+  }
   c.start()
 
   return () => {
+    roomListeners.delete(onRoom)
+    if (leaveTimer !== null) clearTimeout(leaveTimer)
     offs.forEach((o) => o())
     clearInterval(publish)
     clearInterval(sweep)

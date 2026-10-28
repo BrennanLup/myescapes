@@ -1,6 +1,8 @@
 /**
  * People in the 3D room (Phase 3, workstream C): who is here, chat, emotes, "Visit a friend",
- * and, in a friend's room, the visiting banner with "Back to my room". Mounted once by App.tsx.
+ * and, in a friend's room, the visiting banner with "Back to my room". Mounted once by App.tsx;
+ * while it is mounted the realtime socket stays in the home (`useRoomHold`), so an in-app move to
+ * another page (the puzzle room) leaves it.
  *
  * Desktop: a dock at the bottom left (People, Chat, three emotes) with the chat log above it.
  *   `T` or `Enter` opens the chat box, `F` the people panel, `Esc` closes them.
@@ -16,7 +18,7 @@ import type { PublicUser } from '@/contracts/models'
 import { useStore } from '@/state/store'
 import { isTypingTarget } from '@/ui/shell/logic'
 import { useShell } from '@/ui/shell/shellStore'
-import { chatSlowDown, kickPlayer, realtimeClient, sendChat, sendEmote } from '@/net/session'
+import { chatSlowDown, kickPlayer, realtimeClient, sendChat, sendEmote, useRoomHold } from '@/net/session'
 import { firstName, friendsInOrder, playersInOrder, useRealtime, type ChatLine, type Player } from '@/net/store'
 import { EmoteEcho } from './EmoteEcho'
 import { presenceText } from './presence'
@@ -64,6 +66,8 @@ function releasePointer() {
 }
 
 export function PeopleHud() {
+  // While this HUD (and so the main room in App) is mounted, the socket stays in the home.
+  useRoomHold()
   const visible = useVisible()
   const status = useRealtime((s) => s.status)
   const visiting = useStore((s) => s.visiting)
@@ -470,6 +474,8 @@ function PeoplePanel({ onClose, className = '' }: { onClose(): void; className?:
   const elsewhere = useMemo(() => friends.filter((f) => !hereIds.has(f.user.id)), [friends, hereIds])
   const dialog = useRef<HTMLDivElement>(null)
   const titleId = useId()
+  // The guest whose "Ask to leave" waits for a second press (one at a time).
+  const [confirmKick, setConfirmKick] = useState<string | null>(null)
 
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null
@@ -503,20 +509,13 @@ function PeoplePanel({ onClose, className = '' }: { onClose(): void; className?:
           <h3 className="m-0 mt-1 mb-1.5 text-xs font-extrabold tracking-wide text-ink-soft uppercase">Here now · {roomName}</h3>
           <ul data-testid="people-here" className="m-0 list-none space-y-1 p-0">
             {me ? <PersonRow user={me} note={home?.isOwner ? 'You · host' : 'You'} you /> : null}
-            {here.map((p) => (
-              <PersonRow
-                key={p.sid}
-                user={p.user}
-                note={p.isOwner ? 'Host' : 'Visiting'}
-                action={
-                  home?.isOwner && !p.isOwner && p.sid !== sid ? (
-                    <button type="button" data-testid="kick-player" onClick={() => kickPlayer(p.sid)} className="min-h-9 rounded-full px-3 text-xs font-bold text-ink-soft ring-1 ring-panel-edge hover:bg-white">
-                      Ask to leave
-                    </button>
-                  ) : null
-                }
-              />
-            ))}
+            {here.map((p) =>
+              home?.isOwner && !p.isOwner && p.sid !== sid ? (
+                <GuestRow key={p.sid} player={p} confirming={confirmKick === p.sid} onConfirm={(on) => setConfirmKick(on ? p.sid : null)} />
+              ) : (
+                <PersonRow key={p.sid} user={p.user} note={p.isOwner ? 'Host' : 'Visiting'} />
+              ),
+            )}
           </ul>
           {!here.length ? <p className="m-0 mt-1 text-sm text-ink-soft">Nobody else is here right now.</p> : null}
         </section>
@@ -616,6 +615,94 @@ function PersonRow({ user, note, you, action }: { user: PublicUser; note: string
       </span>
       {action}
     </li>
+  )
+}
+
+/** Whole minutes a guest who was asked to leave must wait before coming back. */
+const KICK_MINUTES = Math.round(REALTIME_LIMITS.KICK_COOLDOWN_MS / 60_000)
+
+/**
+ * A guest in your room, for the host: "Ask to leave" opens a small confirm under the row
+ * ("They can't come back for 10 minutes"), so a mis-click next to Visit never ejects a friend.
+ * Focus goes to Cancel; Esc cancels (without closing the panel); Cancel puts focus back.
+ */
+function GuestRow({ player, confirming, onConfirm }: { player: Player; confirming: boolean; onConfirm(on: boolean): void }) {
+  const askRef = useRef<HTMLButtonElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const questionId = useId()
+  const name = firstName(player.user)
+
+  useEffect(() => {
+    if (confirming) cancelRef.current?.focus({ preventScroll: true })
+  }, [confirming])
+
+  const cancel = () => {
+    onConfirm(false)
+    // Back to the button that opened it.
+    askRef.current?.focus({ preventScroll: true })
+  }
+
+  return (
+    <>
+      <PersonRow
+        user={player.user}
+        note="Visiting"
+        action={
+          <button
+            ref={askRef}
+            type="button"
+            data-testid="kick-player"
+            aria-expanded={confirming}
+            onClick={() => onConfirm(!confirming)}
+            className={`min-h-9 rounded-full px-3 text-xs font-bold ring-1 ring-panel-edge transition hover:bg-white ${confirming ? 'bg-white text-ink' : 'text-ink-soft'}`}
+          >
+            Ask to leave
+          </button>
+        }
+      />
+      {confirming ? (
+        <li>
+          <div
+            role="group"
+            aria-labelledby={questionId}
+            data-testid="kick-confirm"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.stopPropagation()
+                cancel()
+              }
+            }}
+            className="mt-0.5 mb-1.5 ml-11 rounded-xl bg-white/80 px-3 py-2.5 ring-1 ring-panel-edge"
+          >
+            <p id={questionId} className="m-0 text-sm leading-snug text-ink">
+              <span className="font-bold">Ask {name} to leave?</span> They can't come back for {KICK_MINUTES} minutes.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                data-testid="kick-confirm-yes"
+                onClick={() => {
+                  onConfirm(false)
+                  kickPlayer(player.sid)
+                }}
+                className="min-h-9 rounded-full bg-[#a63d2a] px-3.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110 active:scale-95"
+              >
+                Ask to leave
+              </button>
+              <button
+                ref={cancelRef}
+                type="button"
+                data-testid="kick-confirm-cancel"
+                onClick={cancel}
+                className="min-h-9 rounded-full px-3.5 text-xs font-bold text-ink ring-1 ring-panel-edge transition hover:bg-white active:scale-95"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </li>
+      ) : null}
+    </>
   )
 }
 
