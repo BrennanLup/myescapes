@@ -1,6 +1,9 @@
 # Shell: loading and onboarding (workstream 19)
 
-Exports from `index.tsx`: `LoadingScreen`, `Hud`, `SettingsOverlay`, `PerfMonitor`. They are already mounted by `App.tsx` and `World.tsx`.
+Exports from `index.tsx`: `LoadingScreen`, `Hud`, `SettingsOverlay`, `PerfMonitor`, `CanvasBoundary`. They are already mounted by `App.tsx` and `World.tsx`.
+
+## CanvasBoundary (`data-testid="canvas-failed"`)
+Wraps the room's `<Canvas>` in `App.tsx`. react-three-fiber rethrows a failed WebGL context (or any error inside the scene) out of `<Canvas>`, and without a boundary React would unmount the whole page. The boundary instead shows an alert above the loading screen (z-90): "The room couldn't light up", with WebGL-specific advice (hardware acceleration, another browser) when the error mentions WebGL or a context, a **Reload** button and **Open the light version** (`/m`, no three.js). The error is logged with `console.error`.
 
 ## LoadingScreen (`data-testid="loading-screen"`)
 - A full-screen night gradient with a lamp glow, the title "My Escapes", fanned polaroids with a padlock and a wiggling key, and a progress bar.

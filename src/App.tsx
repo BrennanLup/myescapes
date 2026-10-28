@@ -14,7 +14,7 @@ import { WishlistOverlay } from './world/wishlist'
 import { DailyOverlay } from './daily/ui/overlay'
 import { DailyWelcome } from './daily/ui/welcome'
 import { WrapOverlay } from './ui/wrap'
-import { LoadingScreen, Hud, SettingsOverlay } from './ui/shell'
+import { LoadingScreen, Hud, SettingsOverlay, CanvasBoundary } from './ui/shell'
 import { Reticle } from './interaction'
 import { MobileControls } from './player'
 import { AudioSystem } from './audio'
@@ -51,19 +51,22 @@ export function App() {
   const quality = useStore((s) => s.settings.quality)
   return (
     <div className="fixed inset-0 overflow-hidden bg-[var(--color-night)] select-none">
-      <Canvas
-        id="world-canvas"
-        shadows={quality !== 'low'}
-        dpr={DPR[quality]}
-        gl={{ antialias: quality !== 'low', powerPreference: 'high-performance' }}
-        camera={{ fov: 70, near: 0.05, far: 80, position: [ANCHORS.spawn.position[0], PLAYER.eyeHeight, ANCHORS.spawn.position[2]] }}
-        style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
-      >
-        <color attach="background" args={[LIGHT.background]} />
-        <Suspense fallback={null}>
-          <World />
-        </Suspense>
-      </Canvas>
+      {/* A WebGL failure shows a friendly way out instead of a blank page. */}
+      <CanvasBoundary>
+        <Canvas
+          id="world-canvas"
+          shadows={quality !== 'low'}
+          dpr={DPR[quality]}
+          gl={{ antialias: quality !== 'low', powerPreference: 'high-performance' }}
+          camera={{ fov: 70, near: 0.05, far: 80, position: [ANCHORS.spawn.position[0], PLAYER.eyeHeight, ANCHORS.spawn.position[2]] }}
+          style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
+        >
+          <color attach="background" args={[LIGHT.background]} />
+          <Suspense fallback={null}>
+            <World />
+          </Suspense>
+        </Canvas>
+      </CanvasBoundary>
       <Hud />
       <Reticle />
       <MobileControls />
