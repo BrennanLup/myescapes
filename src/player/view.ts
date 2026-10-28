@@ -70,6 +70,8 @@ export const playerView = {
   lookPitch: 0,
   /** Horizontal speed, m/s (drives the walk animation). */
   speed: 0,
+  /** Your character's opacity: below 1 while it is in the way (written by LocalAvatar). */
+  avatarOpacity: 1,
 }
 
 if (typeof window !== 'undefined') window.__ESCAPE_VIEW__ = { playerView, cameraMode: useCameraMode }

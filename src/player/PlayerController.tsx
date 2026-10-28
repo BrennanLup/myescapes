@@ -305,7 +305,10 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
     view.lookPitch = s.pitch
     view.speed = speed
 
-    camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ')
+    const rig = st.isTouch ? TOUCH_RIG : DESKTOP_RIG
+    // The camera may look a little below your look pitch (the phone rig), easing in with the blend.
+    const camPitch = s.pitch - rig.tilt * third
+    camera.rotation.set(camPitch, s.yaw, 0, 'YXZ')
     const c = cam.current
     if (third <= 0) {
       c.init = false
@@ -332,7 +335,6 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
     } else {
       for (let i = 0; i < 3; i++) pivot[i] = damp(pivot[i], head[i], THIRD_PERSON.followRate, dt)
     }
-    const rig = st.isTouch ? TOUCH_RIG : DESKTOP_RIG
     // The camera orbits with a pitch that keeps it off the floor and the ceiling; it looks along the real one.
     const orbit = orbitPitch(s.pitch, pivot[1], rig)
     const want = thirdPersonOffset(s.yaw, orbit, rig.distance * third, rig.side * third, rig.up * third, c.want)
@@ -348,7 +350,7 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
     camPos[2] = pivot[2] + want[2] * k
     camera.position.set(camPos[0], camPos[1], camPos[2])
     view.cameraDistance = c.distance
-    view.rayStart = rayStartDistance(camPos, lookVector(s.yaw, s.pitch, c.forward), pos)
+    view.rayStart = rayStartDistance(camPos, lookVector(s.yaw, camPitch, c.forward), pos)
   })
 
   return null

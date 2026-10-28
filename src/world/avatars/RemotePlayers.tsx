@@ -11,7 +11,7 @@
  * mouse (otherwise a one-quad blob shadow), and past `DETAIL_DISTANCE` the small face details are
  * skipped (`CharacterMotion.far`).
  */
-import { memo, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
 import * as THREE from 'three'
@@ -57,7 +57,20 @@ function liftedMaterial(current: THREE.Material, amount: number): THREE.Material
   let out = cache.get(m)
   if (!out) {
     const copy = m.clone()
-    copy.emissive = m.color.clone().multiplyScalar(amount).addScalar(amount * 0.15)
+    if (m.vertexColors) {
+      // A baked character (bake.ts): the colour is per vertex, so the glow is added in the shader.
+      copy.emissive = new THREE.Color().setScalar(amount * 0.15)
+      const k = amount.toFixed(3)
+      copy.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>\n#if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )\ntotalEmissiveRadiance += vColor.rgb * ${k};\n#endif`,
+        )
+      }
+      copy.customProgramCacheKey = () => `avatar-lift-${k}`
+    } else {
+      copy.emissive = m.color.clone().multiplyScalar(amount).addScalar(amount * 0.15)
+    }
     copy.emissiveIntensity = 1
     copy.userData = { ...m.userData, lifted: amount, source: m }
     copy.name = `${m.name}:lifted`
@@ -71,11 +84,15 @@ function liftedMaterial(current: THREE.Material, amount: number): THREE.Material
 export function liftCharacter(root: THREE.Object3D, amount: number): void {
   root.traverse((o) => {
     const mesh = o as THREE.Mesh
-    if (!mesh.isMesh || Array.isArray(mesh.material)) return
+    // Hidden originals behind a bake keep the shared material it reads (hidden far/near bakes are lifted).
+    if (!mesh.isMesh || Array.isArray(mesh.material) || (!mesh.visible && !mesh.userData.baked)) return
     const next = liftedMaterial(mesh.material, amount)
     if (next !== mesh.material) mesh.material = next
   })
 }
+
+/** The root group of every remote player on screen (LocalAvatar fades when it hides one). */
+export const remoteRoots = new Set<THREE.Object3D>()
 
 export function RemotePlayers() {
   const players = useRealtime((s) => s.players)
@@ -104,6 +121,14 @@ const RemotePlayer = memo(function RemotePlayer({ player }: { player: Player }) 
   const frames = useRef(0)
   const emoteRef = useRef(emote)
   emoteRef.current = emote
+  useEffect(() => {
+    const g = root.current
+    if (!g) return
+    remoteRoots.add(g)
+    return () => {
+      remoteRoots.delete(g)
+    }
+  }, [])
 
   useFrame(({ camera }) => {
     const g = root.current

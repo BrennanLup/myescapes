@@ -7,6 +7,7 @@ import {
   orbitPitch,
   pitchLimits,
   TOUCH_RIG,
+  screenY,
   easeBlend,
   followDistance,
   interiorT,
@@ -178,8 +179,8 @@ describe("third-person pitch (no worm's-eye view)", () => {
       expect(o).toBeLessThan(THIRD_PERSON.maxPitchUp)
       const off = thirdPersonOffset(0, o, rig.distance, rig.side, rig.up)
       expect(off[1]).toBeGreaterThanOrEqual(-THIRD_PERSON.minBelowPivot - 1e-9)
-      // Full distance is kept: the camera tilts instead of diving to the floor.
-      close(Math.hypot(off[0], off[1], off[2]), Math.hypot(rig.distance, rig.side, rig.up), 0.5)
+      // The camera stays well out: it tilts instead of diving to the floor.
+      expect(Math.hypot(off[0], off[1], off[2])).toBeGreaterThan(rig.distance * 0.8)
     }
   })
 
@@ -197,5 +198,27 @@ describe("third-person pitch (no worm's-eye view)", () => {
   it('touch centres the character and sits further back', () => {
     expect(TOUCH_RIG.side).toBe(0)
     expect(TOUCH_RIG.distance).toBeGreaterThan(DESKTOP_RIG.distance)
+    expect(DESKTOP_RIG.tilt).toBe(0)
+  })
+
+  it('touch puts the character in the lower third, clear of the reticle, and under the ceiling', () => {
+    const pivotY = 1.55
+    for (const pitch of [0, deg(-10), deg(10)]) {
+      const o = orbitPitch(pitch, pivotY, TOUCH_RIG)
+      const off = thirdPersonOffset(0, o, TOUCH_RIG.distance, TOUCH_RIG.side, TOUCH_RIG.up)
+      const cam = [off[0], pivotY + off[1], off[2]]
+      expect(cam[1]).toBeLessThanOrEqual(ROOM.height - THIRD_PERSON.margin + 1e-9)
+      const viewPitch = pitch - TOUCH_RIG.tilt
+      // Angle below the view direction of a point straight ahead of the camera (yaw 0 looks to -Z).
+      const below = (y: number) => viewPitch - Math.atan2(y - cam[1], cam[2])
+      const hatTop = screenY(below(pivotY + 0.4))
+      const feet = screenY(below(0))
+      if (pitch === 0) {
+        expect(hatTop).toBeGreaterThan(0.57)
+        expect(feet).toBeLessThan(0.97)
+      }
+      // Never on the reticle, whatever the look pitch.
+      expect(hatTop).toBeGreaterThan(0.53)
+    }
   })
 })
