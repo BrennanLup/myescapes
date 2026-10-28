@@ -4,6 +4,7 @@ import { useStore } from '@/state/store'
 import { bus } from '@/contracts/events'
 import { computeProgress, loadingMessage, MIN_LOADING_MS, readFlags } from './logic'
 import { IconKey } from './icons'
+import { headingToRoom } from './BootSplash'
 
 const FADE_MS = 550
 
@@ -32,6 +33,9 @@ export function LoadingScreen() {
   const setWorldReady = useStore((s) => s.setWorldReady)
   const { progress: assetProgress, active: assetActive, total: assetTotal } = useProgress()
   const flags = useMemo(readFlags, [])
+  // In a friend's room the tagline says whose room is loading ("Heading to Vera's room…").
+  const visiting = useStore((s) => s.visiting)
+  const heading = visiting ? headingToRoom(visiting.owner ?? { handle: visiting.handle }) : null
 
   const mountedAt = useRef(performance.now())
   const [now, setNow] = useState(() => performance.now())
@@ -98,7 +102,7 @@ export function LoadingScreen() {
     <div
       data-testid="loading-screen"
       role="dialog"
-      aria-label="Loading My Escapes"
+      aria-label={heading ?? 'Loading My Escapes'}
       aria-busy={!ready}
       className="fixed inset-0 z-[80] flex items-center justify-center overflow-hidden px-4 font-body text-paper transition-opacity ease-out"
       style={{
@@ -122,7 +126,9 @@ export function LoadingScreen() {
         <h1 className="mt-4 font-display text-5xl font-semibold tracking-tight text-[#ffe9d2] drop-shadow-[0_4px_18px_rgba(255,140,60,.45)] sm:text-6xl">
           My Escapes
         </h1>
-        <p className="mt-2 font-hand text-2xl text-[#f7b98a]">every room we ever broke out of</p>
+        <p data-testid="loading-tagline" className="mt-2 font-hand text-2xl text-[#f7b98a] [overflow-wrap:anywhere]">
+          {heading ?? 'every room we ever broke out of'}
+        </p>
 
         <div className="mt-8 w-full max-w-sm">
           <div

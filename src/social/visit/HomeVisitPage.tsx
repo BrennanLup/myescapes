@@ -8,22 +8,16 @@ import { setSessionUser, useSession } from '@/auth'
 import type { HomeView } from '@/contracts/realtime'
 import type { RouteProps } from '@/router'
 import { useDocumentTitle } from '@/public/shared/useApi'
+import { BootSplash, headingToRoom } from '@/ui/shell/BootSplash'
 import { OnboardingScreen, SignInScreen } from '@/public/landing'
 import { REALTIME_LIMITS } from '@/contracts/realtime'
 import { homeUrl, pageNav, preloadHome, useVisitEnded, visitHandleFromPath, visitProblem, type VisitProblem } from './state'
 
 const DesktopApp = lazy(async () => ({ default: (await import('../../desktop')).DesktopApp }))
 
-function Blank({ label }: { label?: string }) {
-  return (
-    <div data-testid="page-loading" className="fixed inset-0 flex items-end justify-center bg-[var(--color-night)] pb-16">
-      {label ? (
-        <p aria-live="polite" className="m-0 font-display text-lg text-panel/80">
-          {label}
-        </p>
-      ) : null}
-    </div>
-  )
+/** The boot splash (as index.html paints it), with a line saying whose room is coming. */
+function Blank({ label }: { label?: string | null }) {
+  return <BootSplash label={label ?? undefined} />
 }
 
 type Load = { state: 'loading' } | { state: 'ok'; view: HomeView } | { state: 'error'; problem: VisitProblem }
@@ -65,11 +59,11 @@ export function HomeVisitPage({ params }: Partial<RouteProps>) {
   // Friends see you by name and @handle in their room, so choose them first.
   if (!session.user.onboarded) return <OnboardingScreen user={session.user} onDone={(me) => setSessionUser(me)} />
   if (!handle) return <VisitError problem="not_found" handle={params?.handle ?? ''} onRetry={() => setAttempt((n) => n + 1)} />
-  if (load.state === 'loading') return <Blank label={`Opening @${handle}'s room…`} />
+  if (load.state === 'loading') return <Blank label={headingToRoom({ handle })} />
   if (load.state === 'error') return <VisitError problem={load.problem} handle={handle} onRetry={() => setAttempt((n) => n + 1)} />
   if (ended) return <VisitError problem={ended.problem} handle={handle} ownerName={ended.ownerName ?? load.view.owner.displayName} retryAfterMs={ended.retryAfterMs} focus onRetry={() => pageNav.go(homeUrl())} />
   return (
-    <Suspense fallback={<Blank label={`Opening ${load.view.owner.displayName}'s room…`} />}>
+    <Suspense fallback={<Blank label={headingToRoom(load.view.owner)} />}>
       <DesktopApp />
     </Suspense>
   )

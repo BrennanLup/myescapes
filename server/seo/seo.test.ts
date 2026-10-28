@@ -69,7 +69,10 @@ describe('head helpers', () => {
     // Everything else in the head stays.
     expect(html).toContain('rel="manifest"')
     expect(html).toContain('name="theme-color"')
-    expect(html).toContain('<div id="root"></div>')
+    expect(html).toContain('<div id="root">')
+    // The boot splash in the body (and its styles in the head) survive the head rewrite.
+    expect(html).toContain('class="boot-splash"')
+    expect(html).toContain('.boot-shimmer')
     expect(injectHeadTags('<p>no head</p>', '<title>x</title>')).toBe('<p>no head</p>')
   })
 })
@@ -220,7 +223,8 @@ describe('served pages', () => {
     expect(res.body.match(/<title>/g)).toHaveLength(1)
     expect(res.body).toContain('<title>The Lost Observatory · Starlight Escapes, San Francisco · My Escapes</title>')
     expect(res.body).toContain('og:description')
-    expect(res.body).toContain('<div id="root"></div>')
+    expect(res.body).toContain('<div id="root">')
+    expect(res.body).toContain('class="boot-splash"')
   })
 
   it('unknown pages get the plain index.html', async () => {

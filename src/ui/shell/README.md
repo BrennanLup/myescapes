@@ -5,8 +5,16 @@ Exports from `index.tsx`: `LoadingScreen`, `Hud`, `SettingsOverlay`, `PerfMonito
 ## CanvasBoundary (`data-testid="canvas-failed"`)
 Wraps the room's `<Canvas>` in `App.tsx`. react-three-fiber rethrows a failed WebGL context (or any error inside the scene) out of `<Canvas>`, and without a boundary React would unmount the whole page. The boundary instead shows an alert above the loading screen (z-90): "The room couldn't light up", with WebGL-specific advice (hardware acceleration, another browser) when the error mentions WebGL or a context, a **Reload** button and **Open the light version** (`/m`, no three.js). The error is logged with `console.error`.
 
+## BootSplash (`BootSplash.tsx`, `data-testid="page-loading"`)
+Every page load starts with a splash instead of an empty screen: the door logo, "My Escapes" and a CSS-only shimmer on the loader's night gradient.
+- `index.html` paints it inside `#root` (markup and inline `<style>` with the `.boot-*` classes), so it shows before any JavaScript or stylesheet loads. React replaces it on its first render.
+- `BootSplash` renders the same markup and is every "still loading" fallback on the way to a room: the router's `PageFallback`, the landing's `Blank` while the session or the room's code loads, `/home/:handle` (with "Heading to Vera's room…") and `/daily/room` ("Unlocking today's room…", `daily-room-loading`). The shimmer gets a negative `animationDelay` so it carries on in step when React swaps the markup. Reduced motion stops it.
+- No imports, so the router can import it straight from the file without pulling in the shell (`index.tsx` imports three.js helpers). Keep the markup and the `.boot-*` styles in `index.html` in sync; `BootSplash.test.tsx` checks both.
+- `headingToRoom(owner)` gives "Heading to Vera's room…" (first name, else `@handle`), shared with the LoadingScreen tagline.
+
 ## LoadingScreen (`data-testid="loading-screen"`)
 - A full-screen night gradient with a lamp glow, the title "My Escapes", fanned polaroids with a padlock and a wiggling key, and a progress bar.
+- The tagline (`loading-tagline`) is "every room we ever broke out of" in your own room and "Heading to Vera's room…" in a friend's (`store.visiting`; the @handle until their name has loaded), also used as the dialog's label.
 - Progress (`computeProgress` in `logic.ts`) is 50% assets (drei `useProgress`, which counts as done when the loading manager never saw a file) and 50% `dataStatus`. It is capped by a 600 ms minimum display time so the screen does not flash.
 - If the data fails to load, it shows the error and a "Try again" button (`retry-button`) that calls `store.loadData()`.
 - When everything is ready, it shows "Enter the room" (`enter-button`; Enter/Space also work). That click emits `user:gesture`. The screen then fades out over 550 ms and calls `setWorldReady(true)`.

@@ -18,6 +18,7 @@ import { ApiCallError } from '../../contracts/errors'
 import { DisplayNameSchema, HandleSchema, RESERVED_HANDLES, type Me } from '../../contracts/models'
 import { PublicFooter } from '../shared/Layout'
 import { useDocumentTitle } from '../shared/useApi'
+import { BootSplash } from '../../ui/shell/BootSplash'
 
 const DesktopApp = lazy(async () => ({ default: (await import('../../desktop')).DesktopApp }))
 
@@ -408,8 +409,9 @@ export function OnboardingScreen({ user, onDone, onSkip }: { user: Me; onDone: (
 // The `/` route
 // ---------------------------------------------------------------------------
 
+/** The boot splash index.html painted, kept up while the session or the room's code loads. */
 function Blank() {
-  return <div data-testid="page-loading" className="fixed inset-0 bg-[var(--color-night)]" />
+  return <BootSplash />
 }
 
 function Room() {

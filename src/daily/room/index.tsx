@@ -8,6 +8,7 @@ import type { RouteProps } from '../../router'
 import { Link } from '../../router'
 import { useDailyToday } from '../ui/DailyGame'
 import { DailyRoom } from './DailyRoom'
+import { BootSplash } from '../../ui/shell/BootSplash'
 
 export function DailyRoomPage(_props: Partial<RouteProps>) {
   useEffect(() => {
@@ -19,27 +20,25 @@ export function DailyRoomPage(_props: Partial<RouteProps>) {
   }, [])
   const [load, setToday, reload] = useDailyToday()
   if (load.status === 'ready') return <DailyRoom key={load.today.puzzle.day} today={load.today} setToday={setToday} reload={reload} />
+  // The same splash index.html painted, so arriving here never flashes a different screen.
+  if (load.status === 'loading') return <BootSplash label="Unlocking today's room…" testId="daily-room-loading" />
   return (
     <main
-      data-testid="daily-room-loading"
+      data-testid="daily-room-failed"
       className="fixed inset-0 flex items-center justify-center px-4 font-body text-[#ffe9d2]"
       style={{ background: 'linear-gradient(180deg, #2a1f2d 0%, #3d2638 55%, #5b2f3d 100%)' }}
     >
-      {load.status === 'loading' ? (
-        <p className="font-display text-xl">Unlocking today's room…</p>
-      ) : (
-        <div className="max-w-sm text-center" data-testid="daily-room-error">
-          <p className="font-display text-xl">{load.message}</p>
-          <div className="mt-4 flex flex-col items-center gap-3">
-            <button type="button" onClick={reload} className="min-h-12 rounded-full bg-accent px-6 font-display font-semibold text-white">
-              Try again
-            </button>
-            <Link to="/daily" className="underline">
-              Play the 2D version
-            </Link>
-          </div>
+      <div className="max-w-sm text-center" data-testid="daily-room-error">
+        <p className="font-display text-xl">{load.message}</p>
+        <div className="mt-4 flex flex-col items-center gap-3">
+          <button type="button" onClick={reload} className="min-h-12 rounded-full bg-accent px-6 font-display font-semibold text-white">
+            Try again
+          </button>
+          <Link to="/daily" className="underline">
+            Play the 2D version
+          </Link>
         </div>
-      )}
+      </div>
     </main>
   )
 }
