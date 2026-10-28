@@ -4,10 +4,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Region } from '../types'
+import { COUNTRY_CODES } from '../countries'
 import {
   CATEGORY_COLUMN,
+  FSQ_COUNTRY_REGIONS,
   FSQ_REGIONS,
+  countryRegion,
   categoriesAllowNameMatch,
+  escapeNameMatch,
   httpParquetSource,
   inBbox,
   isEscapeRoom,
@@ -91,6 +95,40 @@ describe('category and name rules', () => {
     }
   })
 
+  it('matches escape-room names in the languages of the new countries', () => {
+    for (const n of [
+      'Exit Game Wien', 'Escape Game Lyon', 'Quest Room Kyiv', 'Questrooms Oslo', 'Fluchtraum Bremen', 'Rätselraum', 'Escape-Room Köln',
+      'Evden Kaçış Oyunu', 'KAÇIŞ OYUNU', 'Magic Escape - Szabadulószoba', 'Szabadulós Játék', 'Exit Kijutós Játék', 'Precrime úniková hra',
+      'Chytrá únikovka', 'Let Me Out. Pokój zagadek', 'הטירה המקוללת - חדר בריחה', 'Эскейп-рум Москва', 'Salas De Escape Habilmente',
+      '방탈출', 'リアル脱出ゲーム', '密室逃脫', '실내 방탈출 카페',
+    ]) {
+      expect(escapeNameMatch(n), n).toBe('strong')
+    }
+    for (const n of ['Квест-комната "Тайник"', 'КВЕСТ', 'Реалити-квест "выХод"', 'Exit Room Zlín', 'Exit the Room', 'The Locked Room', 'Live Escape Rotterdam', 'Enigma Rooms', '脱出']) {
+      expect(escapeNameMatch(n), n).toBe('weak')
+    }
+    // Not a word start ("Эквестрия" is horse riding), meeting rooms, guest houses, road exits.
+    for (const n of ['Эквестрия', 'КВЕСТОР-ГРУПП', 'Breakout Room 298', 'Quest House', 'Exit Tol Cikarang', 'Nexity', 'Havelock Room', 'Escape']) {
+      expect(escapeNameMatch(n), n).toBeNull()
+    }
+  })
+
+  it('keeps a weak name match only with no category or an entertainment one', () => {
+    expect(categoriesAllowNameMatch(['Arts and Entertainment > Arcade'], 'Квест Ловушка')).toBe(true)
+    expect(categoriesAllowNameMatch(['Business and Professional Services > Entertainment Service'], 'Enigma Rooms')).toBe(true)
+    expect(categoriesAllowNameMatch([], 'Квест-проект')).toBe(true)
+    expect(categoriesAllowNameMatch(null, 'Компания по организации квестов Red Line')).toBe(true)
+    // With no category: not a bare "КВЕСТ" (a company), and not the other weak names (meeting rooms).
+    expect(categoriesAllowNameMatch([], 'КВЕСТ')).toBe(false)
+    expect(categoriesAllowNameMatch([], 'Electrical Exit Room AP1')).toBe(false)
+    expect(categoriesAllowNameMatch(['Community and Government > Education > College and University'], 'Библио Квест')).toBe(false)
+    expect(categoriesAllowNameMatch(['Business and Professional Services > Office > Meeting Room'], 'Exit Room')).toBe(false)
+    expect(categoriesAllowNameMatch(['Community and Government > Spiritual Center > Shrine'], '後醍醐天皇脱出の地')).toBe(false)
+    // A strong match keeps the old rule: anything not ruled out.
+    expect(categoriesAllowNameMatch(['Community and Government > Organization > Non-Profit Organization'], 'Fluchtraum Bremen')).toBe(true)
+    expect(categoriesAllowNameMatch(['Community and Government > Residential Building > Apartment or Condo'], 'Quest Room 5')).toBe(false)
+  })
+
   it('drops name matches whose categories all rule them out', () => {
     expect(categoriesAllowNameMatch(['Dining and Drinking > Bar'])).toBe(false)
     expect(categoriesAllowNameMatch(['Dining and Drinking > Bar', 'Arts and Entertainment > Arcade'])).toBe(true)
@@ -150,6 +188,30 @@ describe('regions', () => {
     expect(FSQ_REGIONS.slice(0, 2).map((r) => r.id)).toEqual(['us', 'ca'])
     for (const r of FSQ_REGIONS) if (r.bbox) expect(r.bbox[0] < r.bbox[2] && r.bbox[1] < r.bbox[3], r.id).toBe(true)
   })
+
+  it('keeps the existing regions first and in order, then one region for every other country', () => {
+    // Existing region ids and their order are part of the seed (files and slugs): append only.
+    expect(FSQ_REGIONS.slice(0, 8).map((r) => r.id)).toEqual(['us', 'ca', 'gb-london', 'fr-paris', 'de-berlin', 'nl-amsterdam', 'es-madrid', 'es-barcelona'])
+    expect(FSQ_REGIONS.findIndex((r) => r.id === 'nz-auckland')).toBe(FSQ_REGIONS.findIndex((r) => !r.bbox && r.id.length === 2 && r.id !== 'us' && r.id !== 'ca') - 1)
+    const whole = FSQ_REGIONS.filter((r) => !r.bbox)
+    expect(new Set(whole.map((r) => r.country)).size).toBe(whole.length)
+    expect(whole.map((r) => r.country).sort()).toEqual([...COUNTRY_CODES])
+    for (const cc of ['GB', 'DE', 'FR', 'RU', 'KR', 'BR', 'XK']) expect(FSQ_REGIONS.find((r) => r.country === cc && !r.bbox)).toMatchObject({ id: cc.toLowerCase(), country: cc })
+    expect(countryRegion('GB')).toEqual({ id: 'gb', name: 'United Kingdom', country: 'GB', unifyCities: true })
+    expect(FSQ_COUNTRY_REGIONS.map((r) => r.id)).not.toContain('us')
+  })
+
+  it('puts a place in a city region before its country, whatever the list order', () => {
+    const GB: Region = countryRegion('GB')
+    expect(regionForPlace({ country: 'GB', lat: 51.5, lng: -0.12 }, [GB, LONDON])?.id).toBe('gb-london')
+    expect(regionForPlace({ country: 'GB', lat: 53.48, lng: -2.24 }, [GB, LONDON])?.id).toBe('gb')
+    expect(regionForPlace({ country: 'GB', lat: null, lng: null }, [LONDON, GB])?.id).toBe('gb')
+    expect(regionForPlace({ country: 'ZZ', lat: 1, lng: 1 }, FSQ_REGIONS)).toBeNull()
+    // Every country has a region in the full list.
+    for (const cc of COUNTRY_CODES) expect(regionForPlace({ country: cc, lat: null, lng: null }, FSQ_REGIONS), cc).not.toBeNull()
+    expect(regionForPlace({ country: 'DE', lat: 52.52, lng: 13.4 }, FSQ_REGIONS)?.id).toBe('de-berlin')
+    expect(regionForPlace({ country: 'DE', lat: 50.94, lng: 6.96 }, FSQ_REGIONS)?.id).toBe('de')
+  })
 })
 
 describe('scanning', () => {
@@ -180,6 +242,19 @@ describe('scanning', () => {
     expect(placeReads.map((x) => [x.rowStart, x.rowEnd])).toEqual([[0, 3], [7, 9]])
     expect(file.reads.filter((x) => x.columns.includes(CATEGORY_COLUMN) && !x.columns.includes('address'))).toHaveLength(2)
     expect(r.hits.find((h) => h.place.sourceId === 'b')!.place.raw.matched_by).toBe('name')
+  })
+
+  it('assigns against the full region list and keeps only the requested regions', async () => {
+    const GB = countryRegion('GB')
+    const file = fakeFile([
+      row({ fsq_place_id: 'ldn', country: 'GB', latitude: 51.5, longitude: -0.1 }),
+      row({ fsq_place_id: 'man', country: 'GB', latitude: 53.48, longitude: -2.24 }),
+      row({ fsq_place_id: 'zz', country: 'ZZ', latitude: 1, longitude: 1 }),
+    ])
+    const unassigned: string[] = []
+    const r = await scanFile(file, [GB], { classifyWith: [LONDON, GB], onUnassigned: (p) => unassigned.push(p.sourceId) })
+    expect(r.hits.map((h) => `${h.regionId}:${h.place.sourceId}`)).toEqual(['gb:man'])
+    expect(unassigned).toEqual(['zz'])
   })
 
   let cacheDir: string | null = null
