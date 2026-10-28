@@ -41,7 +41,7 @@ export function dbAccess(ctx: AppContext): HubAccess {
     visitAccess: (viewerId, ownerId) => visitAccess(ctx.db(), viewerId, ownerId),
     friendIds: (userId) => acceptedFriendIds(ctx.db(), userId),
     // Others only ever see the look you saved (and so own), never one a client made up.
-    outfitFor: async (userId) => (await outfitForUser(ctx.db(), userId)).outfit as RealtimeOutfit,
+    outfitFor: async (userId) => ({ ...(await outfitForUser(ctx.db(), userId)).outfit }) as RealtimeOutfit,
   }
 }
 
