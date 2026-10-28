@@ -70,9 +70,9 @@ function TargetedDirectional({ spec }: { spec: DirectionalLightSpec }) {
         shadow-bias={-0.0006}
         shadow-normalBias={0.03}
         shadow-radius={3}
-        // An orthographic box around the whole room, seen from the moon.
-        shadow-camera-left={-14}
-        shadow-camera-right={14}
+        // An orthographic box around the whole room and its walls, seen from the moon (walls reach about 14.4 m sideways).
+        shadow-camera-left={-15}
+        shadow-camera-right={15}
         shadow-camera-top={12}
         shadow-camera-bottom={-12}
         shadow-camera-near={2}
