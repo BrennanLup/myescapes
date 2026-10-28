@@ -197,3 +197,17 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
 - (C client) Others see your starter look until your wardrobe has loaded; looks from the network are repaired with `normalizeOutfit`, never trusted as-is.
 - (C client) In a friend's room spoilers stay hidden unless you press the banner's Spoilers toggle (it reloads their room with `?spoilers=1`).
 - (C client) `/home/*` pages are `noindex`, out of `robots.txt`, and their head never echoes the @handle.
+- (A, QA r1) An unset score shows an empty dashed track with "Tap to rate" over a see-through
+  slider (`src/ui/confirm/ScoreSlider.tsx`, both forms): a thumb parked at 50 read as "already 50".
+- (A, QA r1) Genre is optional on the desktop form too ("Not sure", saved as `other` because the 3D
+  room's `Room` needs a genre): one rule on both forms, and it shouldn't block a review.
+- (A, QA r1) Room search ranks the draft's city first via a new optional, soft `city` on
+  `directorySearch` (+0.35 rank boost: wins ties, not much better names); ties ignore leading
+  punctuation. A few lines in `src/contracts/routes.ts` and `server/routes/directory.queries.ts`,
+  since a client-only rerank can't reach same-city rooms among thousands of tied "escape" names.
+- (A, QA r1) Removing an uploaded photo gets a 5 s inline "Photo removed · Undo" (the DELETE waits)
+  rather than a confirm dialog: one tap stays one tap, and a mis-tap is recoverable.
+- (A, QA r1) Finished uploads are kept in the photo queue only while something shows them
+  (`watchTarget`), instead of a fixed cap: the photos are on the server and every list refetches.
+- (A, QA r1) A phone keyboard that shrinks the layout viewport counts as open when a text field has
+  focus and the page is >120 px shorter than the tallest seen at that width (touch screens only).
