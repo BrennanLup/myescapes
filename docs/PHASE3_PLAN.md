@@ -185,3 +185,15 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
   spend keys (the wardrobe asks them to sign in).
 - (B) The account export (`/api/me/export`) now includes your saved look and purchases (an
   optional `avatar` field), to keep the privacy promise that the download holds all your data.
+- (C client) Moving between rooms (`/` and `/home/:handle`) is a full page load: the 3D room boots once per page with the right data, socket home and read-only rules, the same clean swap D uses for `/daily/room`.
+- (C client) Read-only is enforced in the store (`visiting`: `addEntry`, `setWishlist` and the record/confirm/wish list overlays refuse) plus small UI hides (record and wish list buttons, photo uploads), so a friend's wish list can never overwrite yours. A few lines in `src/state/store.ts`, `src/ui/shell/Hud.tsx`, `src/ui/review/ReviewOverlay.tsx`.
+- (C client) The store got a pluggable data loader (`setDataLoader`) so the existing loading screen, retry and quiet refresh all work for a friend's room unchanged.
+- (C client) Remote players are drawn 100 ms in the past from server-stamped poses (clock from ping/pong); poses after a pause are anchored so nobody glides, teleports snap, extrapolation stops at 150 ms: smooth at 10 Hz without rubber-banding.
+- (C client) Name tags and chat bubbles are DOM (`Html`) over the canvas, not 3D text: crisp, any script, no font download; they fade with distance and are hidden behind the camera.
+- (C client) The people UI is its own cluster (bottom left on desktop, round buttons on the right of phones) mounted in `App.tsx`, like B's character HUD: the top HUD row is full on a 360 px phone.
+- (C client) Keys: `T`/`Enter` chat and `F` people, chosen to avoid WASD, `E`, `V` and `1`-`6`.
+- (C client) Visiting needs a display name and @handle (the socket requires them): `/home/:handle` shows the onboarding step first instead of a room without people.
+- (C client) "Back to my room" goes to `/?autostart=1`, so phones land on `/m` as `/` always sends them; visiting itself works on phones (the 3D room with touch controls).
+- (C client) Others see your starter look until your wardrobe has loaded; looks from the network are repaired with `normalizeOutfit`, never trusted as-is.
+- (C client) In a friend's room spoilers stay hidden unless you press the banner's Spoilers toggle (it reloads their room with `?spoilers=1`).
+- (C client) `/home/*` pages are `noindex`, out of `robots.txt`, and their head never echoes the @handle.

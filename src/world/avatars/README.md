@@ -8,7 +8,8 @@ Your character in the 3D room, and the same character for anyone else (other pla
 | `animation.ts` | `poseAt({ time, phase, speed, action, lookPitch })`: joint angles for idle, walk (from speed) and the emotes `wave`, `cheer`, `dance`. `advancePhase`, `locomotionAction`. Pure. |
 | `kit.ts` | Shared, cached geometries (`G`) and materials (`M(hex)`) for every character on screen. |
 | `Character.tsx` | `<Character outfit motion? speed? action? shadows? {...groupProps} />`. |
-| `LocalAvatar.tsx` | You: follows `playerView` (src/player/view.ts), visible only in third person. Mounted by `World.tsx`. |
+| `LocalAvatar.tsx` | You: follows `playerView` (src/player/view.ts), visible only in third person (and plays the emote you sent to the room). Mounted by `World.tsx`. |
+| `RemotePlayers.tsx` | Other people in the room (workstream C): one `Character` each in their own look, moved from the interpolated poses in `src/net` every frame, with an @handle tag (a dot, gold for the host) and their latest chat line in a bubble (drei `Html`, fades out from 9 m, hidden past 16 m). Emotes play while they stand still. Mounted by `World.tsx`. |
 
 ## Character
 - Built from primitives (capsules, spheres, boxes, cylinders, tori), about 40 small meshes, no textures and no downloaded model. Flat-shaded clothes, smooth skin, in the room's warm palette.

@@ -33,6 +33,7 @@ Locally the database is PGlite (a WebAssembly Postgres in `DATA_DIR/pglite`), so
 | `/games/:slug`, `/venues/:slug`, `/cities/:slug` | Public directory pages: aggregates, puzzle highlights behind "Show spoilers", public reviews by @handle (never email), "played together" links, a report button, source attribution. |
 | `/daily` | Escape of the Day. Also behind the door of the 3D room and on the phone's home screen. |
 | `/daily/room` | Escape of the Day as a small 3D puzzle room (clues on the walls, a lock by the door, hidden keys on search days). Finishing opens the door; walking out takes you into your own room. Linked as **Play in 3D** from `/daily` and the room's door. |
+| `/home/:handle` | A friend's room, read-only: their board and reviews (spoilers hidden unless you ask), with them and other friends walking around in it live. Friends only; **Back to my room** returns home. |
 | `/settings` | Profile, inbox (tags and guest-name claims), friends, invite links and QR code, data download (JSON), account deletion, and links to the legal pages. |
 | `/invite/:code` | An invite link: sign in, become friends, claim visits logged under a guest name. |
 | `/welcome` | The landing page directly (also where a failed sign-in explains itself). |
@@ -48,6 +49,7 @@ Locally the database is PGlite (a WebAssembly Postgres in `DATA_DIR/pglite`), so
 | Sort the board | Keys `1`-`6`, the sort chips at the top right, or the tabs on the board itself (the seventh tab, **Crew**, groups rooms by who you played with) | Sort button at the top right, or the tabs on the board |
 | Camera | `V` or the **First / Third person** button at the bottom right switches between your own eyes and a view from behind your character (remembered on this device) | The round eye button at the bottom right |
 | Your look | The **Wardrobe** button at the bottom right | The hanger button at the bottom right |
+| People | `F` opens who is here and **Visit a friend** (bottom left); `T` or `Enter` chats; the wave, cheer and dance buttons play an emote | The people, chat and wave buttons on the right |
 | Close a panel | `Esc` or the × button | The × button |
 
 The round buttons at the top right open the wish list, the year wrap, the voice recorder, settings (sensitivity, invert Y, quality, head bob, and an Account link to `/settings` when signed in), sound and the controls help.
@@ -64,7 +66,7 @@ The round buttons at the top right open the wish list, the year wrap, the voice 
 - **Escape of the Day.** Six guesses, hints that cost points, a spoiler-free share grid, streaks counted against the server's record of your day, and a friends leaderboard. Play it on `/daily` or walk through it in 3D at `/daily/room` (src/daily/room/README.md).
 - **Your character and the wardrobe.** A low-poly character you can see in third person, dressed in the wardrobe (skin tone, hair, top, bottom, shoes, hat, accessory, colours). Some items unlock with keys, earned by logging rooms (10) and solving Escape of the Day (5), plus 20 to start. No real money: there is no payment provider. Saved to your account (`GET/PUT /api/me/avatar`); in the demo room, free looks are kept on the device.
 - **Wish list** and the **Year in Escape Rooms** wrap (now with your #1 teammate).
-- **Visiting friends (Phase 3, server side).** A websocket at `/api/realtime` lets friends share a room live (poses at 10 Hz, emotes, short chat that is never stored, "Mia is in your room" presence), and `GET /api/homes/:handle` returns a friend's room read-only with only what you may already see. Friends only; signed-out visitors get no socket. See [`server/realtime/README.md`](server/realtime/README.md).
+- **Visiting friends.** Friends share a room live: you see each other's characters (in their own looks) walk around with an @handle tag, chat in bubbles (never stored), wave, cheer and dance. "Mia is in your room" toasts, a list of who is here, and **Visit a friend** (online friends first) open `/home/:handle`, their room read-only, with **Back to my room**. The friends list in `/settings` shows who is online. Friends only; signed-out visitors get no socket. See [`server/realtime/README.md`](server/realtime/README.md), [`src/net/README.md`](src/net/README.md) and [`src/social/visit/README.md`](src/social/visit/README.md).
 
 ## Configuration
 
@@ -138,7 +140,8 @@ src/
   auth/                 useSession, sign-in, onboarding
   mobile/               shell, log (record, confirm, crew chips, upload queue), match, list
   public/               landing, game, venue, city, reviews
-  social/               invites, QR, friends, inbox, settings
+  social/               invites, QR, friends, inbox, settings; visit/ (friends' rooms, people in the room)
+  net/                  Phase 3: realtime socket client, interpolation of other players
   daily/                Escape of the Day engine, 2D UI and the 3D puzzle room (daily/room)
   world/ player/ interaction/ ui/ state/ audio/ gate/   The 3D room (Phase 1, now on per-user data)
 scripts/
