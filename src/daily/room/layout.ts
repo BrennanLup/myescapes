@@ -36,8 +36,23 @@ export const DR = {
 
 export const ROOM_CENTER: Vec3 = [(DR.minX + DR.maxX) / 2, 0, (DR.minZ + DR.maxZ) / 2]
 
-/** Where you stand when you enter: near the south wall, facing the door. */
-export const SPAWN = { position: [0, PLAYER.eyeHeight, 3.6] as Vec3, yaw: 0, pitch: -0.04 }
+/**
+ * Where you stand when you enter: in the south half, facing the door. Far enough from the south
+ * wall (2.6 m) that the third-person camera sits at its full distance instead of being
+ * pulled in against the wall behind you.
+ */
+export const SPAWN = { position: [0, PLAYER.eyeHeight, 2.4] as Vec3, yaw: 0, pitch: -0.04 }
+
+/**
+ * Third-person rigs for this small room. Phones: closer and higher than the main room's centred
+ * rig (3.5 m back), so the camera keeps its full distance in an 8 m room and your character stays
+ * a figure below the reticle instead of filling the bottom half of the screen. Desktop keeps the
+ * shared over-the-shoulder rig, a little shorter.
+ */
+export const ROOM_RIGS = {
+  touch: { distance: 2.2, side: 0, up: 0.6 },
+  desktop: { distance: 2.4, side: 0.55, up: 0.35 },
+} as const
 
 /** Crossing this line (heading north, door open) takes you home. */
 export const EXIT_Z = -4.5
@@ -96,6 +111,13 @@ export const BELL_POS: Vec3 = [2.55, 0, 3.0]
 
 /** Brass plaque with today's number and theme, on the wall left of the door (centre, wall surface). */
 export const PLAQUE_POS: Vec3 = [-1.3, 1.55, DR.minZ + 0.01]
+
+/**
+ * The pendant lamp (x, z of its cord, and how far the shade hangs below the ceiling): off the
+ * walking line through the middle of the room and high, so it never sits between you (or the
+ * third-person camera behind you) and the banner above the door, the main clue on a cipher day.
+ */
+export const PENDANT = { x: -1.7, z: (DR.minZ + DR.maxZ) / 2 + 0.4, drop: 0.55 } as const
 
 /** The banner above the door (cipher word, or the room's name). */
 export const BANNER_POS: Vec3 = [0, 2.72, DR.minZ + 0.03]

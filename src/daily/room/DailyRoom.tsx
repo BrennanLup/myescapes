@@ -28,7 +28,7 @@ import { markDoorSolved } from '../ui/overlay'
 import { isFinished } from '../ui/state'
 import { walkHome } from './exit'
 import { Furniture } from './Furniture'
-import { SPAWN } from './layout'
+import { ROOM_RIGS, SPAWN } from './layout'
 import { EMPTY_ROUND, resetRoomPlay, useRoomPlay } from './playStore'
 import { Clues, ExitSign, GuessBoard, HintBell, LockBox, Plaque } from './PuzzleProps'
 import { CameraToggle, Confetti, ControlsHint, EntryCard, LeavingFade, ROOM_CSS, RoomHud, RoomPanels, Toast } from './RoomUi'
@@ -268,7 +268,7 @@ function RoomScene({ play, onExit }: { play: DailyPlayApi; onExit(): void }) {
       <HintBell />
       <Plaque c={c} />
       <Furniture searchSymbol={c.kind === 'search' ? c.data.symbol : null} />
-      <PlayerController />
+      <PlayerController rigs={ROOM_RIGS} />
       <LocalAvatar />
       <InteractionSystem />
       <PerfMonitor />

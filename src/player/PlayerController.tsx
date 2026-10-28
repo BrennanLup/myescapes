@@ -24,6 +24,7 @@ import {
   THIRD_PERSON,
   thirdPersonOffset,
   TOUCH_RIG,
+  type CameraRig,
 } from './camera'
 import { eventCode, inputFromKeys, isMoveKey, isTypingTarget } from './keyboard'
 import {
@@ -52,9 +53,11 @@ function controlsEnabled() {
 export interface PlayerControllerProps {
   /** Pin the camera to first person and ignore `V` (rooms that don't draw your character). */
   firstPersonOnly?: boolean
+  /** Third-person rig overrides for this room (small rooms bring the camera closer). */
+  rigs?: { desktop?: CameraRig; touch?: CameraRig }
 }
 
-export function PlayerController({ firstPersonOnly = false }: PlayerControllerProps = {}) {
+export function PlayerController({ firstPersonOnly = false, rigs }: PlayerControllerProps = {}) {
   const gl = useThree((s) => s.gl)
   const held = useRef(new Set<string>())
   const look = useRef({ x: 0, y: 0 })
@@ -332,7 +335,7 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
     } else {
       for (let i = 0; i < 3; i++) pivot[i] = damp(pivot[i], head[i], THIRD_PERSON.followRate, dt)
     }
-    const rig = st.isTouch ? TOUCH_RIG : DESKTOP_RIG
+    const rig = st.isTouch ? (rigs?.touch ?? TOUCH_RIG) : (rigs?.desktop ?? DESKTOP_RIG)
     // The camera orbits with a pitch that keeps it off the floor and the ceiling; it looks along the real one.
     const orbit = orbitPitch(s.pitch, pivot[1], rig)
     const want = thirdPersonOffset(s.yaw, orbit, rig.distance * third, rig.side * third, rig.up * third, c.want)
