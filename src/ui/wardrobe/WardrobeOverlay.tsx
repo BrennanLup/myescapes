@@ -571,6 +571,12 @@ function EarnInfo({ keys, signedIn }: { keys: ReturnType<typeof useWardrobe.getS
         {signedIn && keys ? (
           <p className="text-ink-soft" data-testid="earn-summary">
             So far: {keys.earned} earned ({KEY_REWARDS.welcome} welcome, {keys.rooms} {keys.rooms === 1 ? 'room' : 'rooms'}, {keys.dailies} {keys.dailies === 1 ? 'puzzle' : 'puzzles'}), {keys.spent} spent.
+            {keys.spent > keys.earned ? (
+              <span data-testid="earn-owed">
+                {' '}
+                Deleted rooms take their keys back, so the next {keys.spent - keys.earned} {keys.spent - keys.earned === 1 ? 'key' : 'keys'} you earn pay that back first.
+              </span>
+            ) : null}
           </p>
         ) : (
           <p className="text-ink-soft">

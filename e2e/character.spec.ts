@@ -35,6 +35,13 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
   await expect(page.getByTestId('character-hud')).toBeVisible()
   expect((await view(page)).mode).toBe('first')
 
+  // The How to play card covers the Phase 3 controls (QA r3): the wardrobe on both, a legend of
+  // the round buttons on a phone.
+  await page.getByTestId('help-button').click()
+  await expect(page.getByTestId('controls-hint')).toContainText('Wardrobe')
+  if (phone) await expect(page.getByTestId('hint-legend-camera')).toBeVisible()
+  await page.getByTestId('hint-close').click()
+
   // Switch to third person (V on a laptop, the round eye button on a phone).
   if (phone) await page.getByTestId('camera-toggle').tap()
   else await page.keyboard.press('v')
@@ -61,6 +68,10 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
     await page.waitForFunction(() => window.__ESCAPE_VIEW__!.playerView.avatarOpacity < 0.8, null, { timeout: SLOW })
   }
 
+  // Back to a wall (QA r3): the camera rises over your head instead of collapsing into it.
+  await page.evaluate(() => window.__ESCAPE__!.requestTeleport([0, 1.6, 7.4], 0, 0))
+  await page.waitForFunction(() => window.__ESCAPE_VIEW__!.playerView.cameraDistance > 0.95, null, { timeout: SLOW })
+
   // Too far away is still too far (reach is not measured from the camera).
   await aimAt(page, [0, 1.6, 1.5], GATE_DOOR)
   await page.waitForTimeout(800)
@@ -83,13 +94,22 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
   await page.getByTestId('wardrobe-primary').click()
   await waitOverlay(page, null)
 
-  // Unlock headphones with the 20 welcome keys and wear them in one step.
+  // QA r3: try on the trench (50, too dear) and the headphones (10). Unlocking the headphones
+  // wears them at once; the trench stays a try-on and the button names it, on a phone too.
   await page.getByTestId('wardrobe-button').click()
+  await page.getByTestId('wardrobe-tab-top').click()
+  await page.getByTestId('item-top-trench').click()
+  await expect(page.getByTestId('wardrobe-primary')).toBeDisabled()
   await page.getByTestId('wardrobe-tab-extras').click()
   await expect(page.getByTestId('item-acc-headphones')).toHaveAttribute('data-locked', 'true')
   await page.getByTestId('item-acc-headphones').click()
   await expect(page.getByTestId('wardrobe-primary')).toContainText('Unlock Headphones')
   await page.getByTestId('wardrobe-primary').click()
+  await expect(page.getByTestId('wardrobe-message')).toContainText('Unlocked Headphones and put it on')
+  await expect(page.getByTestId('item-acc-headphones')).toHaveAttribute('data-wearing', 'true')
+  await expect(page.getByTestId('wardrobe-primary')).toContainText('Unlock Detective trench')
+  await page.getByTestId('wardrobe-cancel').click()
+  await page.getByTestId('wardrobe-discard-yes').click()
   await waitOverlay(page, null)
 
   // Too expensive: the crown stays locked.

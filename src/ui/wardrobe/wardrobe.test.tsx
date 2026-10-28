@@ -140,6 +140,12 @@ describe('WardrobeOverlay', () => {
     expect(screen.getByTestId('earn-info').textContent).toContain(`${KEY_REWARDS.roomLogged} keys for every room`)
   })
 
+  it('explains a key debt after deleting rooms whose keys were spent', async () => {
+    server.state = { ...server.state, keys: keys({ balance: 0, earned: 30, spent: 50, rooms: 1 }) }
+    await openLoaded()
+    expect(screen.getByTestId('earn-owed').textContent).toContain('next 20 keys you earn pay that back first')
+  })
+
   it('shows the server refusal', async () => {
     await openLoaded()
     server.fail = { status: 403, error: 'Unlock Headphones with keys before wearing it.' }
