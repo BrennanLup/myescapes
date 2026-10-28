@@ -17,6 +17,7 @@ beforeEach(() => {
     upload: (_v, _p, opts) => new Promise<PhotoV2>((resolve, reject) => uploads.push({ opts, resolve, reject })),
     createUrl: () => 'blob:preview',
     revokeUrl: () => {},
+    undoMs: 30,
   })
 })
 afterEach(() => {
@@ -76,7 +77,12 @@ describe('PhotoAttach', () => {
     expect(screen.getAllByRole('button', { name: /Remove photo/ })).toHaveLength(1)
     expect(screen.getByText('Add more photos')).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    // Hidden at once with Undo; deleted on the server when the Undo window is over.
+    expect(screen.getAllByTestId('photo-tile')).toHaveLength(1)
+    expect(screen.getByTestId('photo-undo').textContent).toMatch(/Photo removed/)
+    expect(fetchMock).not.toHaveBeenCalled()
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('pho_a'))
+    expect(screen.queryByTestId('photo-undo')).toBeNull()
     expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toBe('/api/photos/pho_a')
 
     cleanup()
@@ -90,5 +96,58 @@ describe('PhotoAttach', () => {
     render(<PhotoAttach target="draft:t3" disabledReason="Sign in to add photos." />)
     expect(screen.queryByTestId('photo-input')).toBeNull()
     expect(screen.getByTestId('photo-disabled').textContent).toBe('Sign in to add photos.')
+  })
+
+  it('says which files were skipped, in the status line', async () => {
+    const user = userEvent.setup({ applyAccept: false })
+    render(<PhotoAttach target="draft:t4" />)
+    await user.upload(screen.getByTestId('photo-input'), [file('a.png'), new File(['hi'], 'notes.txt', { type: 'text/plain' })])
+    const status = screen.getByTestId('photo-status')
+    await waitFor(() => expect(status.textContent).toMatch(/1 photo will upload when you save/))
+    expect(status.textContent).toContain("notes.txt isn't a photo, so it was skipped.")
+    // The next pick starts a fresh list.
+    await user.upload(screen.getByTestId('photo-input'), [file('b.png')])
+    expect(screen.queryByTestId('photo-skipped')).toBeNull()
+  })
+
+  it('Undo brings back a removed uploaded photo and nothing is deleted', async () => {
+    const user = userEvent.setup()
+    configurePhotoQueue({ undoMs: 60_000 })
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const { unmount } = render(<PhotoAttach target="visit:vis_1" visitId="vis_1" existing={[photo('pho_a'), photo('pho_b')]} meId="usr_me" fetch={fetchMock as unknown as typeof fetch} />)
+    await user.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    expect(screen.getAllByTestId('photo-tile')).toHaveLength(1)
+    await user.click(screen.getByTestId('photo-undo-button'))
+    expect(screen.getAllByTestId('photo-tile')).toHaveLength(2)
+    expect(screen.queryByTestId('photo-undo')).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    // Removing one more and closing the form makes that removal final at once.
+    await user.click(screen.getByRole('button', { name: 'Remove photo 2' }))
+    unmount()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+    expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toBe('/api/photos/pho_b')
+  })
+
+  it('removing a second photo makes the first removal final', async () => {
+    const user = userEvent.setup()
+    configurePhotoQueue({ undoMs: 60_000 })
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const onDeleted = vi.fn()
+    render(<PhotoAttach target="visit:vis_1" visitId="vis_1" existing={[photo('pho_a'), photo('pho_b')]} meId="usr_me" onExistingDeleted={onDeleted} fetch={fetchMock as unknown as typeof fetch} />)
+    await user.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    await user.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('pho_a'))
+    expect(onDeleted).not.toHaveBeenCalledWith('pho_b')
+    expect(screen.queryAllByTestId('photo-tile')).toHaveLength(0)
+  })
+
+  it('shows a failed delete and puts the photo back', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: 'Nope', code: 'forbidden' }), { status: 403, headers: { 'content-type': 'application/json' } }))
+    render(<PhotoAttach target="visit:vis_1" visitId="vis_1" existing={[photo('pho_a')]} meId="usr_me" fetch={fetchMock as unknown as typeof fetch} />)
+    await user.click(screen.getByRole('button', { name: 'Remove photo 1' }))
+    expect(await screen.findByTestId('photo-delete-error')).toBeTruthy()
+    expect(screen.getAllByTestId('photo-tile')).toHaveLength(1)
   })
 })

@@ -53,9 +53,12 @@ interface Deps {
   upload: Upload
   createUrl(b: Blob): string | null
   revokeUrl(url: string): void
+  /** How long "Photo removed · Undo" waits before an uploaded photo is deleted on the server. */
+  undoMs: number
 }
 
 const defaultDeps = (): Deps => ({
+  undoMs: 5000,
   resize: (f) => resizePhoto(f),
   upload: uploadPhotoWithProgress,
   createUrl: (b) => (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' ? URL.createObjectURL(b) : null),
@@ -66,16 +69,43 @@ const defaultDeps = (): Deps => ({
 
 let deps: Deps = defaultDeps()
 
-/** Tests: swap the resizer, the uploader or the object URL helpers. */
+/** Tests: swap the resizer, the uploader, the object URL helpers or the undo delay. */
 export function configurePhotoQueue(over: Partial<Deps>): void {
   deps = { ...deps, ...over }
 }
+
+/** Milliseconds a removed uploaded photo can still be restored (PhotoAttach's Undo). */
+export const removeUndoMs = () => deps.undoMs
 
 export const visitTarget = (visitId: string) => `visit:${visitId}`
 /** The visit id of a `visit:<id>` target, else null. */
 export const visitOf = (target: string): string | null => (target.startsWith('visit:') ? target.slice(6) || null : null)
 let draftSeq = 0
 export const newDraftTarget = () => `draft:${Date.now().toString(36)}-${++draftSeq}`
+
+/**
+ * Who is showing a target right now (PhotoAttach tiles, the after-save toast). A finished upload
+ * is only kept while someone shows it: after that the photo lives on the server, so its resized
+ * JPEG and object URL are let go instead of piling up for the whole session.
+ */
+const watchers = new Map<string, number>()
+const watched = (target: string) => (watchers.get(target) ?? 0) > 0
+
+/** Keep `target`'s finished photos while the caller shows them. Returns the release function. */
+export function watchTarget(target: string): () => void {
+  watchers.set(target, (watchers.get(target) ?? 0) + 1)
+  let done = false
+  return () => {
+    if (done) return
+    done = true
+    const n = (watchers.get(target) ?? 1) - 1
+    if (n > 0) watchers.set(target, n)
+    else {
+      watchers.delete(target)
+      usePhotoQueue.getState().clearDone(target)
+    }
+  }
+}
 
 type Listener = (target: string, photo: PhotoV2) => void
 const listeners = new Set<Listener>()
@@ -93,7 +123,7 @@ interface QueueState {
   retry(key: string): void
   retryAll(target: string): void
   remove(key: string): void
-  /** Forget finished items of a target (their photos now live in the visit). */
+  /** Forget finished items of a target (their photos now live in the visit). `watchTarget` calls it. */
   clearDone(target: string): void
   /** Drop everything of a target, cancelling uploads. */
   clear(target: string): void
@@ -147,6 +177,8 @@ export const usePhotoQueue = create<QueueState>()((set, get) => {
           // Keep only the small resized JPEG (it backs the thumbnail); let the original, up to 40 MB, go.
           if (find(next.key)) patch(next.key, { status: 'done', progress: 1, photo, source: next.resized.blob })
           for (const fn of listeners) fn(next.target, photo)
+          // Nobody is showing it (the form or overlay closed mid-upload): it's on the server now.
+          if (!watched(next.target)) get().clearDone(next.target)
         } catch (err) {
           if (find(next.key)) {
             const aborted = (err as { name?: string })?.name === 'AbortError'
@@ -176,15 +208,15 @@ export const usePhotoQueue = create<QueueState>()((set, get) => {
       for (const f of files) {
         const name = (f as Blob & { name?: string }).name || 'photo'
         if (!looksLikeImage(f)) {
-          rejected.push(`${name} isn't a photo.`)
+          rejected.push(`${name} isn't a photo, so it was skipped.`)
           continue
         }
         if (f.size > MAX_ORIGINAL_BYTES) {
-          rejected.push(`${name} is over 40 MB.`)
+          rejected.push(`${name} is over 40 MB, so it was skipped.`)
           continue
         }
         if (slots <= 0) {
-          rejected.push(`${name} wasn't added: a visit holds at most ${MAX_PHOTOS_PER_VISIT} photos.`)
+          rejected.push(`${name} was skipped: a visit holds at most ${MAX_PHOTOS_PER_VISIT} photos.`)
           continue
         }
         slots--
@@ -254,6 +286,7 @@ export function resetPhotoQueueForTests(): void {
   for (const c of controllers.values()) c.abort()
   controllers.clear()
   listeners.clear()
+  watchers.clear()
   pumping = false
   deps = defaultDeps()
   usePhotoQueue.setState({ items: [] })
