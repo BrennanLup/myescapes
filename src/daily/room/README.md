@@ -22,7 +22,7 @@ Today's Escape of the Day as a small room you walk around in, at **`/daily/room`
 
 | File | What |
 | --- | --- |
-| `index.tsx` | `DailyRoomPage` (route), loading and error states |
+| `index.tsx` | `DailyRoomPage` (route): the shared boot splash ("Unlocking today's room…") while loading, then the error state |
 | `DailyRoom.tsx` | Canvas + DOM layer; boots the shared player state, maps `interact` events (`daily:*` ids) to panels and search looks, publishes the play snapshot, leaving |
 | `layout.ts` | Pure layout: room size, colliders (door closed/open), exit line, prop positions |
 | `search.ts` | Pure: hiding spots, day-seeded target assignment, look/round logic |

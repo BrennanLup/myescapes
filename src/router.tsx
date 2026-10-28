@@ -23,6 +23,7 @@
  */
 import { lazy, Suspense, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type LazyExoticComponent, type MouseEvent, type ReactNode } from 'react'
 import { mobileRedirectURL, shouldRedirectToMobile } from './mobile/shell/device'
+import { BootSplash } from './ui/shell/BootSplash'
 
 export interface RouteProps {
   params: Record<string, string>
@@ -139,8 +140,9 @@ export function Link({ to, children, ...rest }: { to: string; children: ReactNod
   )
 }
 
+/** The same splash index.html paints before the bundle runs, so a page swap never goes blank. */
 function PageFallback() {
-  return <div data-testid="page-loading" className="fixed inset-0 bg-[var(--color-night)]" />
+  return <BootSplash />
 }
 
 export function Router() {

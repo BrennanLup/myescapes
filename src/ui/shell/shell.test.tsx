@@ -159,6 +159,24 @@ describe('LoadingScreen', () => {
     expect(screen.queryByTestId('loading-screen')).toBeNull()
   })
 
+  it("says whose room is loading in a friend's room", () => {
+    useStore.setState({ dataStatus: 'loading', visiting: { handle: 'vera', owner: { id: 'u-v', handle: 'vera', displayName: 'Vera Lynn', image: null } } })
+    render(<LoadingScreen />)
+    expect(screen.getByTestId('loading-tagline').textContent).toBe("Heading to Vera's room…")
+    expect(screen.getByTestId('loading-screen').getAttribute('aria-label')).toBe("Heading to Vera's room…")
+    useStore.setState({ visiting: null })
+  })
+
+  it("uses the @handle until the friend's name has loaded, and the usual tagline at home", () => {
+    useStore.setState({ dataStatus: 'loading', visiting: { handle: 'vera', owner: null } })
+    const { unmount } = render(<LoadingScreen />)
+    expect(screen.getByTestId('loading-tagline').textContent).toBe("Heading to @vera's room…")
+    unmount()
+    useStore.setState({ visiting: null })
+    render(<LoadingScreen />)
+    expect(screen.getByTestId('loading-tagline').textContent).toBe('every room we ever broke out of')
+  })
+
   it('shows retry on data error', () => {
     const load = vi.fn(async () => {})
     useStore.setState({ dataStatus: 'error', dataError: 'boom', loadData: load })

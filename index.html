@@ -13,9 +13,50 @@
     <meta property="og:title" content="My Escapes" />
     <meta property="og:description" content="Every escape room you've played, pinned up in your own cozy 3D room." />
     <meta property="og:image" content="/og-image.png" />
+    <!-- Boot splash (src/ui/shell/BootSplash.tsx renders the same markup): never paint an empty page. -->
+    <style>
+      html, body { margin: 0; background: #2a1f2d; }
+      .boot-splash {
+        position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; padding: 0 16px; box-sizing: border-box; color: #ffe9d2; text-align: center;
+        font-family: 'Fredoka', 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: radial-gradient(120% 80% at 50% 110%, #b8503f 0%, rgba(184,80,63,0) 55%),
+          radial-gradient(90% 70% at 85% -10%, rgba(45,226,208,.25) 0%, rgba(45,226,208,0) 60%),
+          linear-gradient(180deg, #2a1f2d 0%, #3d2638 55%, #5b2f3d 100%);
+      }
+      .boot-logo { width: 84px; height: 84px; border-radius: 20px; box-shadow: 0 10px 30px rgba(26,15,20,.45); }
+      .boot-name { margin: 0; font-size: 30px; font-weight: 600; letter-spacing: -.01em; text-shadow: 0 4px 18px rgba(255,140,60,.45); }
+      .boot-track { position: relative; width: 168px; max-width: 60vw; height: 6px; overflow: hidden; border-radius: 999px; background: rgba(255,247,236,.14); }
+      .boot-shimmer {
+        position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: inherit;
+        background: linear-gradient(90deg, rgba(224,123,57,0), #e07b39 40%, #ffb36b 60%, rgba(224,123,57,0));
+        animation: boot-shimmer 1.4s ease-in-out infinite;
+      }
+      @keyframes boot-shimmer { from { transform: translateX(-100%) } to { transform: translateX(250%) } }
+      .boot-label { margin: 0; min-height: 1.4em; font-size: 17px; color: rgba(255,233,210,.8); overflow-wrap: anywhere; }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-shimmer { animation: none; left: 30%; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-splash" data-testid="boot-splash" role="status" aria-label="Loading My Escapes">
+        <svg class="boot-logo" viewBox="0 0 512 512" aria-hidden="true">
+          <rect width="512" height="512" rx="112" fill="#4a2f48" />
+          <path d="M132 432V214a124 124 0 0 1 248 0v218z" fill="#c69a63" />
+          <path d="M158 432V214a98 98 0 0 1 196 0v218z" fill="#e8843f" />
+          <circle cx="256" cy="268" r="30" fill="#2a1f2d" />
+          <path d="M243 286h26l13 70h-52z" fill="#2a1f2d" />
+          <rect x="112" y="428" width="288" height="18" rx="9" fill="#e8c9a4" />
+          <circle cx="256" cy="72" r="14" fill="#2de2d0" />
+        </svg>
+        <p class="boot-name" aria-hidden="true">My Escapes</p>
+        <div class="boot-track" aria-hidden="true"><span class="boot-shimmer"></span></div>
+        <p class="boot-label" aria-hidden="true"></p>
+      </div>
+      <noscript><p class="boot-label" style="position: fixed; left: 0; right: 0; bottom: 48px; text-align: center">My Escapes needs JavaScript to open your room.</p></noscript>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
