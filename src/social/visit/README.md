@@ -8,7 +8,7 @@
 | `PeopleHud.tsx` | In the 3D room (mounted by `App.tsx`): the visiting banner (whose room, a spoilers toggle, **Back to my room**), the people dock (People, Chat, emotes), the people panel (who is here, with "Ask to leave" for the host; "Visit a friend" with online dots, online first, and "Here with you" instead of Visit for a friend already in this room), the chat box and log, and a connection chip (Reconnecting..., Away, Open in another tab). On phones the banner reads "Robin's room" and "My room" so it fits at 360 px. Touch: round buttons on the right, sheets for people (bottom) and chat (top, clear of the keyboard), and the newest line under the HUD. |
 | `FriendsOnline.tsx` | The phone home's (`/m`) "Friends online" row: online friends (at home first, up to 4, then "and N more online" to `/settings#friends`) with presence text and a **Visit** button to `/home/:handle`; a friend in your room gets **Join** (the shell's "View on desktop"). Hidden while nobody is online. Light: presence polling only. |
 | `notices.ts` | In a friend's room, says why the wish list and "log a room" don't open. |
-| `presence.tsx` | Light (no three.js, no socket): `useFriendPresence` polls `GET /api/presence` every 30 s while visible; `PresenceDot`, `presenceText`, `VisitRoomLink`. Used by the friends list in `/settings` (and the phone's friends panel). |
+| `presence.tsx` | Light (no three.js, no socket): `useFriendPresence` polls `GET /api/presence` every 30 s while visible; `PresenceDot`, `presenceText`, `VisitRoomLink`. Used by the friends list in `/settings` (and the phone's friends panel) and the "Friends online" row on the `/m` home (`FriendsOnline.tsx`). |
 
 ## Rules
 
