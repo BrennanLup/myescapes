@@ -102,6 +102,8 @@ describe('wishlist list ops', () => {
     expect(safeHref('http://x.org')).toBe('http://x.org/')
     expect(safeHref('javascript:alert(1)')).toBe('')
     expect(safeHref('  ')).toBe('')
+    expect(safeHref('/games/the-vault')).toBe('/games/the-vault')
+    expect(safeHref('//evil.example/x')).toBe('https://evil.example/x')
   })
 
   it('caps board lines with a "+N more" count', () => {

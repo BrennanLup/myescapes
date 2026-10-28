@@ -5,6 +5,13 @@ import { bus } from '@/contracts/events'
 import { useStore } from '@/state/store'
 import { WishlistOverlay } from './WishlistOverlay'
 
+vi.mock('@/ui/roompicker/search', () => ({
+  searchDirectory: vi.fn(async () => ({
+    games: [{ id: 'g1', slug: 'the-vault-toronto', name: 'The Vault', genre: null, status: 'active', venueId: 'v1', venueName: 'Lockbox', venueSlug: 'lockbox', city: 'Toronto', country: 'CA', reviewCount: 0, avgOverall: null }],
+    venues: [],
+  })),
+}))
+
 const items: WishlistItem[] = [
   { id: 'w2', name: 'Sky Pirates', city: 'San Francisco', link: '', addedBy: 'Jules', priority: 2, done: false },
   { id: 'w1', name: 'The Vault', city: 'Toronto', link: 'vault.example.com', addedBy: 'Maya', priority: 1, done: false },
@@ -55,6 +62,23 @@ describe('WishlistOverlay', () => {
     expect(sfx).toHaveBeenCalledWith({ name: 'chalk' })
     expect((screen.getByTestId('wishlist-add-name') as HTMLInputElement).value).toBe('')
     off()
+  })
+
+  it('links a room picked from the directory', async () => {
+    vi.useFakeTimers()
+    try {
+      render(<WishlistOverlay />)
+      fireEvent.change(screen.getByTestId('wishlist-add-name'), { target: { value: 'vau' } })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+      fireEvent.click(screen.getByTestId('roompicker-option-game'))
+      expect(screen.getByTestId('wishlist-linked').textContent).toContain('Lockbox, Toronto')
+      fireEvent.click(screen.getByTestId('wishlist-add-submit'))
+      expect(last()[3]).toMatchObject({ name: 'The Vault', city: 'Toronto', link: '/games/the-vault-toronto', gameId: 'g1' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not add without a name', () => {
