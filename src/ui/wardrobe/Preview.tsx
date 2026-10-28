@@ -95,7 +95,7 @@ export function Preview({ outfit, describe }: { outfit: Outfit; describe: string
           <span className="px-6 text-center text-sm">{describe}</span>
         </div>
       )}
-      <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-panel/80 px-2.5 py-0.5 text-[11px] font-bold text-ink-soft">
+      <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-panel/90 px-2.5 py-0.5 text-[11px] font-bold text-ink/80">
         Drag to turn
       </span>
     </div>

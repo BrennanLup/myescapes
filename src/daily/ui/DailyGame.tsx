@@ -9,7 +9,7 @@ import { ApiCallError } from '../../contracts/errors'
 import type { DailyToday, LeaderboardEntry, Streak } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
 import { Link } from '../../router'
-import { browserTimeZone, formatDuration, generateDaily, shareText, type DailyChallenge } from '../engine'
+import { browserTimeZone, formatDuration, generateDaily, SCORE, shareText, type DailyChallenge } from '../engine'
 import { isFinished, loadProgress, newProgress, playReducer, saveProgress, toResultInput, type PlayAction, type Progress } from './state'
 import { AnswerReveal, btnGhost, btnPrimary, GuessHistory, GuessInput, PuzzleClues } from './views'
 
@@ -262,7 +262,7 @@ function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: Dail
       </header>
 
       {progress.status === 'idle' ? (
-        <Intro challenge={challenge} onStart={start} />
+        <Intro challenge={challenge} onStart={start} maxGuesses={puzzle.maxGuesses} maxHints={maxHints} rules={!compact} />
       ) : finished ? (
         <Finished
           challenge={challenge}
@@ -282,7 +282,7 @@ function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: Dail
   )
 }
 
-function Intro({ challenge, onStart }: { challenge: DailyChallenge; onStart(): void }) {
+function Intro({ challenge, onStart, maxGuesses, maxHints, rules }: { challenge: DailyChallenge; onStart(): void; maxGuesses: number; maxHints: number; rules: boolean }) {
   return (
     <div className="space-y-4 text-center">
       <p className="mx-auto max-w-md text-ink">{challenge.prompt}</p>
@@ -290,7 +290,38 @@ function Intro({ challenge, onStart }: { challenge: DailyChallenge; onStart(): v
       <button type="button" data-testid="daily-start" className={btnPrimary} onClick={onStart}>
         Start today's escape
       </button>
+      {rules && <HowItWorks maxGuesses={maxGuesses} maxHints={maxHints} />}
     </div>
+  )
+}
+
+/** The rules under the start button on the /daily page (the 3D door overlay is compact and skips them). */
+function HowItWorks({ maxGuesses, maxHints }: { maxGuesses: number; maxHints: number }) {
+  const items: { icon: string; text: string }[] = [
+    { icon: '🔢', text: `You get ${maxGuesses} guesses. After each one, every slot turns green when it's right and gold when it's close.` },
+    {
+      icon: '💡',
+      text: maxHints > 0 ? `Stuck? Take up to ${maxHints} hint${maxHints === 1 ? '' : 's'}, at ${SCORE.perHint} points each.` : 'No hints today: this one is all yours.',
+    },
+    { icon: '⏱️', text: `A first-guess solve scores ${SCORE.base.toLocaleString('en')}. Extra guesses, hints and a slow clock take points off.` },
+    { icon: '🔥', text: 'Escape on days in a row to build your streak, and compare scores with friends.' },
+  ]
+  return (
+    <section data-testid="daily-rules" aria-labelledby="daily-rules-title" className="mx-auto max-w-md rounded-2xl bg-paper p-4 text-left ring-1 ring-panel-edge">
+      <h3 id="daily-rules-title" className="m-0 font-display text-lg font-semibold text-ink">
+        How it works
+      </h3>
+      <ul className="mt-2 space-y-2">
+        {items.map((it) => (
+          <li key={it.icon} className="flex gap-2.5 text-sm text-ink">
+            <span aria-hidden className="shrink-0">
+              {it.icon}
+            </span>
+            <span>{it.text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
