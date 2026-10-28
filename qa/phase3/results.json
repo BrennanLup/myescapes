@@ -1,0 +1,153 @@
+{
+  "review-phone": {
+    "errors": [],
+    "audit": [
+      "phone form: 2 visible controls smaller than 32px: Overall slider(266x16), Puzzles slider(266x16)",
+      "phone form: Save bar covers the focused field with simulated keyboard",
+      "phone room detail: 1 visible controls smaller than 32px: review-transcript-toggle(197x20)"
+    ],
+    "info": [
+      "phone form headings: Scores | Puzzles | Features | Photos | Who played | Who can see your review",
+      "keyboard-sim: focused field box {\"x\":16,\"y\":403,\"width\":358,\"height\":38}, footer {\"x\":0,\"y\":391,\"width\":390,\"height\":89}",
+      "phone search no-match options: [\"roompicker-option-create:＋Add “Zyxw Nonexistent Room” (not in the directory\"]",
+      "photo status: 3 photos will upload when you save.",
+      "after txt: Photos On save × On save × On save × Add more photos 3 of 30 3 photos will upload when you save. notes.txt isn't a photo.",
+      "done: Saved! Golden Gate Vault Job is pinned to your board. Your review shows on its public page. See the public page Photos ✓ × ✓ × ✓ × Add more photos 3 of 30 3 photos added. Back to my rooms"
+    ],
+    "ok": true,
+    "ms": 21715
+  },
+  "review-desktop": {
+    "errors": [
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+    ],
+    "audit": [],
+    "info": [
+      "desktop form visible fields before typing 41, while typing 41",
+      "desktop search options: [\"roompicker-option-game:🗝️The Last Lighthouse KeeperFog City Escapes · San Francisc\",\"roompicker-option-create:＋Add “Lighth” (not in the directory)\"]",
+      "desktop no-match options: [\"roompicker-option-create:＋Add “qqqq nothing here” (not in the directory)\"] / room-search text: Find it in the room directory Near me ＋ Add “qqqq nothing here” (not in the directory) Type the room or venue name. Pick it from the list, or add it if it’s new.",
+      "after save reviews: [{\"id\":\"vis_YGu0GJUuWNcF1DzHEFbI\",\"room\":\"The Last Lighthouse Keeper\",\"photos\":2}]",
+      "review attach status: ✓ × ✓ × ✓ × Add more photos 3 of 30 · or drop them here 3 photos added."
+    ],
+    "ok": true,
+    "ms": 295433
+  },
+  "character-desktop": {
+    "errors": [
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+    ],
+    "audit": [],
+    "info": [
+      "desk: camera distance with back to the wall = 3.1717503054307414",
+      "desk key balance: 20\nkeys",
+      "desk wardrobe tabs: body,hair,top,bottom,shoes,hat,extras",
+      "desk primary: Unlock Headphones · 10",
+      "desk avatar after unlock: {\"signedIn\":true,\"outfit\":{\"skin\":\"umber\",\"hair\":\"hair-short\",\"hairColor\":\"honey\",\"top\":\"top-tee\",\"topColor\":\"rose\",\"bottom\":\"bottom-skirt\",\"bottomColor\":\"charcoal\",\"shoes\":\"shoes-boots\",\"shoesColor\":\"red\",\"hat\":\"hat-none\",\"hatColor\":\"plum\",\"accessory\":\"acc-headphones\"},\"saved\":true,\"owned\":[\"acc-he",
+      "desk: Escape with unsaved wardrobe change -> overlay null",
+      "desk: hovered in third person at the door: gate:door"
+    ],
+    "ok": true,
+    "ms": 313461
+  },
+  "character-phone": {
+    "errors": [
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+    ],
+    "audit": [
+      "phone room first person: 1 visible controls smaller than 32px: mode-badge(117x24)",
+      "phone room first person: button text clipped: wardrobe-button"
+    ],
+    "info": [
+      "phone: camera distance with back to the wall = 0.2864806727485843",
+      "phone key balance: 20\nkeys",
+      "phone wardrobe tabs: body,hair,top,bottom,shoes,hat,extras",
+      "phone primary: Unlock · 10",
+      "phone avatar after unlock: {\"signedIn\":true,\"outfit\":{\"skin\":\"espresso\",\"hair\":\"hair-ponytail\",\"hairColor\":\"silver\",\"top\":\"top-tank\",\"topColor\":\"rose\",\"bottom\":\"bottom-shorts\",\"bottomColor\":\"brown\",\"shoes\":\"shoes-sneakers\",\"shoesColor\":\"white\",\"hat\":\"hat-beanie\",\"hatColor\":\"forest\",\"accessory\":\"acc-headphones\"},\"saved\":true,\"",
+      "phone: Escape with unsaved wardrobe change -> overlay null",
+      "phone: hovered in third person at the door: null"
+    ],
+    "ok": true,
+    "ms": 223831
+  },
+  "multiplayer": {
+    "errors": [
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+    ],
+    "audit": [],
+    "info": [
+      "mp-desk: host row online=true text=AH Avery Host Online. In their room · 1 in their room Visit",
+      "mp-desk: visit to room ready in 48241 ms",
+      "mp-desk: host \"in your room\" toast/text count 0",
+      "mp-desk: chat input accepted 200 chars of 600",
+      "mp-desk: host received 4 of 8 spam lines; guest chat area: LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL spam 0 spam 1 spam 2 spam 3 Message to everyone in this room Slow down a little: try again in 11 s.",
+      "mp-desk: guest read-only state {\"visiting\":\"qmda_xybp5\",\"record\":false}",
+      "mp-desk: host saw guest leave after 6632 ms"
+    ],
+    "ok": true,
+    "ms": 268389
+  },
+  "multiplayer-phone": {
+    "errors": [
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+    ],
+    "audit": [
+      "mp-phone guest own room: 1 visible controls smaller than 32px: mode-badge(117x24)",
+      "mp-phone guest own room: button text clipped: wardrobe-button",
+      "mp-phone guest visiting: 1 visible controls smaller than 32px: mode-badge(117x24)",
+      "mp-phone guest visiting: button text clipped: wardrobe-button",
+      "mp-phone guest visiting: button text clipped: people-button"
+    ],
+    "info": [
+      "mp-phone: host row online=true text=AH Avery Host Online. In their room · 1 in their room Visit",
+      "mp-phone: visit to room ready in 34163 ms",
+      "mp-phone: host \"in your room\" toast/text count 0",
+      "mp-phone: chat input accepted 200 chars of 600",
+      "mp-phone: host received 3 of 8 spam lines; guest chat area: LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL spam 0 spam 1 spam 2 Message to everyone in this room Slow down a little: try again in 3 s.",
+      "mp-phone: guest read-only state {\"visiting\":\"qmpa_y4iw4\",\"record\":false}",
+      "mp-phone: host saw guest leave after 4669 ms"
+    ],
+    "ok": true,
+    "ms": 257358
+  },
+  "daily-desktop": {
+    "errors": [
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+    ],
+    "audit": [],
+    "info": [
+      "daily-desk: hovered gate:door, overlay gate",
+      "daily-desk: puzzle kind cipher/null",
+      "daily-desk: hovered at lock: daily:lock",
+      "daily-desk: result text You escaped! × 🔓 Escaped in 1/6 1:30 P L A N T Share result My Escapes · Escape #3 🔓 1/6 · 1:30 🟩🟩🟩🟩🟩 http://localhost:3301/daily 1 STREAK 1 BEST 1 PLAYED 100% SOLVED 1:30 BEST TIME Friends today None of your friends have played yet. Invite someone from your profile to compare scores. 1 D Dan",
+      "daily-desk: left the room after 8190 ms -> http://localhost:3301/?autostart=1",
+      "daily-desk: welcome none"
+    ],
+    "ok": true,
+    "ms": 238365
+  },
+  "daily-phone": {
+    "errors": [
+      "warn THREE.Clock: This module has been deprecated. Please use THREE.Timer instead."
+    ],
+    "audit": [],
+    "info": [
+      "daily-phone: puzzle kind cipher/null",
+      "daily-phone: result text You escaped! × 🔓 Escaped in 1/6 1:13 P L A N T Share result My Escapes · Escape #3 🔓 1/6 · 1:13 🟩🟩🟩🟩🟩 http://localhost:3301/daily Sign in to keep a streak and see how your friends did. Next escape in 13h 43m Walk out through the door Go to the demo room",
+      "daily-phone: left the room after 6800 ms -> http://localhost:3301/m",
+      "daily-phone: welcome none"
+    ],
+    "ok": true,
+    "ms": 138728
+  }
+}

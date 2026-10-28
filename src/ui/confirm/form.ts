@@ -2,8 +2,10 @@
  * Pure form logic for the confirm screen: draft -> editable form -> Entry.
  * No React in here so it is easy to unit test.
  */
+import type { GameSummary, VenueSummary } from '@/contracts/models'
 import {
   EntrySchema,
+  GENRES,
   makeId,
   RATING_KEYS,
   type Entry,
@@ -32,6 +34,12 @@ export const RATING_LABELS: Record<RatingKey, string> = {
   difficulty: 'Difficulty',
 }
 
+/** "an overall score", "a setting score" (for the "Set …" messages). */
+export function scoreName(k: RatingKey): string {
+  const w = RATING_LABELS[k].toLowerCase()
+  return `${/^[aeiou]/.test(w) ? 'an' : 'a'} ${w} score`
+}
+
 export interface FormPuzzle {
   /** Local React key; not saved. */
   key: string
@@ -40,8 +48,30 @@ export interface FormPuzzle {
   memorable: boolean
 }
 
+/** The directory game the room fields came from (picked in the room search). */
+export interface DirectoryLink {
+  gameId: string
+  name: string
+  venueName: string
+  city: string
+  country: string
+}
+
+/** The directory venue picked in the room search (a venue row, no specific room). */
+export interface VenueLink {
+  venueId: string
+  /** What the company and city fields were set to: editing either one unlinks the venue. */
+  company: string
+  city: string
+  country: string
+}
+
 export interface FormState {
   room: { name: string; company: string; city: string; genre: Genre | ''; address: string; website: string }
+  /** Set while the room fields still describe a directory game; saving then reuses that game. */
+  link: DirectoryLink | null
+  /** Set while the company and city still describe a picked directory venue; saving adds the room there. */
+  venue: VenueLink | null
   review: {
     date: string
     crew: string[]
@@ -117,6 +147,8 @@ export function draftToForm(
       address: draft.room.address ?? '',
       website: draft.room.website ?? '',
     },
+    link: null,
+    venue: null,
     review: {
       date,
       crew: uniq(d.crew ?? []),
@@ -145,19 +177,16 @@ export function validateForm(form: FormState): FormErrors {
   if (!room.name.trim()) e['room.name'] = 'Room name is required'
   if (!room.company.trim()) e['room.company'] = 'Company is required'
   if (!room.city.trim()) e['room.city'] = 'City is required'
-  if (!room.genre) e['room.genre'] = 'Pick a genre'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(review.date)) e['review.date'] = 'Pick the date you played'
   for (const k of RATING_KEYS) {
     const s = review.ratings[k].score
-    if (s === null || !Number.isFinite(s)) e[`review.ratings.${k}.score`] = `Set a ${RATING_LABELS[k].toLowerCase()} score`
+    if (s === null || !Number.isFinite(s)) e[`review.ratings.${k}.score`] = `Set ${scoreName(k)}`
     else if (!Number.isInteger(s) || s < 1 || s > 100) e[`review.ratings.${k}.score`] = 'Score must be a whole number 1-100'
   }
   if (review.escaped === null) e['review.escaped'] = 'Did you escape?'
   const t = review.escapeTimeMinutes
   if (t !== null && (!Number.isFinite(t) || t < 0 || t > 600)) e['review.escapeTimeMinutes'] = 'Minutes must be between 0 and 600'
-  for (const f of BOOL_FEATURES) {
-    if (review[f] === null) e[`review.${f}`] = `Choose yes or no`
-  }
+  // The four features are optional ("Not sure" is null), as on the phone.
   review.puzzles.forEach((p, i) => {
     const hasText = p.description.trim().length > 0
     if (hasText && !p.type) e[`review.puzzles.${i}.type`] = 'Pick a puzzle type'
@@ -220,7 +249,9 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
   const keys = Object.keys(errors)
   if (keys.length) throw new Error(`Form is not complete: ${keys.map(labelFor).join(', ')}`)
   const f = form.room
-  const existing = findExistingRoom(f, existingRooms)
+  const linked = form.link && linkMatches(form) ? form.link : null
+  const atVenue = !linked && form.venue && venueMatches(form) ? form.venue : null
+  const existing = (linked && existingRooms.find((r) => r.id === linked.gameId)) || findExistingRoom(f, existingRooms)
   const room: Room = existing
     ? {
         ...existing,
@@ -228,14 +259,18 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
         website: existing.website || f.website.trim(),
       }
     : {
-        id: makeId('room'),
+        // A directory game id: the server saves the visit against that game (server/db/dataset.ts).
+        id: linked ? linked.gameId : makeId('room'),
         name: f.name.trim(),
         company: f.company.trim(),
         city: f.city.trim(),
-        genre: f.genre as Genre,
+        // Genre is optional in the form ("Not sure"); a room still needs one, so it is "other".
+        genre: f.genre || 'other',
         address: f.address.trim(),
         website: f.website.trim(),
         photos: [],
+        // A picked directory venue: the server adds the room there instead of matching by name.
+        ...(atVenue ? { venueId: atVenue.venueId } : {}),
       }
   const r = form.review
   const reviewId = makeId('rev')
@@ -254,10 +289,10 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
         .map((p) => ({ id: makeId('pz'), reviewId, description: p.description.trim(), type: p.type as PuzzleType, memorable: p.memorable })),
       escaped: r.escaped as boolean,
       escapeTimeMinutes: r.escapeTimeMinutes,
-      visibleTimer: r.visibleTimer as boolean,
-      multiRoom: r.multiRoom as boolean,
-      flashlights: r.flashlights as boolean,
-      liveActors: r.liveActors as boolean,
+      visibleTimer: r.visibleTimer,
+      multiRoom: r.multiRoom,
+      flashlights: r.flashlights,
+      liveActors: r.liveActors,
       toolsUsed: uniq(r.toolsUsed),
       voiceTranscript: r.voiceTranscript,
       photos: [],
@@ -280,4 +315,57 @@ export function shiftPuzzleFlags(flags: string[], idx: number): string[] {
     out.push(n > idx ? `review.puzzles.${n - 1}${m[2] ?? ''}` : fl)
   }
   return out
+}
+
+const isGenre = (g: string | null | undefined): g is Genre => !!g && (GENRES as readonly string[]).includes(g)
+
+/**
+ * Fill the room fields from a directory game. `venue`, when known, adds the address and prefers
+ * the venue's brand as the company. Keeps a genre the user already chose if the game has none.
+ */
+export function linkGame(form: FormState, game: GameSummary, venue?: Pick<VenueSummary, 'name' | 'brand' | 'address'> | null): FormState {
+  const company = (venue?.brand || game.venueName || venue?.name || '').trim()
+  return {
+    ...form,
+    room: {
+      ...form.room,
+      name: game.name,
+      company,
+      city: game.city,
+      genre: isGenre(game.genre) ? game.genre : form.room.genre,
+      address: venue?.address?.trim() || form.room.address,
+    },
+    link: { gameId: game.id, name: game.name, venueName: company, city: game.city, country: game.country },
+    venue: null,
+  }
+}
+
+/** A venue without a specific room: fill the company, city and address, keep the room name. */
+export function linkVenue(form: FormState, venue: Pick<VenueSummary, 'name' | 'brand' | 'address' | 'city'> & Partial<Pick<VenueSummary, 'id' | 'country'>>): FormState {
+  const company = (venue.brand || venue.name).trim()
+  return {
+    ...form,
+    room: { ...form.room, company, city: venue.city, address: venue.address || form.room.address },
+    link: null,
+    venue: venue.id ? { venueId: venue.id, company, city: venue.city, country: venue.country ?? '' } : null,
+  }
+}
+
+/** "Add a new room": the typed text becomes the room name; a picked venue stays (the new room is there). */
+export function newRoomNamed(form: FormState, name: string): FormState {
+  return { ...form, room: { ...form.room, name: name.trim() }, link: null }
+}
+
+/** Whether the company and city still describe the picked venue (editing either one unlinks it). */
+export function venueMatches(form: FormState): boolean {
+  const v = form.venue
+  if (!v) return false
+  return norm(form.room.company) === norm(v.company) && norm(form.room.city) === norm(v.city)
+}
+
+/** Whether the room fields still describe the linked game (editing the name, company or city unlinks it). */
+export function linkMatches(form: FormState): boolean {
+  const l = form.link
+  if (!l) return false
+  return norm(form.room.name) === norm(l.name) && norm(form.room.company) === norm(l.venueName) && norm(form.room.city) === norm(l.city)
 }

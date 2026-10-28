@@ -118,7 +118,7 @@ export function validateLogForm(form: LogForm, today: string = todayISO()): Form
   else if (form.date > today) e.date = "That date hasn't happened yet"
   for (const k of RATING_KEYS) {
     const s = form.ratings[k].score
-    if (s === null || !Number.isFinite(s)) e[`ratings.${k}.score`] = `Set a ${RATING_LABELS[k].toLowerCase()} score`
+    if (s === null || !Number.isFinite(s)) e[`ratings.${k}.score`] = `Set ${/^[aeiou]/i.test(RATING_LABELS[k]) ? 'an' : 'a'} ${RATING_LABELS[k].toLowerCase()} score`
     else if (!Number.isInteger(s) || s < 1 || s > 100) e[`ratings.${k}.score`] = 'A whole number from 1 to 100'
   }
   const t = form.escapeTimeMinutes

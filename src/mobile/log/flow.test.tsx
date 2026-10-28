@@ -209,6 +209,9 @@ describe('mobile log flow', () => {
     expect(s.calls.find((c) => c.url === '/api/visits/vis_new/review')?.body).toMatchObject({ memorablePuzzleIds: ['pzl_0'] })
     expect(await listRecordings(ME.id)).toEqual([])
     expect(screen.getByTestId('log-done-public').getAttribute('href')).toBe(`/games/${GAME.slug}`)
+    // The keys this room earned, and the way to the wardrobe.
+    expect(screen.getByTestId('log-done-keys').textContent).toContain('+10 keys')
+    expect(screen.getByTestId('log-done-wardrobe')).toBeTruthy()
     await userEvent.click(screen.getByTestId('log-done-home'))
     expect(onDone).toHaveBeenCalledWith('vis_new')
   })

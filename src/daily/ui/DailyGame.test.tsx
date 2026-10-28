@@ -62,8 +62,13 @@ describe('DailyPage, signed out', () => {
     expect(screen.getByTestId('daily-number').textContent).toBe('Escape #2')
     expect(screen.getByTestId('daily-theme').textContent).toContain('The Lost Observatory')
     expect(calls[0].path).toMatch(/^\/api\/daily\/today\?tz=/)
+    // The start screen explains the rules, then they make way for the game.
+    const rules = screen.getByRole('region', { name: 'How it works' })
+    expect(rules.textContent).toContain('You get 6 guesses')
+    expect(rules.textContent).toContain('scores 1,000')
 
     fireEvent.click(screen.getByTestId('daily-start'))
+    expect(screen.queryByTestId('daily-rules')).toBeNull()
     expect(screen.getByTestId('daily-game').dataset.status).toBe('playing')
     await type(wrongGuess())
     const row = screen.getByTestId('daily-row-0')
@@ -195,6 +200,8 @@ describe('DailyOverlay (3D room door)', () => {
     act(() => useStore.getState().openOverlay({ kind: 'gate' }))
     render(<DailyOverlay />)
     await screen.findByTestId('daily-start')
+    // The compact door overlay skips the page's "How it works" rules.
+    expect(screen.queryByTestId('daily-rules')).toBeNull()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(useStore.getState().overlay).toBeNull()
 

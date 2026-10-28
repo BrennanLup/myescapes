@@ -177,6 +177,8 @@ export function staticPageMeta(p: string): PageMeta | null {
   }
   if (p === '/m' || p.startsWith('/m/')) return { title: SITE_NAME, description: DEFAULT_DESCRIPTION, path: '/m', noindex: true }
   if (p.startsWith('/admin')) return { title: `Admin · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, path: p, noindex: true, noUrl: true }
+  // A friend's room (Phase 3 C): private, and the @handle is not echoed into the page head.
+  if (p.startsWith('/home/')) return { title: `A friend's room · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, path: '/home', noindex: true, noUrl: true }
   if (p === '/settings') return { title: `Settings · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, path: '/settings', noindex: true }
   return null
 }
@@ -305,6 +307,7 @@ export function robotsTxt(origin: string): string {
     'Disallow: /m',
     'Disallow: /settings',
     'Disallow: /invite/',
+    'Disallow: /home/',
     'Allow: /',
     '',
     `Sitemap: ${origin}/sitemap.xml`,

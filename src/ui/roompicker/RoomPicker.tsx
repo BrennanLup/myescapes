@@ -3,7 +3,9 @@
  * then venues. Used by the "Rooms to try" wish list and the review form.
  *
  * - Controlled (`query` + `onQueryChange`) or uncontrolled (`initialQuery`).
- * - ARIA combobox: ↑/↓ move, Enter picks the highlighted row, Escape closes the list (and does not
+ * - ARIA combobox: no row is highlighted until ↑/↓ (so the first ↓ lands on the first result),
+ *   Enter picks the highlighted row (on the "Add" row it calls `onCreate`, as a click does; with no
+ *   row highlighted the surrounding form gets the Enter), Escape closes the list (and does not
  *   bubble, so it doesn't also close the overlay around it).
  * - `allowCreate` adds a last row "Add “<text>”" that calls `onCreate(text)` for rooms not listed.
  */
@@ -59,7 +61,7 @@ export const RoomPicker = forwardRef<HTMLInputElement, RoomPickerProps>(function
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
   const [open, setOpen] = useState(false)
-  const [active, setActive] = useState(0)
+  const [active, setActive] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
   useImperativeHandle(ref, () => inputRef.current as HTMLInputElement)
   const listId = useId()
@@ -104,10 +106,15 @@ export const RoomPicker = forwardRef<HTMLInputElement, RoomPickerProps>(function
   ]
   if (allowCreate && trimmed.length >= MIN_CHARS && !loading) rows.push({ key: 'create', kind: 'create', text: trimmed })
   const showList = open && trimmed.length >= MIN_CHARS
-  const activeIndex = Math.min(active, Math.max(rows.length - 1, 0))
+  const activeIndex = active < 0 || !rows.length ? -1 : Math.min(active, rows.length - 1)
+
+  const close = () => {
+    setOpen(false)
+    setActive(-1)
+  }
 
   const choose = (row: Row) => {
-    setOpen(false)
+    close()
     if (row.kind === 'game') onPick({ kind: 'game', game: row.game })
     else if (row.kind === 'venue') onPick({ kind: 'venue', venue: row.venue })
     else onCreate?.(row.text)
@@ -118,17 +125,18 @@ export const RoomPicker = forwardRef<HTMLInputElement, RoomPickerProps>(function
       if (!rows.length) return
       e.preventDefault()
       setOpen(true)
+      // From no highlighted row, ↓ goes to the first row and ↑ to the last.
       const d = e.key === 'ArrowDown' ? 1 : -1
-      setActive((activeIndex + d + rows.length) % rows.length)
-    } else if (e.key === 'Enter' && showList && rows[activeIndex] && rows[activeIndex].kind !== 'create') {
-      // Enter on a directory row picks it; on the "Add" row (or with no list) the surrounding form submits.
+      setActive(activeIndex < 0 ? (d > 0 ? 0 : rows.length - 1) : (activeIndex + d + rows.length) % rows.length)
+    } else if (e.key === 'Enter' && showList && activeIndex >= 0 && rows[activeIndex]) {
+      // Enter on a highlighted row picks it ("Add" calls onCreate); with none highlighted the surrounding form gets it.
       e.preventDefault()
       choose(rows[activeIndex])
     } else if (e.key === 'Escape' && showList) {
       e.preventDefault()
       e.stopPropagation()
       e.nativeEvent.stopImmediatePropagation?.()
-      setOpen(false)
+      close()
     }
   }
 
@@ -144,12 +152,12 @@ export const RoomPicker = forwardRef<HTMLInputElement, RoomPickerProps>(function
         aria-autocomplete="list"
         aria-expanded={showList}
         aria-controls={listId}
-        aria-activedescendant={showList && rows[activeIndex] ? `${listId}-${activeIndex}` : undefined}
+        aria-activedescendant={showList && activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
         value={text}
         onChange={(e) => {
           setText(e.target.value)
           setOpen(true)
-          setActive(0)
+          setActive(-1)
         }}
         onFocus={(e) => {
           setOpen(true)
@@ -157,7 +165,7 @@ export const RoomPicker = forwardRef<HTMLInputElement, RoomPickerProps>(function
         }}
         onBlur={(e) => {
           // Let a click on a row land first.
-          setTimeout(() => setOpen(false), 150)
+          setTimeout(close, 150)
           inputProps?.onBlur?.(e)
         }}
         onKeyDown={onKeyDown}
@@ -183,7 +191,8 @@ export const RoomPicker = forwardRef<HTMLInputElement, RoomPickerProps>(function
               onPointerDown={(e) => e.preventDefault()}
               onClick={() => choose(row)}
               onPointerEnter={() => setActive(i)}
-              className={`flex cursor-pointer items-center gap-2 px-3 py-2 ${i === activeIndex ? 'bg-teal/10' : ''}`}
+              // The highlighted row: a clear tint plus a bar on the left (a faint tint alone read as unselected).
+              className={`flex cursor-pointer items-center gap-2 border-l-4 py-2 pr-3 pl-2 ${i === activeIndex ? 'border-teal bg-teal/20' : 'border-transparent'}`}
             >
               {row.kind === 'game' && (
                 <>

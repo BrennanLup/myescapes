@@ -1,9 +1,20 @@
 # Shell: loading and onboarding (workstream 19)
 
-Exports from `index.tsx`: `LoadingScreen`, `Hud`, `SettingsOverlay`, `PerfMonitor`. They are already mounted by `App.tsx` and `World.tsx`.
+Exports from `index.tsx`: `LoadingScreen`, `Hud`, `SettingsOverlay`, `PerfMonitor`, `CanvasBoundary`. They are already mounted by `App.tsx` and `World.tsx`.
+
+## CanvasBoundary (`data-testid="canvas-failed"`)
+Wraps the room's `<Canvas>` in `App.tsx`. react-three-fiber rethrows a failed WebGL context (or any error inside the scene) out of `<Canvas>`, and without a boundary React would unmount the whole page. The boundary instead shows an alert above the loading screen (z-90): "The room couldn't light up", with WebGL-specific advice (hardware acceleration, another browser) when the error mentions WebGL or a context, a **Reload** button and **Open the light version** (`/m`, no three.js). The error is logged with `console.error`.
+
+## BootSplash (`BootSplash.tsx`, `data-testid="page-loading"`)
+Every page load starts with a splash instead of an empty screen: the door logo, "My Escapes" and a CSS-only shimmer on the loader's night gradient.
+- `index.html` paints it inside `#root` (markup and inline `<style>` with the `.boot-*` classes), so it shows before any JavaScript or stylesheet loads. React replaces it on its first render.
+- `BootSplash` renders the same markup and is every "still loading" fallback on the way to a room: the router's `PageFallback`, the landing's `Blank` while the session or the room's code loads, `/home/:handle` (with "Heading to Vera's room…") and `/daily/room` ("Unlocking today's room…", `daily-room-loading`). The shimmer gets a negative `animationDelay` so it carries on in step when React swaps the markup. Reduced motion stops it.
+- No imports, so the router can import it straight from the file without pulling in the shell (`index.tsx` imports three.js helpers). Keep the markup and the `.boot-*` styles in `index.html` in sync; `BootSplash.test.tsx` checks both.
+- `headingToRoom(owner)` gives "Heading to Vera's room…" (first name, else `@handle`), shared with the LoadingScreen tagline.
 
 ## LoadingScreen (`data-testid="loading-screen"`)
 - A full-screen night gradient with a lamp glow, the title "My Escapes", fanned polaroids with a padlock and a wiggling key, and a progress bar.
+- The tagline (`loading-tagline`) is "every room we ever broke out of" in your own room and "Heading to Vera's room…" in a friend's (`store.visiting`; the @handle until their name has loaded), also used as the dialog's label.
 - Progress (`computeProgress` in `logic.ts`) is 50% assets (drei `useProgress`, which counts as done when the loading manager never saw a file) and 50% `dataStatus`. It is capped by a 600 ms minimum display time so the screen does not flash.
 - If the data fails to load, it shows the error and a "Try again" button (`retry-button`) that calls `store.loadData()`.
 - When everything is ready, it shows "Enter the room" (`enter-button`; Enter/Space also work). That click emits `user:gesture`. The screen then fades out over 550 ms and calls `setWorldReady(true)`.
@@ -14,7 +25,7 @@ Exports from `index.tsx`: `LoadingScreen`, `Hud`, `SettingsOverlay`, `PerfMonito
 - Top-left: a title chip with the room count, plus a "Demo mode" badge (`mode-badge`) when `/api/status` reports mock extraction or seed storage. The badge has a tooltip and opens settings when clicked.
 - Top-right round buttons: wish list (`wishlist:open`), year wrap (`wrap:open`), log a room (`record:open`), settings (`settings:open`, `settings-button`), `VolumeToggle` from `@/audio`, and help "?" (re-opens the controls hint).
 - Sort: at 768 px and wider, an always-visible chip group (`sort-<key>`). Narrower screens get a round sort button (`sort-button`) that opens the same chips. Keys 1-6 (top row or numpad) change the sort; they are ignored while typing in a field.
-- Controls hint (`controls-hint`): 3 lines with desktop and touch variants (from `store.isTouch`). It appears the first time the world becomes ready, fades after 8 s, can be dismissed, and re-opens from "?".
+- Controls hint (`controls-hint`, lines from `hints.tsx`): desktop lists WASD, Click / E, Esc, V, then "F · T people here · chat" while the realtime room is live, and the Wardrobe button. Touch lists Left thumb, Drag and Tap, then a legend of the round buttons on the right (`hint-legend`, `hint-legend-<id>`: people, chat and emotes when live, then the camera and the wardrobe), top to bottom as they sit. It appears the first time the world becomes ready, fades after 8 s, can be dismissed, and re-opens from "?".
 - Toasts (`shell-toast`) are always rendered, e.g. the perf downgrade notice.
 
 ## SettingsOverlay (`data-testid="settings-overlay"`)

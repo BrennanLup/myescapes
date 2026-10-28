@@ -41,17 +41,37 @@ describe('validateForm', () => {
     const { form } = draftToForm(sampleDraft(), '2026-10-25')
     const e = validateForm(form)
     expect(Object.keys(e).sort()).toEqual(
-      ['room.city', 'review.ratings.storyline.score', 'review.puzzles.1.type', 'review.multiRoom', 'review.liveActors'].sort(),
+      ['room.city', 'review.ratings.storyline.score', 'review.puzzles.1.type'].sort(),
     )
+  })
+  it('does not require the four features ("Not sure" is null, as on the phone)', () => {
+    const f = completeForm()
+    f.review.visibleTimer = null
+    f.review.multiRoom = null
+    f.review.flashlights = null
+    f.review.liveActors = null
+    expect(validateForm(f)).toEqual({})
+    const entry = draftToEntry(f)
+    expect([entry.review.visibleTimer, entry.review.multiRoom, entry.review.flashlights, entry.review.liveActors]).toEqual([null, null, null, null])
   })
   it('passes a complete form', () => {
     expect(validateForm(completeForm())).toEqual({})
   })
-  it('requires escaped and genre', () => {
+  it('requires escaped but not genre (a "Not sure" genre saves as other)', () => {
     const f = completeForm()
     f.review.escaped = null
     f.room.genre = ''
-    expect(Object.keys(validateForm(f))).toEqual(expect.arrayContaining(['review.escaped', 'room.genre']))
+    expect(Object.keys(validateForm(f))).toEqual(['review.escaped'])
+    f.review.escaped = true
+    expect(draftToEntry(f, []).room.genre).toBe('other')
+  })
+  it('says "an" before a vowel in the score messages', () => {
+    const f = completeForm()
+    f.review.ratings.overall.score = null
+    f.review.ratings.setting.score = null
+    const e = validateForm(f)
+    expect(e['review.ratings.overall.score']).toBe('Set an overall score')
+    expect(e['review.ratings.setting.score']).toBe('Set a setting score')
   })
 })
 

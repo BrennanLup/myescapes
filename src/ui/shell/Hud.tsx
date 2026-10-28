@@ -5,11 +5,15 @@ import { SORT_KEYS, SORT_LABELS, type SortKey } from '@/contracts/types'
 import { VolumeToggle } from '@/audio'
 import { isTypingTarget, sortForKey } from './logic'
 import { useServerStatus, useShell } from './shellStore'
+import { hintLines, TouchLegend } from './hints'
+import { useRealtime } from '@/net/store'
 import { IconClose, IconGear, IconHelp, IconLock, IconMic, IconSort, IconStar, IconTrophy } from './icons'
 
 export const HINT_AUTO_HIDE_MS = 8000
 /** Height of the narrow-screen HUD stack (title line + button row + gap). */
 const HUD_STACK_PX = 100
+/** The friend's-room banner (src/social/visit) sits under the stack on narrow and touch screens. */
+const VISIT_BANNER_PX = 50
 
 const SAFE = {
   top: 'max(12px, env(safe-area-inset-top))',
@@ -73,11 +77,15 @@ export function Hud() {
 function HudBar() {
   const wide = useMediaQuery('(min-width: 768px)')
   const rooms = useStore((s) => s.rooms.length)
+  // In a friend's room (Phase 3 C) nothing can be logged or wished for: src/social/visit shows a banner instead.
+  const visit = useStore((s) => s.visiting)
+  const visiting = visit !== null
+  const owner = visit ? (visit.owner?.displayName.trim().split(/\s+/)[0] || `@${visit.handle}`) : null
   const title = (
-    <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-panel/90 px-3.5 py-1.5 shadow-[0_6px_18px_rgba(40,20,20,.28)] ring-1 ring-panel-edge backdrop-blur">
-      <IconLock width={18} height={18} className="text-accent" />
-      <span className="font-display text-base font-semibold leading-none">My Escapes</span>
-      <span className="rounded-full bg-[rgba(47,143,138,.14)] px-2 py-0.5 text-xs font-bold text-teal">
+    <div data-testid="hud-title" className="pointer-events-auto flex min-w-0 items-center gap-2 rounded-full bg-panel/90 px-3.5 py-1.5 shadow-[0_6px_18px_rgba(40,20,20,.28)] ring-1 ring-panel-edge backdrop-blur">
+      <IconLock width={18} height={18} className="shrink-0 text-accent" />
+      <span className="truncate font-display text-base font-semibold leading-none">{owner ? `${owner}'s escapes` : 'My Escapes'}</span>
+      <span className="shrink-0 rounded-full bg-[rgba(47,143,138,.14)] px-2 py-0.5 text-xs font-bold text-teal">
         {rooms} {rooms === 1 ? 'room' : 'rooms'}
       </span>
     </div>
@@ -85,15 +93,21 @@ function HudBar() {
   const buttons = (
     <>
       {!wide ? <SortMenu /> : null}
-      <RoundButton label="Wish list" onClick={() => bus.emit('wishlist:open')} testId="wishlist-button">
-        <IconStar />
-      </RoundButton>
-      <RoundButton label="Year in Escape Rooms" onClick={() => bus.emit('wrap:open')} testId="wrap-button">
-        <IconTrophy />
-      </RoundButton>
-      <RoundButton label="Log a new room" onClick={() => bus.emit('record:open')} testId="record-button" accent>
-        <IconMic />
-      </RoundButton>
+      {!visiting ? (
+        <RoundButton label="Wish list" onClick={() => bus.emit('wishlist:open')} testId="wishlist-button">
+          <IconStar />
+        </RoundButton>
+      ) : null}
+      {!visiting ? (
+        <RoundButton label="Year in Escape Rooms" onClick={() => bus.emit('wrap:open')} testId="wrap-button">
+          <IconTrophy />
+        </RoundButton>
+      ) : null}
+      {!visiting ? (
+        <RoundButton label="Log a new room" onClick={() => bus.emit('record:open')} testId="record-button" accent>
+          <IconMic />
+        </RoundButton>
+      ) : null}
       <RoundButton label="Settings" onClick={() => bus.emit('settings:open')} testId="settings-button">
         <IconGear />
       </RoundButton>
@@ -282,23 +296,12 @@ function ModeBadge() {
   )
 }
 
-const HINTS = {
-  desktop: [
-    ['WASD', 'to walk, mouse to look (click to lock)'],
-    ['Click / E', 'to interact'],
-    ['Esc', 'to release the mouse'],
-  ],
-  touch: [
-    ['Left thumb', 'to walk'],
-    ['Drag', 'to look around'],
-    ['Tap', 'things to interact'],
-  ],
-} as const
-
 function ControlsHint() {
   const open = useShell((s) => s.hintOpen)
   const nonce = useShell((s) => s.hintNonce)
   const isTouch = useStore((s) => s.isTouch)
+  const visiting = useStore((s) => s.visiting !== null)
+  const live = useRealtime((s) => s.status !== 'off')
   const [fading, setFading] = useState(false)
 
   useEffect(() => {
@@ -313,12 +316,12 @@ function ControlsHint() {
   }, [open, nonce])
 
   if (!open) return null
-  const lines = isTouch ? HINTS.touch : HINTS.desktop
+  const lines = hintLines(isTouch, live)
   return (
     <div
       className="pointer-events-none fixed inset-x-0 z-30 flex justify-center px-4"
       // Touch: under the HUD at the top, clear of the joystick and the tap button.
-      style={isTouch ? { top: `calc(${SAFE.top} + ${HUD_STACK_PX}px)` } : { bottom: SAFE.bottom }}
+      style={isTouch ? { top: `calc(${SAFE.top} + ${HUD_STACK_PX + (visiting ? VISIT_BANNER_PX : 0)}px)` } : { bottom: SAFE.bottom }}
     >
       <div
         data-testid="controls-hint"
@@ -344,17 +347,20 @@ function ControlsHint() {
             </li>
           ))}
         </ul>
-        {!isTouch ? <p className="mt-2 text-xs text-ink-soft/80">Keys 1-6 re-sort the board.</p> : null}
+        {isTouch ? <TouchLegend live={live} /> : <p className="mt-2 text-xs text-ink-soft/80">Keys 1-6 re-sort the board.</p>}
       </div>
     </div>
   )
 }
 
 const TOAST_MS = 4500
+/** Desktop: below the button row and the sort chips under it, so a long toast covers neither. */
+const TOAST_WIDE_TOP_PX = 112
 
 function Toast() {
   const toast = useShell((s) => s.toast)
   const wide = useMediaQuery('(min-width: 768px)')
+  const visiting = useStore((s) => s.visiting !== null)
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => useShell.getState().clearToast(toast.id), TOAST_MS)
@@ -362,7 +368,7 @@ function Toast() {
   }, [toast])
   if (!toast) return null
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-[60] flex justify-center px-4" style={{ top: `calc(${SAFE.top} + ${wide ? 56 : HUD_STACK_PX}px)` }}>
+    <div className="pointer-events-none fixed inset-x-0 z-[60] flex justify-center px-4" style={{ top: `calc(${SAFE.top} + ${wide ? TOAST_WIDE_TOP_PX : HUD_STACK_PX + (visiting ? VISIT_BANNER_PX : 0)}px)` }}>
       <div data-testid="shell-toast" role="status" className="rounded-full bg-ink/90 px-4 py-2 text-sm font-semibold text-paper shadow-cozy">
         {toast.text}
       </div>

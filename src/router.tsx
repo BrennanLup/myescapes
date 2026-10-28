@@ -12,6 +12,8 @@
  *   /reviews          public review feed, all rooms, spoiler filter (?city=<slug>)
  *   /admin/rooms      room crawler status and start form (admins)
  *   /daily            Escape of the Day (22)
+ *   /daily/room       Escape of the Day as a 3D puzzle room (Phase 3, workstream D; loads three.js)
+ *   /home/:handle     a friend's room, read-only (Phase 3, workstream C; loads three.js)
  *   /settings         account settings: name, handle, export, delete (35)
  *   /invite/:code     invite landing (35)
  *   /welcome          landing + sign-in (19)
@@ -21,6 +23,7 @@
  */
 import { lazy, Suspense, useSyncExternalStore, type AnchorHTMLAttributes, type ComponentType, type LazyExoticComponent, type MouseEvent, type ReactNode } from 'react'
 import { mobileRedirectURL, shouldRedirectToMobile } from './mobile/shell/device'
+import { BootSplash } from './ui/shell/BootSplash'
 
 export interface RouteProps {
   params: Record<string, string>
@@ -50,6 +53,8 @@ export const ROUTE_TABLE: RouteEntry[] = [
   { pattern: '/reviews', page: page(() => import('./public/feed'), (m) => m.ReviewsFeedPage) },
   { pattern: '/admin/rooms', page: page(() => import('./public/admin/crawler'), (m) => m.CrawlerAdminPage) },
   { pattern: '/daily', page: page(() => import('./daily/ui'), (m) => m.DailyPage) },
+  { pattern: '/daily/room', page: page(() => import('./daily/room'), (m) => m.DailyRoomPage) },
+  { pattern: '/home/:handle', page: page(() => import('./social/visit/HomeVisitPage'), (m) => m.HomeVisitPage) },
   { pattern: '/settings', page: page(() => import('./social/settings'), (m) => m.SettingsPage) },
   { pattern: '/invite/:code', page: page(() => import('./social'), (m) => m.InvitePage) },
   { pattern: '/welcome', page: page(() => import('./public/landing'), (m) => m.Landing) },
@@ -135,8 +140,9 @@ export function Link({ to, children, ...rest }: { to: string; children: ReactNod
   )
 }
 
+/** The same splash index.html paints before the bundle runs, so a page swap never goes blank. */
 function PageFallback() {
-  return <div data-testid="page-loading" className="fixed inset-0 bg-[var(--color-night)]" />
+  return <BootSplash />
 }
 
 export function Router() {

@@ -9,8 +9,8 @@ import { ApiCallError } from '../../contracts/errors'
 import type { DailyToday, LeaderboardEntry, Streak } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
 import { Link } from '../../router'
-import { browserTimeZone, formatDuration, generateDaily, shareText, type DailyChallenge } from '../engine'
-import { isFinished, loadProgress, newProgress, playReducer, saveProgress, toResultInput, type Progress } from './state'
+import { browserTimeZone, formatDuration, generateDaily, SCORE, shareText, type DailyChallenge } from '../engine'
+import { isFinished, loadProgress, newProgress, playReducer, saveProgress, toResultInput, type PlayAction, type Progress } from './state'
 import { AnswerReveal, btnGhost, btnPrimary, GuessHistory, GuessInput, PuzzleClues } from './views'
 
 declare global {
@@ -20,7 +20,7 @@ declare global {
   }
 }
 
-const KIND_LABEL: Record<DailyChallenge['kind'], string> = {
+export const KIND_LABEL: Record<DailyChallenge['kind'], string> = {
   combination: 'Combination lock',
   cipher: 'Symbol cipher',
   sequence: 'Sequence',
@@ -28,7 +28,7 @@ const KIND_LABEL: Record<DailyChallenge['kind'], string> = {
 }
 
 /** Re-render every `ms` (for the timer and the countdown). */
-function useTick(ms: number, active = true): number {
+export function useTick(ms: number, active = true): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!active) return
@@ -38,7 +38,7 @@ function useTick(ms: number, active = true): number {
   return now
 }
 
-function countdown(toIso: string, now: number): string {
+export function countdown(toIso: string, now: number): string {
   const ms = Math.max(0, Date.parse(toIso) - now)
   const h = Math.floor(ms / 3_600_000)
   const m = Math.floor((ms % 3_600_000) / 60_000)
@@ -123,7 +123,31 @@ export function DailyGame({ onSolved, compact }: DailyGameProps) {
   return <DailyPlay key={load.today.puzzle.day} today={load.today} setToday={setToday} reload={reload} onSolved={onSolved} compact={compact} />
 }
 
-function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: DailyToday; setToday(t: DailyToday): void; reload(): void } & DailyGameProps) {
+export interface DailyPlayApi {
+  today: DailyToday
+  challenge: DailyChallenge
+  progress: Progress
+  dispatch(a: PlayAction): void
+  signedIn: boolean
+  streak: Streak | null
+  saving: boolean
+  saveError: string | null
+  maxHints: number
+  finished: boolean
+  /** Starts the clock (and fixes the time zone on the server). */
+  start(): void
+  /** Sends a guess (marks it with the challenge). */
+  guess(g: string[]): void
+  /** Sends the result again after a failure. */
+  retrySave(): void
+}
+
+/**
+ * The play logic for one day, shared by the 2D game and the 3D puzzle room: progress (kept in
+ * localStorage), starting the clock on the server, and saving the finished result through the
+ * daily API so streaks and leaderboards keep working.
+ */
+export function useDailyPlay({ today, setToday, reload, onSolved }: { today: DailyToday; setToday(t: DailyToday): void; reload(): void; onSolved?: DailyGameProps['onSolved'] }): DailyPlayApi {
   const { puzzle } = today
   const signedIn = today.streak !== null
   const challenge = useMemo(() => generateDaily(puzzle), [puzzle])
@@ -161,11 +185,11 @@ function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: Dail
     return started
   }, [signedIn, today, setToday])
 
-  const start = () => {
+  const start = useCallback(() => {
     dispatch({ type: 'start', at: Date.now() })
     // Fixes the time zone on the server. A failure is retried before the result is sent.
     ensureStarted().catch(() => undefined)
-  }
+  }, [ensureStarted])
 
   const save = useCallback(async () => {
     if (!signedIn || progress.submitted || !isFinished(progress) || inFlight.current) return
@@ -199,6 +223,18 @@ function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: Dail
     if (finished && signedIn && !progress.submitted && !saving && !saveError) void save()
   }, [finished, signedIn, progress.submitted, saving, saveError, save])
 
+  const guess = useCallback(
+    (g: string[]) => dispatch({ type: 'guess', guess: g, marks: challenge.check(g), maxGuesses: puzzle.maxGuesses, at: Date.now() }),
+    [challenge, puzzle.maxGuesses],
+  )
+  const retrySave = useCallback(() => void save(), [save])
+
+  return { today, challenge, progress, dispatch, signedIn, streak, saving, saveError, maxHints, finished, start, guess, retrySave }
+}
+
+function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: DailyToday; setToday(t: DailyToday): void; reload(): void } & DailyGameProps) {
+  const { puzzle } = today
+  const { challenge, progress, dispatch, signedIn, streak, saving, saveError, maxHints, finished, start, retrySave } = useDailyPlay({ today, setToday, reload, onSolved })
   const theme = puzzle.theme
   return (
     <div data-testid="daily-game" data-kind={challenge.kind} data-status={progress.status} className={compact ? 'space-y-4' : 'space-y-5'}>
@@ -226,7 +262,7 @@ function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: Dail
       </header>
 
       {progress.status === 'idle' ? (
-        <Intro challenge={challenge} onStart={start} />
+        <Intro challenge={challenge} onStart={start} maxGuesses={puzzle.maxGuesses} maxHints={maxHints} rules={!compact} />
       ) : finished ? (
         <Finished
           challenge={challenge}
@@ -237,7 +273,7 @@ function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: Dail
           nextAt={today.nextAt}
           saving={saving}
           saveError={saveError}
-          onRetry={() => void save()}
+          onRetry={retrySave}
         />
       ) : (
         <Playing challenge={challenge} progress={progress} maxGuesses={puzzle.maxGuesses} maxHints={maxHints} dispatch={dispatch} />
@@ -246,7 +282,7 @@ function DailyPlay({ today, setToday, reload, onSolved, compact }: { today: Dail
   )
 }
 
-function Intro({ challenge, onStart }: { challenge: DailyChallenge; onStart(): void }) {
+function Intro({ challenge, onStart, maxGuesses, maxHints, rules }: { challenge: DailyChallenge; onStart(): void; maxGuesses: number; maxHints: number; rules: boolean }) {
   return (
     <div className="space-y-4 text-center">
       <p className="mx-auto max-w-md text-ink">{challenge.prompt}</p>
@@ -254,7 +290,38 @@ function Intro({ challenge, onStart }: { challenge: DailyChallenge; onStart(): v
       <button type="button" data-testid="daily-start" className={btnPrimary} onClick={onStart}>
         Start today's escape
       </button>
+      {rules && <HowItWorks maxGuesses={maxGuesses} maxHints={maxHints} />}
     </div>
+  )
+}
+
+/** The rules under the start button on the /daily page (the 3D door overlay is compact and skips them). */
+function HowItWorks({ maxGuesses, maxHints }: { maxGuesses: number; maxHints: number }) {
+  const items: { icon: string; text: string }[] = [
+    { icon: '🔢', text: `You get ${maxGuesses} guesses. After each one, every slot turns green when it's right and gold when it's close.` },
+    {
+      icon: '💡',
+      text: maxHints > 0 ? `Stuck? Take up to ${maxHints} hint${maxHints === 1 ? '' : 's'}, at ${SCORE.perHint} points each.` : 'No hints today: this one is all yours.',
+    },
+    { icon: '⏱️', text: `A first-guess solve scores ${SCORE.base.toLocaleString('en')}. Extra guesses, hints and a slow clock take points off.` },
+    { icon: '🔥', text: 'Escape on days in a row to build your streak, and compare scores with friends.' },
+  ]
+  return (
+    <section data-testid="daily-rules" aria-labelledby="daily-rules-title" className="mx-auto max-w-md rounded-2xl bg-paper p-4 text-left ring-1 ring-panel-edge">
+      <h3 id="daily-rules-title" className="m-0 font-display text-lg font-semibold text-ink">
+        How it works
+      </h3>
+      <ul className="mt-2 space-y-2">
+        {items.map((it) => (
+          <li key={it.icon} className="flex gap-2.5 text-sm text-ink">
+            <span aria-hidden className="shrink-0">
+              {it.icon}
+            </span>
+            <span>{it.text}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -313,7 +380,7 @@ function Playing({
   )
 }
 
-async function shareResult(text: string): Promise<'shared' | 'copied' | 'failed'> {
+export async function shareResult(text: string): Promise<'shared' | 'copied' | 'failed'> {
   try {
     const nav = window.navigator as Navigator & { share?: (d: ShareData) => Promise<void> }
     const touch = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
@@ -331,7 +398,7 @@ async function shareResult(text: string): Promise<'shared' | 'copied' | 'failed'
   return 'failed'
 }
 
-function Finished({
+export function Finished({
   challenge,
   progress,
   maxGuesses,
@@ -445,7 +512,7 @@ export function StreakStats({ streak }: { streak: Streak }) {
   )
 }
 
-function Leaderboard({ day, refreshKey }: { day: string; refreshKey: number }) {
+export function Leaderboard({ day, refreshKey }: { day: string; refreshKey: number }) {
   const [entries, setEntries] = useState<LeaderboardEntry[] | null>(null)
   useEffect(() => {
     const ac = new AbortController()

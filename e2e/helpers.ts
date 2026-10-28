@@ -93,6 +93,10 @@ export async function solveDaily(page: Page) {
 
 /** Fill every required field the confirm form still reports as missing. */
 export async function fillMissingConfirmFields(page: Page) {
+  // Field errors only show after a save attempt (or once a field is left). Save looks disabled
+  // (aria-disabled) while something is missing, but pressing it shows every error.
+  const save = page.getByTestId('confirm-save')
+  if ((await save.getAttribute('aria-disabled')) === 'true') await save.dispatchEvent('click')
   for (let guard = 0; guard < 40; guard++) {
     const missing = await page.$$eval('[data-testid^="error-"]', (els) => els.map((e) => e.getAttribute('data-testid')!.slice('error-'.length)))
     if (missing.length === 0) return

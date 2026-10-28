@@ -4,12 +4,12 @@ PostgreSQL through Drizzle ORM. `DATABASE_URL` selects node-postgres (Railway); 
 
 | File | What |
 | --- | --- |
-| `schema.ts` | Every table: Better Auth (`users`, `sessions`, `accounts`, `verifications`), directory (`cities`, `venues`, `games`, `sources`), visits (`visits`, `visit_participants`, `reviews`, `visit_puzzles`, `visit_photos`, `visit_edits`), social (`friendships`, `invites`, `notifications`), `wishlist_items`, Escape of the Day (`daily_puzzles`, `daily_results`), `reports`, `usage_counters` |
+| `schema.ts` | Every table: Better Auth (`users`, `sessions`, `accounts`, `verifications`), directory (`cities`, `venues`, `games`, `sources`), visits (`visits`, `visit_participants`, `reviews`, `visit_puzzles`, `visit_photos`, `visit_edits`), social (`friendships`, `invites`, `notifications`), `wishlist_items`, Escape of the Day (`daily_puzzles`, `daily_results`), `reports`, `usage_counters`, characters (`avatars`: one saved outfit per user; `avatar_purchases`: wardrobe items bought with keys, unique per user and item) |
 | `migrations/` | SQL migrations from `npm run db:generate`. `0000_extensions.sql` enables `pg_trgm`. Never edit one that has shipped |
 | `client.ts` | `createDb()`, `createPostgres(url)`, `createPglite(dir)`; `Db`, `Tx`, `DbHandle` types |
 | `migrate.ts` | `runMigrations(handle, { timeoutMs })` and the `npm run db:migrate` CLI |
 | `usage.ts` | Spending caps: `reserveUsage`, `releaseUsage`, `usageSummary`, `spendingCapError`, `capsFromEnv` |
-| `dataset.ts` | Phase 1 mapping for the 3D room: `datasetForUser`, `saveEntryForUser`, wish list get/put |
+| `dataset.ts` | Phase 1 mapping for the 3D room: `datasetForUser`, `saveEntryForUser` (uses a picked game id as `room.id` or a picked venue as `room.venueId`; otherwise matches the venue by name or brand plus city name or slug, directory venues first, before adding one), wish list get/put |
 | `util.ts` | `slugify`, `citySlug`, `uniqueSlug`, `toPublicUser`, `isUniqueViolation`, `haversineKm`, `googleMapsUrl` |
 | `seed.ts` | `npm run db:seed`: the 12 invented Phase 1 rooms as a local demo directory (refuses in production) |
 | `testing.ts` | `createTestDb()`, `resetDb()`, `ALL_TABLES` |

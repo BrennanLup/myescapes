@@ -8,7 +8,11 @@ export default defineConfig({
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {
     port: Number(process.env.VITE_PORT ?? 5173),
-    proxy: { '/api': `http://localhost:${process.env.PORT ?? 3000}`, '/health': `http://localhost:${process.env.PORT ?? 3000}` },
+    proxy: {
+      '/api/realtime': { target: `ws://localhost:${process.env.PORT ?? 3000}`, ws: true },
+      '/api': `http://localhost:${process.env.PORT ?? 3000}`,
+      '/health': `http://localhost:${process.env.PORT ?? 3000}`,
+    },
   },
   build: { outDir: 'dist', chunkSizeWarningLimit: 2000 },
 })

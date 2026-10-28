@@ -87,10 +87,10 @@ export async function datasetForUser(db: Db, userId: string): Promise<Dataset> {
       puzzles: vp.map((p): Puzzle => ({ id: p.id, reviewId: visit.id, description: p.description, type: p.type as PuzzleType, memorable: memorable.has(p.id) })),
       escaped: visit.escaped ?? false,
       escapeTimeMinutes: visit.escapeTimeMinutes,
-      visibleTimer: visit.visibleTimer ?? false,
-      multiRoom: visit.multiRoom ?? false,
-      flashlights: visit.flashlights ?? false,
-      liveActors: visit.liveActors ?? false,
+      visibleTimer: visit.visibleTimer,
+      multiRoom: visit.multiRoom,
+      flashlights: visit.flashlights,
+      liveActors: visit.liveActors,
       toolsUsed: visit.toolsUsed,
       voiceTranscript: r?.transcript ?? '',
       photos: photos.filter((p) => p.visitId === visit.id).map((p) => ({ url: `/api/photos/${p.id}`, caption: p.caption || undefined })),
@@ -106,7 +106,8 @@ export async function datasetForUser(db: Db, userId: string): Promise<Dataset> {
 }
 
 /**
- * Save a Phase 1 entry for a user: find or create the venue (by name + city) and game, then
+ * Save a Phase 1 entry for a user: find or create the venue (the picked game's or venue's, else by
+ * name or brand + city) and game, then
  * upsert the visit (keyed by `legacyId` = the entry's review id, or by visit id when the review
  * id already is one of this user's visits), the user's review and the puzzles.
  * Crew names become guest participants. Returns the entry as `datasetForUser` would show it.
@@ -119,13 +120,39 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
     const tx = txRaw as unknown as Db
     const venueName = room.company.trim() || room.name.trim()
     const cslug = citySlug(room.city, '', '')
-    let venue = (
-      await tx
-        .select()
-        .from(venues)
-        .where(and(sql`lower(${venues.name}) = lower(${venueName})`, eq(venues.citySlug, cslug)))
-        .limit(1)
-    )[0]
+    // Room.id is a game id when the room came from the directory picker (or is already on the
+    // board): use that game and its venue as they are instead of matching by name.
+    const picked = room.id.startsWith('gam_')
+      ? (await tx.select({ game: games, venue: venues }).from(games).innerJoin(venues, eq(venues.id, games.venueId)).where(and(eq(games.id, room.id), ne(games.status, 'hidden'))).limit(1))[0]
+      : undefined
+    // A venue picked in the room search (no specific room): use it and find or add the room there.
+    const pickedVenue =
+      !picked && room.venueId?.startsWith('ven_')
+        ? (await tx.select().from(venues).where(and(eq(venues.id, room.venueId), ne(venues.status, 'hidden'))).limit(1))[0]
+        : undefined
+    // Otherwise match by name (or brand) and city. Imported venues keep a country-suffixed city
+    // slug ("oostduinkerke-be") while the form only knows the city, so the city name counts too.
+    // Directory venues (a real country) win over ones a user typed in before ("ZZ"). A bare city
+    // name is ambiguous (Paris, London, Portland), so when the directory matches span more than
+    // one country, link none of them rather than guess.
+    const byName = picked || pickedVenue
+      ? []
+      : await tx
+          .select()
+          .from(venues)
+          .where(
+            and(
+              sql`(lower(${venues.name}) = lower(${venueName}) or lower(${venues.brand}) = lower(${venueName}))`,
+              sql`(${venues.citySlug} = ${cslug} or lower(${venues.city}) = lower(${room.city.trim()}))`,
+              ne(venues.status, 'hidden'),
+            ),
+          )
+          .orderBy(venues.createdAt)
+          .limit(10)
+    const directory = byName.filter((v) => v.country !== 'ZZ')
+    const typed = byName.filter((v) => v.country === 'ZZ')
+    const countries = new Set(directory.map((v) => v.country))
+    let venue = picked?.venue ?? pickedVenue ?? (countries.size === 1 ? directory[0] : typed.find((v) => v.citySlug === cslug) ?? typed[0])
     if (!venue) {
       const slug = await uniqueSlug(tx, venues, venues.slug, slugify(`${venueName} ${room.city}`))
       venue = (
@@ -135,7 +162,7 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
           .returning()
       )[0]
     }
-    let game = (
+    let game = picked?.game ?? (
       await tx
         .select()
         .from(games)

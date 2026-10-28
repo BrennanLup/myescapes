@@ -40,6 +40,11 @@ export const RoomSchema = z.object({
   address: z.string().default(''),
   website: z.string().default(''),
   photos: z.array(PhotoSchema).default([]),
+  /**
+   * Directory venue picked in the review form's room search (no specific room picked). Only sent
+   * when saving: the server adds the room at that venue instead of matching the venue by name.
+   */
+  venueId: Id.optional(),
 })
 export type Room = z.infer<typeof RoomSchema>
 
@@ -113,10 +118,11 @@ export const ReviewSchema = z.object({
   escaped: z.boolean(),
   /** Minutes taken (or minutes used when failing). Null when unknown. */
   escapeTimeMinutes: z.number().min(0).max(600).nullable(),
-  visibleTimer: z.boolean(),
-  multiRoom: z.boolean(),
-  flashlights: z.boolean(),
-  liveActors: z.boolean(),
+  /** The four room features: null when the player wasn't sure ("Not sure" on both forms). */
+  visibleTimer: z.boolean().nullable(),
+  multiRoom: z.boolean().nullable(),
+  flashlights: z.boolean().nullable(),
+  liveActors: z.boolean().nullable(),
   toolsUsed: z.array(z.string()).default([]),
   voiceTranscript: z.string().default(''),
   photos: z.array(PhotoSchema).default([]),

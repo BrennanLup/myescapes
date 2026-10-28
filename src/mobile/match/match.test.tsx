@@ -104,6 +104,20 @@ describe('VenueGameMatcher', () => {
     expect(fetchMock.mock.calls.some((c) => String(c[0]) === '/api/directory/search?q=starlight&limit=20')).toBe(true)
   })
 
+  it("searches with the transcript's city so rooms there rank first", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('/api/directory/match')) return json({ venues: [], games: [] })
+      if (url.startsWith('/api/directory/search')) return json({ venues: [VENUE], games: [] })
+      return json({ error: 'nope' }, 404)
+    })
+    render(<VenueGameMatcher hints={HINTS} onPick={vi.fn()} fetch={fetchMock as unknown as typeof fetch} />)
+    await userEvent.clear(await screen.findByTestId('matcher-search'))
+    await userEvent.type(screen.getByTestId('matcher-search'), 'escape{Enter}')
+    await screen.findByTestId('match-venue-ven_starlight')
+    const call = fetchMock.mock.calls.map((c) => String(c[0])).find((u) => u.startsWith('/api/directory/search'))!
+    expect(Object.fromEntries(new URL(call, 'http://x').searchParams)).toEqual({ q: 'escape', limit: '20', city: 'San Francisco' })
+  })
+
   it('creates a new venue and then a new game in it', async () => {
     const created: unknown[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

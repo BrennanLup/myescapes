@@ -7,6 +7,7 @@ import { SettingsOverlay } from './SettingsOverlay'
 import { Hud } from './Hud'
 import { LoadingScreen } from './LoadingScreen'
 import { resetShellForTests } from './shellStore'
+import { useRealtime } from '@/net/store'
 import { resetSessionForTests, setSessionUser } from '@/auth/session'
 
 beforeEach(() => {
@@ -94,6 +95,53 @@ describe('Hud', () => {
   })
 })
 
+describe('How to play card (Phase 3 controls)', () => {
+  afterEach(() => useRealtime.setState({ status: 'off' }))
+
+  it('desktop: people and chat keys when the room is live, and the wardrobe', () => {
+    useRealtime.setState({ status: 'open' })
+    useStore.setState({ worldReady: true })
+    render(<Hud />)
+    const card = screen.getByTestId('controls-hint').textContent ?? ''
+    expect(card).toContain('F · T')
+    expect(card).toContain('chat')
+    expect(card).toContain('Wardrobe')
+    expect(card).toContain('V')
+  })
+
+  it('desktop, offline: no people or chat line', () => {
+    useStore.setState({ worldReady: true })
+    render(<Hud />)
+    expect(screen.getByTestId('controls-hint').textContent).not.toContain('F · T')
+  })
+
+  it('touch: a legend for the round buttons on the right', () => {
+    useRealtime.setState({ status: 'open' })
+    useStore.setState({ worldReady: true, isTouch: true })
+    render(<Hud />)
+    for (const id of ['people', 'chat', 'emotes', 'camera', 'wardrobe']) expect(screen.getByTestId(`hint-legend-${id}`)).toBeTruthy()
+    expect(screen.getByTestId('hint-legend').textContent).toContain('Wardrobe')
+  })
+
+  it('touch, offline: only the camera and wardrobe buttons', () => {
+    useStore.setState({ worldReady: true, isTouch: true })
+    render(<Hud />)
+    expect(screen.queryByTestId('hint-legend-people')).toBeNull()
+    expect(screen.getByTestId('hint-legend-camera')).toBeTruthy()
+  })
+})
+
+describe("Hud in a friend's room", () => {
+  afterEach(() => useStore.setState({ visiting: null }))
+
+  it("names whose escapes these are instead of 'My Escapes'", () => {
+    useStore.setState({ worldReady: true, visiting: { handle: 'robin', owner: { id: 'u-r', handle: 'robin', displayName: 'Robin Host', image: null } } })
+    render(<Hud />)
+    expect(screen.getByTestId('hud-title').textContent).toContain("Robin's escapes")
+    expect(screen.getByTestId('hud-title').textContent).not.toContain('My Escapes')
+  })
+})
+
 describe('LoadingScreen', () => {
   it('shows the enter button when ready and sets worldReady after the fade', async () => {
     vi.useFakeTimers()
@@ -109,6 +157,24 @@ describe('LoadingScreen', () => {
     })
     expect(useStore.getState().worldReady).toBe(true)
     expect(screen.queryByTestId('loading-screen')).toBeNull()
+  })
+
+  it("says whose room is loading in a friend's room", () => {
+    useStore.setState({ dataStatus: 'loading', visiting: { handle: 'vera', owner: { id: 'u-v', handle: 'vera', displayName: 'Vera Lynn', image: null } } })
+    render(<LoadingScreen />)
+    expect(screen.getByTestId('loading-tagline').textContent).toBe("Heading to Vera's room…")
+    expect(screen.getByTestId('loading-screen').getAttribute('aria-label')).toBe("Heading to Vera's room…")
+    useStore.setState({ visiting: null })
+  })
+
+  it("uses the @handle until the friend's name has loaded, and the usual tagline at home", () => {
+    useStore.setState({ dataStatus: 'loading', visiting: { handle: 'vera', owner: null } })
+    const { unmount } = render(<LoadingScreen />)
+    expect(screen.getByTestId('loading-tagline').textContent).toBe("Heading to @vera's room…")
+    unmount()
+    useStore.setState({ visiting: null })
+    render(<LoadingScreen />)
+    expect(screen.getByTestId('loading-tagline').textContent).toBe('every room we ever broke out of')
   })
 
   it('shows retry on data error', () => {

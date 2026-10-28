@@ -29,9 +29,11 @@ Locally the database is PGlite (a WebAssembly Postgres in `DATA_DIR/pglite`), so
 | Path | What |
 | --- | --- |
 | `/` | Signed out on a laptop: the landing page with **Continue with Google**. Signed in: the 3D room (after a one-time display name and @handle step). Phones are sent to `/m`. `/?desktop=1` keeps a phone on the 3D room; `/?demo=1` opens the signed-out demo room. |
-| `/m` | The phone app: log a room (voice, captions or typing), the rooms table, review detail, visits to confirm, Escape of the Day card. Never downloads three.js. |
+| `/m` | The phone app: log a room (voice, captions or typing), the rooms table, review detail, visits to confirm, Escape of the Day card, friends online with **Visit**, and the keys each logged room earns ("+10 keys" on the Saved screen, with the way to the wardrobe). Never downloads three.js. |
 | `/games/:slug`, `/venues/:slug`, `/cities/:slug` | Public directory pages: aggregates, puzzle highlights behind "Show spoilers", public reviews by @handle (never email), "played together" links, a report button, source attribution. |
 | `/daily` | Escape of the Day. Also behind the door of the 3D room and on the phone's home screen. |
+| `/daily/room` | Escape of the Day as a small 3D puzzle room (clues on the walls, a lock by the door, hidden keys on search days). Finishing opens the door; walking out takes you into your own room. Linked as **Play in 3D** from `/daily` and the room's door. |
+| `/home/:handle` | A friend's room, read-only: their board and reviews (spoilers hidden unless you ask), with them and other friends walking around in it live. Friends only; **Back to my room** returns home. |
 | `/settings` | Profile, inbox (tags and guest-name claims), friends, invite links and QR code, data download (JSON), account deletion, and links to the legal pages. |
 | `/invite/:code` | An invite link: sign in, become friends, claim visits logged under a guest name. |
 | `/welcome` | The landing page directly (also where a failed sign-in explains itself). |
@@ -45,6 +47,9 @@ Locally the database is PGlite (a WebAssembly Postgres in `DATA_DIR/pglite`), so
 | Look | Click the room to lock the mouse, then move it. `Esc` releases it | Drag anywhere |
 | Interact | Aim the centre dot at something and click or press `E` | Aim at it, then press the big **Tap** button (or tap the thing) |
 | Sort the board | Keys `1`-`6`, the sort chips at the top right, or the tabs on the board itself (the seventh tab, **Crew**, groups rooms by who you played with) | Sort button at the top right, or the tabs on the board |
+| Camera | `V` or the **First / Third person** button at the bottom right switches between your own eyes and a view from behind your character (remembered on this device) | The round eye button at the bottom right |
+| Your look | The **Wardrobe** button at the bottom right | The hanger button at the bottom right |
+| People | `F` opens who is here and **Visit a friend** (bottom left); `T` or `Enter` chats; the wave, cheer and dance buttons play an emote | The people, chat and wave buttons on the right |
 | Close a panel | `Esc` or the × button | The × button |
 
 The round buttons at the top right open the wish list, the year wrap, the voice recorder, settings (sensitivity, invert Y, quality, head bob, and an Account link to `/settings` when signed in), sound and the controls help.
@@ -56,9 +61,12 @@ The round buttons at the top right open the wish list, the year wrap, the voice 
 - **Voice logging.** On the phone the recording is kept in IndexedDB until the server confirms the transcript, so a failed upload in a basement retries later. Audio is processed in memory and deleted once transcribed. Live captions are opt-in. Over a daily spending cap, or if transcription fails, the app falls back to typing and mock extraction with a short message.
 - **Directory.** About 3,350 escape-room venues in 42 regions (US and Canada, plus major cities in Europe, Asia and Australia) from Foursquare Open Source Places, plus venues and games users add while logging. Search is fuzzy (pg_trgm).
 - **Shared visits.** A visit (game, date, escaped, time, puzzles, photos) is logged once; each person writes their own review. Friends are mutual; only friends can tag you; tags wait in your inbox unless you turned on auto-accept for that friend. A joining friend's review starts as a copy that is left out of public averages until they change a score. Any accepted participant can edit the shared facts, with history.
+- **Review form.** Every question on one scrolling page (phone keyboards never hide the field you're typing in), the room found in the directory as you type (nearest first with **Near me**, or add a new one), and photos added while you write: resized in the browser, uploaded with progress right after you save, with Retry. Photos can also be added later from the review in the 3D room or the room's page on the phone.
 - **Reviews.** Public by default, or friends only, or private. Comments can be marked as spoilers. Admins can hide reviews, photos, games and venues that were reported.
-- **Escape of the Day.** Six guesses, hints that cost points, a spoiler-free share grid, streaks counted against the server's record of your day, and a friends leaderboard.
+- **Escape of the Day.** Six guesses, hints that cost points, a spoiler-free share grid, streaks counted against the server's record of your day, and a friends leaderboard. Play it on `/daily` or walk through it in 3D at `/daily/room` (src/daily/room/README.md).
+- **Your character and the wardrobe.** A low-poly character you can see in third person, dressed in the wardrobe (skin tone, hair, top, bottom, shoes, hat, accessory, colours). Some items unlock with keys, earned by logging rooms (10) and solving Escape of the Day (5), plus 20 to start. No real money: there is no payment provider. Saved to your account (`GET/PUT /api/me/avatar`); in the demo room, free looks are kept on the device.
 - **Wish list** and the **Year in Escape Rooms** wrap (now with your #1 teammate).
+- **Visiting friends.** Friends share a room live: you see each other's characters (in their own looks) walk around with an @handle tag, chat in bubbles (never stored), wave, cheer and dance. "Mia is in your room" toasts, a list of who is here, and **Visit a friend** (online friends first) open `/home/:handle`, their room read-only, with **Back to my room**. The friends list in `/settings` shows who is online. Friends only; signed-out visitors get no socket. See [`server/realtime/README.md`](server/realtime/README.md), [`src/net/README.md`](src/net/README.md) and [`src/social/visit/README.md`](src/social/visit/README.md).
 
 ## Configuration
 
@@ -123,6 +131,7 @@ server/                 Fastify server
   auth/                 Better Auth with Google, sessions, handles, account rules
   extract/              Claude and mock extractors, directory hints
   routes/               One module per workstream, listed in routes/registry.ts
+  realtime/             Phase 3: websocket hub for friends' homes (poses, chat, emotes, presence)
   seo/                  Meta and Open Graph tags, robots.txt, sitemap
   static.ts             dist/, the static pages, SPA fallback
 src/
@@ -131,8 +140,9 @@ src/
   auth/                 useSession, sign-in, onboarding
   mobile/               shell, log (record, confirm, crew chips, upload queue), match, list
   public/               landing, game, venue, city, reviews
-  social/               invites, QR, friends, inbox, settings
-  daily/                Escape of the Day engine and UI
+  social/               invites, QR, friends, inbox, settings; visit/ (friends' rooms, people in the room)
+  net/                  Phase 3: realtime socket client, interpolation of other players
+  daily/                Escape of the Day engine, 2D UI and the 3D puzzle room (daily/room)
   world/ player/ interaction/ ui/ state/ audio/ gate/   The 3D room (Phase 1, now on per-user data)
 scripts/
   import/               Foursquare importer, de-duplication, Google place-ID linker, OSM stub

@@ -6,18 +6,21 @@
  * If the upload or transcription fails, the recording stays queued for a later retry and the
  * flow carries on with the browser's live captions, or typing.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiCallError } from '../../contracts/errors'
 import type { CrewTag, GameSummary, Me, VenueSummary } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
 import type { ReviewDraft } from '../../contracts/types'
 import { formatElapsed, RECORD_PROMPTS, SAMPLE_TRANSCRIPT } from '../../ui/record/prompts'
-import { VenueGameMatcher } from '../match'
-import type { MatchHints } from '../match/logic'
+import { newDraftTarget, usePhotoQueue, PhotoAttach } from '../../ui/photos'
+import type { RoomPick } from '../../ui/roompicker'
+import { VenueGameMatcher, type MatcherMode } from '../match'
+import { venueToSummary, type MatchHints } from '../match/logic'
 import { createVisit, extract, transcribe, type ExtractResult } from './api'
 import { ConfirmStep, revealFirstError } from './confirm'
 import { tagsFromNames } from './crew/logic'
 import { useCrewSuggestions } from './crew'
+import { KeysEarned } from './keys'
 import { draftToForm, hintsFrom, memorableIds, reviewOf, toCreateVisitBody, validateLogForm, type FormErrors, type LogForm } from './form'
 import { enqueueRecording, errorMessage, getRecording, removeRecording, uploadRecording, waitingLabel } from './queue'
 import { usePhoneRecorder } from './recorder'
@@ -36,7 +39,7 @@ type Step =
   | { kind: 'uploading' }
   | { kind: 'transcript' }
   | { kind: 'drafting' }
-  | { kind: 'match' }
+  | { kind: 'match'; mode?: MatcherMode }
   | { kind: 'confirm' }
   | { kind: 'done'; visitId: string; game: GameSummary; visibility: string }
 
@@ -103,6 +106,15 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
   const [saveError, setSaveError] = useState<string | null>(null)
   const [ticked, setTicked] = useState<Set<string>>(new Set())
   const { suggestions } = useCrewSuggestions(true, fetchImpl)
+  // Photos picked on the form wait here until the visit exists, then upload (src/ui/photos/queue.ts).
+  const [photoTarget] = useState(newDraftTarget)
+  useEffect(
+    () => () => {
+      // Leaving the flow without saving drops photos that were only queued for this draft.
+      usePhotoQueue.getState().clear(photoTarget)
+    },
+    [photoTarget],
+  )
 
   // The account the queued recordings belong to: only its own can be resumed or uploaded.
   const ownerId = me?.id ?? null
@@ -200,12 +212,37 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
         // Puzzle ids only exist once the visit does. Not fatal if it fails.
         await callApi(ROUTES.putMyReview, { params: { id: visit.id }, body: reviewOf(form, memorable) }, opts).catch(() => {})
       }
+      usePhotoQueue.getState().attachToVisit(photoTarget, visit.id)
       if (recordingId) await removeRecording(recordingId).catch(() => {})
       setStep({ kind: 'done', visitId: visit.id, game: visit.game ?? choice.game, visibility: form.visibility })
     } catch (err) {
       setSaveError(saveErrorMessage(err))
     } finally {
       setSaving(false)
+    }
+  }
+
+  const pickSeq = useRef(0)
+  /** The room search on the form: a game is the answer; a venue or a new room opens the matcher there. */
+  const changeRoom = async (pick: RoomPick | { kind: 'create'; text: string }) => {
+    const seq = ++pickSeq.current
+    if (pick.kind === 'game') {
+      const g = pick.game
+      let venue = choice?.venue.id === g.venueId ? choice.venue : null
+      if (!venue) {
+        try {
+          venue = venueToSummary((await callApi(ROUTES.venuePage, { params: { slug: g.venueSlug } }, opts)).venue)
+        } catch {
+          venue = { id: g.venueId, slug: g.venueSlug, name: g.venueName, brand: null, address: '', city: g.city, citySlug: '', region: '', country: g.country, lat: null, lng: null, status: 'active', gameCount: 1 }
+        }
+      }
+      // A later pick wins: don't let a slow venue lookup overwrite it.
+      if (seq === pickSeq.current) setChoice({ venue, game: g })
+    } else if (pick.kind === 'venue') {
+      setStep({ kind: 'match', mode: { kind: 'venue', venue: pick.venue } })
+    } else {
+      setHints((h) => ({ ...h, game: pick.text }))
+      setStep({ kind: 'match', mode: { kind: 'newVenue' } })
     }
   }
 
@@ -347,6 +384,7 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
       {step.kind === 'match' && (
         <VenueGameMatcher
           hints={hints}
+          initialMode={step.mode}
           fetch={fetchImpl}
           onPick={(c) => {
             setChoice(c)
@@ -374,6 +412,8 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
           saving={saving}
           saveError={saveError}
           onChangeGame={() => setStep({ kind: 'match' })}
+          onChangeRoom={(pick) => void changeRoom(pick)}
+          photoTarget={photoTarget}
           onSave={() => void save()}
         />
       )}
@@ -390,6 +430,8 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
               See the public page
             </a>
           )}
+          <KeysEarned fetch={fetchImpl} />
+          <PhotoDone target={photoTarget} visitId={step.visitId} />
           <button type="button" data-testid="log-done-home" className={btnPrimary} onClick={() => onDone(step.visitId)}>
             Back to my rooms
           </button>
@@ -425,4 +467,14 @@ function directForm(blob: Blob, mimeType: string, durationSeconds: number): Form
   fd.append('durationSeconds', String(Math.round(durationSeconds * 10) / 10))
   fd.append('audio', blob, `recording.${mimeType.includes('mp4') ? 'm4a' : 'webm'}`)
   return fd
+}
+
+/** On the "Saved!" screen: how the photos are getting on, with Retry, and room for more. */
+function PhotoDone({ target, visitId }: { target: string; visitId: string }) {
+  return (
+    <div className="rounded-2xl bg-white p-3 text-left shadow-sm" data-testid="log-done-photos">
+      <p className="mb-2 text-sm font-bold">Photos</p>
+      <PhotoAttach target={target} visitId={visitId} compact testId="log-done-photo-attach" />
+    </div>
+  )
 }

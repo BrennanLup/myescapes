@@ -472,8 +472,12 @@ function crewFor(index: Record<string, readonly CrewSticker[]>, review: Review |
   return (review && index[review.id]) || NO_STICKERS
 }
 
-/** The empty-board note: a signed-in user's own (new) room, or the demo with nothing in it. */
-export function emptyBoardLines(signedIn: boolean): string[] {
+/**
+ * The empty-board note: a signed-in user's own (new) room, the demo with nothing in it, or a
+ * friend's room you are visiting (`visitingName`: you can't log anything there, so no call to).
+ */
+export function emptyBoardLines(signedIn: boolean, visitingName: string | null = null): string[] {
+  if (visitingName) return [`${visitingName} hasn't pinned`, 'any escapes yet!', 'Check back after their next one.']
   return signedIn
     ? ['Your board is empty!', 'Log your first escape at the desk', 'or from your phone.']
     : ['No escapes pinned yet!', 'Log one at the desk.']
@@ -491,6 +495,7 @@ export function BulletinBoard() {
   const sort = useStore((s) => s.boardSort)
   const crewIndex = useStore((s) => s.crewIndex)
   const signedIn = useStore((s) => s.dataSource === 'postgres')
+  const visitingName = useStore((s) => (s.visiting ? s.visiting.owner?.displayName.trim().split(/\s+/)[0] || `@${s.visiting.handle}` : null))
   const lastAddedRoomId = useStore((s) => s.lastAddedRoomId)
   const fontsReady = useFontsReady()
 
@@ -761,7 +766,7 @@ export function BulletinBoard() {
           />
         )
       })}
-      {n === 0 && <Note lines={emptyBoardLines(signedIn)} x={0} y={AREA_CY} w={1.9} h={0.9} rot={-0.03} fontsReady={fontsReady} />}
+      {n === 0 && <Note lines={emptyBoardLines(signedIn, visitingName)} x={0} y={AREA_CY} w={1.9} h={0.9} rot={-0.03} fontsReady={fontsReady} />}
     </Anchor>
   )
 }

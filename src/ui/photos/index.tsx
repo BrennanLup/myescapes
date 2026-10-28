@@ -11,6 +11,23 @@ import { ROUTES, callApi } from '@/contracts/routes'
 import { resizePhoto, type ResizedPhoto } from './resize'
 
 export { fitWithin, encodeUnderBudget, resizePhoto, TARGET_MAX_PX, TARGET_MAX_BYTES } from './resize'
+export { PhotoAttach, type PhotoAttachProps } from './PhotoAttach'
+export { Lightbox, PhotoThumbs, isLightboxOpen, type LightboxPhoto } from './Lightbox'
+export {
+  usePhotoQueue,
+  visitTarget,
+  visitOf,
+  newDraftTarget,
+  onPhotoUploaded,
+  watchTarget,
+  removeUndoMs,
+  summarize,
+  configurePhotoQueue,
+  resetPhotoQueueForTests,
+  MAX_PHOTOS_PER_VISIT,
+  type PendingPhoto,
+} from './queue'
+export { uploadPhotoWithProgress, uploadErrorMessage } from './upload'
 
 /** Resize to fit `maxPx` on the long side and re-encode as JPEG under ~400 KB. */
 export async function resizeImage(file: Blob, maxPx = 1600): Promise<Blob> {

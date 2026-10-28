@@ -1,12 +1,16 @@
 import { test, expect } from '@playwright/test'
-import { openApp, roomUrl, storeState } from './helpers'
+import { SLOW, openApp, roomUrl, storeState } from './helpers'
 
 test('app shell loads with a canvas and healthy server', async ({ page, request }) => {
   const health = await request.get('/health')
   expect(health.ok()).toBeTruthy()
   await page.goto(roomUrl())
-  await expect(page.locator('canvas').first()).toBeVisible()
-  await page.waitForFunction(() => !!window.__ESCAPE__)
+  // SLOW, not the 30 s default: in a full run on shared CPUs (software WebGL), the lazy 3D chunk
+  // and the first frames can take well over 30 s right after a heavy spec.
+  await expect(page.locator('canvas').first()).toBeVisible({ timeout: SLOW })
+  await page.waitForFunction(() => !!window.__ESCAPE__, null, { timeout: SLOW })
+  // Under automation the loader enters by itself once ready, and then leaves the DOM.
+  await expect(page.getByTestId('loading-screen')).toHaveCount(0, { timeout: SLOW })
 })
 
 test('phones opening / get the light mobile app; signed-out desktops get the landing page', async ({ page, isMobile }) => {
@@ -35,7 +39,7 @@ test('phones opening / get the light mobile app; signed-out desktops get the lan
   }
   // The demo room stays reachable while signed out.
   await page.goto(roomUrl())
-  await expect(page.locator('canvas').first()).toBeVisible()
+  await expect(page.locator('canvas').first()).toBeVisible({ timeout: SLOW })
 })
 
 test('with ?gate=off the room opens straight away with the seed data', async ({ page }) => {

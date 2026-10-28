@@ -1,6 +1,6 @@
 /**
  * Mobile app shell (workstream 13): routing inside /m, sign-in and onboarding gates, the home
- * screen (big "Log an escape room" button, visits to confirm, recordings waiting to upload,
+ * screen (big "Log an escape room" button, friends online with Visit, visits to confirm, recordings waiting to upload,
  * Escape of the Day card, the rooms table), "View on desktop" and add-to-home-screen.
  *
  * Must never import three.js or anything under src/world (src/mobile/shell/bundle.test.ts checks).
@@ -14,8 +14,10 @@ import { signInErrorMessage } from '../../auth/errors'
 import type { Me } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
 import { DailyCard } from '../../daily/ui'
+import { MobileDailyWelcome } from '../../daily/ui/MobileWelcome'
 import { matchPath, navigate, type RouteProps } from '../../router'
 import { Inbox, NotificationsBadge, visitsToConfirm } from '../../social'
+import { FriendsOnline } from '../../social/visit/FriendsOnline'
 import { ReviewDetail, RoomsTable } from '../list'
 import { LogFlow } from '../log'
 import { readyLabel, waitingLabel } from '../log/queue'
@@ -123,7 +125,11 @@ export function MobileApp({ rest = '/', fetch: fetchImpl }: MobileAppProps) {
           </div>
         )}
       </header>
-      <main className="mx-auto max-w-xl px-4 py-5">{body}</main>
+      <main className="mx-auto max-w-xl px-4 py-5">
+        {/* Arrived from the Escape of the Day room's exit door (/m?from=daily): a short celebration. */}
+        {session.status !== 'loading' && <MobileDailyWelcome signedIn={!!user} />}
+        {body}
+      </main>
       <MobileFooter signedIn={!!user} />
     </div>
   )
@@ -181,6 +187,7 @@ function Home({ fetch: fetchImpl, meId }: { fetch?: typeof fetch; meId: string }
       <button type="button" data-testid="log-room" className="w-full rounded-3xl bg-accent px-6 py-8 font-display text-2xl text-accent-ink shadow-[var(--shadow-cozy)] active:scale-[0.99]" onClick={() => navigate('/m/log')}>
         Log an escape room
       </button>
+      <FriendsOnline onJoinMine={viewOnDesktop} />
       <DailyCard />
       <section className="space-y-2">
         <h2 className="font-display text-xl">My rooms</h2>
@@ -225,18 +232,27 @@ function MobileSignIn() {
   )
 }
 
+/** Footer links: at least 44 px tall and wide (phone tap targets), padded instead of bare text. */
+const FOOTER_LINK = 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 active:bg-white/60'
+
 function MobileFooter({ signedIn }: { signedIn: boolean }) {
   return (
-    <footer className="mx-auto max-w-xl space-y-3 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 text-sm text-ink-soft">
-      <button type="button" data-testid="view-on-desktop" className="font-semibold text-teal underline" onClick={viewOnDesktop}>
+    <footer className="mx-auto max-w-xl space-y-1 px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 text-sm text-ink-soft">
+      <button type="button" data-testid="view-on-desktop" className="-ml-2 inline-flex min-h-11 items-center rounded-lg px-2 font-semibold text-teal underline active:bg-white/60" onClick={viewOnDesktop}>
         View on desktop (3D room)
       </button>
-      <nav className="flex flex-wrap gap-4 underline">
-        <a href="/about">About</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
+      <nav className="-ml-2 flex flex-wrap gap-x-2 underline">
+        <a href="/about" className={FOOTER_LINK}>
+          About
+        </a>
+        <a href="/privacy" className={FOOTER_LINK}>
+          Privacy
+        </a>
+        <a href="/terms" className={FOOTER_LINK}>
+          Terms
+        </a>
         {signedIn && (
-          <button type="button" className="underline" onClick={() => void signOut().then(() => window.location.assign('/m'))}>
+          <button type="button" data-testid="mobile-signout" className={`${FOOTER_LINK} underline`} onClick={() => void signOut().then(() => window.location.assign('/m'))}>
             Sign out
           </button>
         )}

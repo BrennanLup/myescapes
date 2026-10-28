@@ -1,0 +1,111 @@
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_OUTFIT, itemById, OUTFIT_SLOTS } from '@/world/avatars/catalog'
+import { colorApplies, listNames, primaryAction, priceLabel, scrollEdges, stepIndex, swatchColumns, tabItems, TABS, wearableDraft } from './logic'
+
+describe('scrollEdges', () => {
+  it('flags the edges that hide more tabs', () => {
+    expect(scrollEdges({ scrollLeft: 0, scrollWidth: 300, clientWidth: 300 })).toEqual({ start: false, end: false })
+    expect(scrollEdges({ scrollLeft: 0, scrollWidth: 500, clientWidth: 300 })).toEqual({ start: false, end: true })
+    expect(scrollEdges({ scrollLeft: 100, scrollWidth: 500, clientWidth: 300 })).toEqual({ start: true, end: true })
+    expect(scrollEdges({ scrollLeft: 199.5, scrollWidth: 500, clientWidth: 300 })).toEqual({ start: true, end: false })
+  })
+})
+
+describe('tabs', () => {
+  it('cover every slot once and every outfit field', () => {
+    const slots = TABS.flatMap((t) => (t.slot ? [t.slot] : []))
+    expect(slots.sort()).toEqual([...OUTFIT_SLOTS].sort())
+    const fields = new Set(TABS.flatMap((t) => [t.slot === 'accessory' ? 'accessory' : t.slot, t.color?.field].filter(Boolean)))
+    for (const k of Object.keys(DEFAULT_OUTFIT)) expect(fields.has(k), k).toBe(true)
+  })
+
+  it('lists free items first, then by price', () => {
+    const hats = tabItems(TABS.find((t) => t.id === 'hat')!)
+    const prices = hats.map((i) => i.price)
+    expect(prices).toEqual([...prices].sort((a, b) => a - b))
+    expect(hats[0].id).toBe('hat-none')
+    expect(tabItems(TABS.find((t) => t.id === 'body')!)).toEqual([])
+  })
+
+  it('hides colours that do not apply', () => {
+    const hat = TABS.find((t) => t.id === 'hat')!
+    expect(colorApplies(hat, DEFAULT_OUTFIT)).toBe(false)
+    expect(colorApplies(hat, { ...DEFAULT_OUTFIT, hat: 'hat-cap' })).toBe(true)
+    expect(colorApplies(TABS.find((t) => t.id === 'hair')!, { ...DEFAULT_OUTFIT, hair: 'hair-none' })).toBe(false)
+    expect(colorApplies(TABS.find((t) => t.id === 'extras')!, DEFAULT_OUTFIT)).toBe(false)
+  })
+})
+
+describe('primaryAction', () => {
+  const saved = DEFAULT_OUTFIT
+  it('unchanged and save', () => {
+    expect(primaryAction(saved, saved, [], 20, true)).toEqual({ kind: 'unchanged' })
+    expect(primaryAction({ ...saved, skin: 'ebony' }, saved, [], 20, true)).toEqual({ kind: 'save' })
+  })
+
+  it('buy, affordable or short, and whether it completes the look', () => {
+    const one = primaryAction({ ...saved, accessory: 'acc-headphones' }, saved, [], 20, true)
+    expect(one).toMatchObject({ kind: 'buy', affordable: true, short: 0, completes: true })
+    const two = primaryAction({ ...saved, accessory: 'acc-headphones', hat: 'hat-crown' }, saved, [], 20, true)
+    // The affordable item is offered first.
+    expect(two).toMatchObject({ kind: 'buy', item: { id: 'acc-headphones' }, affordable: true, completes: false, rest: [{ id: 'hat-crown' }] })
+    const poor = primaryAction({ ...saved, hat: 'hat-tophat', accessory: 'acc-lantern' }, saved, [], 20, true)
+    expect(poor).toMatchObject({ kind: 'buy', item: { id: 'hat-tophat' }, affordable: false, short: 25, completes: false })
+    // Owned items don't need buying.
+    expect(primaryAction({ ...saved, hat: 'hat-crown' }, saved, ['hat-crown'], 0, true)).toEqual({ kind: 'save' })
+  })
+
+  it('signed out: sign in to unlock', () => {
+    const a = primaryAction({ ...saved, hat: 'hat-crown' }, saved, [], null, false)
+    expect(a).toEqual({ kind: 'signin', item: itemById('hat-crown') })
+  })
+})
+
+describe('wearableDraft', () => {
+  const saved = { ...DEFAULT_OUTFIT, top: 'top-jersey', accessory: 'acc-none' } as const
+  it('swaps only the locked items back to what you wear, keeping colours and owned picks', () => {
+    const draft = { ...saved, top: 'top-trench', topColor: 'plum', accessory: 'acc-headphones', hair: 'hair-bob' } as const
+    // The QA case: trench (50) can't be afforded, headphones (10) were just bought.
+    expect(wearableDraft(draft, saved, ['top-jersey', 'acc-headphones'])).toEqual({ ...draft, top: 'top-jersey' })
+    expect(wearableDraft(draft, saved, ['top-jersey'])).toEqual({ ...draft, top: 'top-jersey', accessory: 'acc-none' })
+  })
+  it('falls back to the first free item when even the saved one is not owned', () => {
+    const draft = { ...DEFAULT_OUTFIT, hat: 'hat-crown' } as const
+    expect(wearableDraft(draft, { ...DEFAULT_OUTFIT, hat: 'hat-tophat' }, []).hat).toBe('hat-none')
+  })
+  it('leaves a wearable look alone', () => {
+    expect(wearableDraft(DEFAULT_OUTFIT, DEFAULT_OUTFIT, [])).toEqual(DEFAULT_OUTFIT)
+  })
+})
+
+describe('listNames and swatchColumns', () => {
+  it('lists names as a sentence', () => {
+    expect(listNames([])).toBe('')
+    expect(listNames([{ name: 'A' }])).toBe('A')
+    expect(listNames([{ name: 'A' }, { name: 'B' }, { name: 'C' }])).toBe('A, B and C')
+  })
+  it('balances swatch rows on phones', () => {
+    expect(swatchColumns(5)).toBe(5)
+    expect(swatchColumns(7)).toBe(7)
+    expect(swatchColumns(8)).toBe(4)
+    expect(swatchColumns(11)).toBe(6)
+    expect(swatchColumns(19)).toBe(7)
+  })
+})
+
+describe('labels and keys', () => {
+  it('priceLabel', () => {
+    expect(priceLabel(itemById('hat-cap')!, [])).toBe('Free')
+    expect(priceLabel(itemById('hat-crown')!, [])).toBe('120 keys')
+    expect(priceLabel(itemById('hat-crown')!, ['hat-crown'])).toBe('Owned')
+  })
+
+  it('stepIndex wraps and handles Home/End', () => {
+    expect(stepIndex(0, 'ArrowRight', 3)).toBe(1)
+    expect(stepIndex(2, 'ArrowRight', 3)).toBe(0)
+    expect(stepIndex(0, 'ArrowLeft', 3)).toBe(2)
+    expect(stepIndex(1, 'Home', 3)).toBe(0)
+    expect(stepIndex(1, 'End', 3)).toBe(2)
+    expect(stepIndex(1, 'a', 3)).toBeNull()
+  })
+})

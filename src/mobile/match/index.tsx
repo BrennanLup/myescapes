@@ -28,10 +28,13 @@ export interface MatcherProps {
   hints: MatchHints
   onPick(choice: { venue: VenueSummary; game: GameSummary }): void
   onCancel?(): void
+  /** Open straight on a venue's rooms or the "add a venue" form (from the review form's room search). */
+  initialMode?: MatcherMode
   /** Tests: swap the transport. */
   fetch?: typeof fetch
 }
 
+export type MatcherMode = Mode
 type Mode = { kind: 'list' } | { kind: 'venue'; venue: VenueSummary } | { kind: 'newVenue' } | { kind: 'newGame'; venue: VenueSummary }
 
 const clean = (s: string | null | undefined) => (s && s.trim() ? s.trim() : undefined)
@@ -55,14 +58,14 @@ const card = 'flex w-full items-center justify-between gap-3 rounded-2xl border 
 const primary = 'w-full rounded-2xl bg-accent px-4 py-3 text-base font-bold text-accent-ink disabled:opacity-50'
 const secondary = 'w-full rounded-2xl border border-panel-edge px-4 py-3 text-base font-semibold text-ink'
 
-export function VenueGameMatcher({ hints, onPick, onCancel, fetch: fetchImpl }: MatcherProps) {
+export function VenueGameMatcher({ hints, onPick, onCancel, initialMode, fetch: fetchImpl }: MatcherProps) {
   const opts = useMemo(() => (fetchImpl ? { fetch: fetchImpl } : {}), [fetchImpl])
   const [query, setQuery] = useState(() => initialQuery(hints))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [venues, setVenues] = useState<VenueMatch[]>([])
   const [games, setGames] = useState<GameMatch[]>([])
-  const [mode, setMode] = useState<Mode>({ kind: 'list' })
+  const [mode, setMode] = useState<Mode>(initialMode ?? { kind: 'list' })
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -88,7 +91,9 @@ export function VenueGameMatcher({ hints, onPick, onCancel, fetch: fetchImpl }: 
     if (!q) return
     setLoading(true)
     try {
-      const r = await callApi(ROUTES.directorySearch, { query: { q, limit: 20 } }, opts)
+      // The transcript's city ranks rooms there first (soft: other cities still show).
+      const city = clean(hints.city)
+      const r = await callApi(ROUTES.directorySearch, { query: { q, limit: 20, ...(city ? { city: city.slice(0, 120) } : {}) } }, opts)
       // Search results have no match score: keep the server's order.
       const n = Math.max(r.games.length, 1)
       setGames(rankGames(r.games.map((game, i) => ({ game, score: Math.max(0, 0.7 - (i / n) * 0.7) }))))

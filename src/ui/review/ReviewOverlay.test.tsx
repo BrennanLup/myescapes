@@ -79,6 +79,25 @@ describe('ReviewOverlay', () => {
     expect(screen.getByTestId('escape-stamp').textContent).toContain('52 min')
   })
 
+  it('shows "Not sure" for a feature nobody remembered', () => {
+    useStore.setState((s) => ({ reviews: s.reviews.map((r) => (r.roomId === 'room_fx_1' ? { ...r, visibleTimer: null } : r)) }))
+    render(<ReviewOverlay roomId="room_fx_1" />)
+    const badge = screen.getByTestId('badge-visibleTimer')
+    expect(badge.getAttribute('data-value')).toBe('unknown')
+    expect(badge.textContent).toContain('Not sure')
+  })
+
+  it('opens the polaroid photo full size', () => {
+    useStore.setState((s) => ({ reviews: s.reviews.map((r) => (r.roomId === 'room_fx_1' ? { ...r, photos: [{ url: '/p/1.jpg' }, { url: '/p/2.jpg', caption: 'Gears' }] } : r)) }))
+    render(<ReviewOverlay roomId="room_fx_1" />)
+    fireEvent.click(screen.getByTestId('gallery-open'))
+    expect(screen.getByRole('dialog', { name: 'Photo 1 of 2' })).toBeTruthy()
+    fireEvent.click(screen.getByTestId('photo-lightbox-next'))
+    expect(screen.getByText('Gears', { selector: '[data-testid="photo-lightbox"] p' })).toBeTruthy()
+    fireEvent.click(screen.getByTestId('photo-lightbox-close'))
+    expect(screen.queryByTestId('photo-lightbox')).toBeNull()
+  })
+
   it('shows a failed escape for room 2', () => {
     render(<ReviewOverlay roomId="room_fx_2" />)
     expect(screen.getByTestId('badge-escaped').getAttribute('data-value')).toBe('no')
