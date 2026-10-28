@@ -1,5 +1,5 @@
 /** Pure wardrobe logic (tabs, what the main button does), unit-tested in logic.test.ts. */
-import { FABRIC_COLORS, HAIR_COLORS, itemsForSlot, SKIN_TONES, sameOutfit, unownedItems, type CatalogItem, type ItemId, type Outfit, type OutfitSlot, type Swatch } from '@/world/avatars/catalog'
+import { FABRIC_COLORS, HAIR_COLORS, itemById, itemsForSlot, OUTFIT_SLOTS, SKIN_TONES, sameOutfit, unownedItems, type CatalogItem, type ItemId, type Outfit, type OutfitSlot, type Swatch } from '@/world/avatars/catalog'
 
 export type TabId = 'body' | 'hair' | 'top' | 'bottom' | 'shoes' | 'hat' | 'extras'
 
@@ -49,7 +49,16 @@ export function colorApplies(tab: TabSpec, draft: Outfit): boolean {
 export type PrimaryAction =
   | { kind: 'unchanged' }
   | { kind: 'save' }
-  | { kind: 'buy'; item: CatalogItem; affordable: boolean; short: number; /** True when this purchase makes the whole look wearable. */ completes: boolean }
+  | {
+      kind: 'buy'
+      item: CatalogItem
+      affordable: boolean
+      short: number
+      /** True when this purchase makes the whole look wearable. */
+      completes: boolean
+      /** The other locked items in the look (empty when `completes`). */
+      rest: CatalogItem[]
+    }
   | { kind: 'signin'; item: CatalogItem }
 
 /** What the wardrobe's main button does for this draft. */
@@ -60,9 +69,46 @@ export function primaryAction(draft: Outfit, saved: Outfit, owned: readonly Item
   if (missing.length) {
     const item = missing[0]
     if (!signedIn) return { kind: 'signin', item }
-    return { kind: 'buy', item, affordable: have >= item.price, short: Math.max(0, item.price - have), completes: missing.length === 1 }
+    return { kind: 'buy', item, affordable: have >= item.price, short: Math.max(0, item.price - have), completes: missing.length === 1, rest: missing.slice(1) }
   }
   return sameOutfit(draft, saved) ? { kind: 'unchanged' } : { kind: 'save' }
+}
+
+/**
+ * The part of `draft` you can wear now: every priced item you don't own goes back to what you
+ * wear today (`saved`, which you own), or the slot's first free item if even that is locked.
+ * Colours are kept. Used to wear an item you just unlocked while the rest of the look stays
+ * locked, and for "Wear what you own".
+ */
+export function wearableDraft(draft: Outfit, saved: Outfit, owned: readonly string[]): Outfit {
+  const have = new Set(owned)
+  const ok = (id: string) => {
+    const item = itemById(id)
+    return !!item && (item.price === 0 || have.has(id))
+  }
+  const out = { ...draft }
+  for (const slot of OUTFIT_SLOTS) {
+    const field = SLOT_FIELD[slot]
+    if (ok(out[field])) continue
+    const fallback = ok(saved[field]) ? saved[field] : itemsForSlot(slot).find((i) => i.price === 0)!.id
+    ;(out as Record<keyof Outfit, string>)[field] = fallback
+  }
+  return out
+}
+
+/** Names as a sentence: "A", "A and B", "A, B and C". */
+export function listNames(items: readonly Pick<CatalogItem, 'name'>[]): string {
+  const names = items.map((i) => i.name)
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+/**
+ * Columns for a row of colour swatches on a phone: as few rows as fit `maxPerRow`, then balanced,
+ * so 8 skin tones are 4 + 4 rather than 7 + 1.
+ */
+export function swatchColumns(count: number, maxPerRow = 7): number {
+  if (count <= maxPerRow) return Math.max(1, count)
+  return Math.ceil(count / Math.ceil(count / maxPerRow))
 }
 
 /** Price label for an item tile. */
