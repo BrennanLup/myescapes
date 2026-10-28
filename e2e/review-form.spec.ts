@@ -135,7 +135,17 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     visitId = decodeURIComponent(new URL(pp.url()).pathname.split('/').pop()!)
     const attach = pp.getByTestId('review-photo-attach')
     await expect(attach.getByTestId('photo-tile')).toHaveCount(1, { timeout: SLOW })
+    // A read view: removing is behind "Edit photos", and a tap opens the photo full size.
+    await expect(attach.getByRole('button', { name: 'Remove photo 1' })).toHaveCount(0)
+    await attach.getByTestId('photo-edit-toggle').click()
     await expect(attach.getByRole('button', { name: 'Remove photo 1' })).toBeVisible()
+    await attach.getByTestId('photo-edit-toggle').click()
+    await attach.getByRole('button', { name: 'Open photo 1' }).click()
+    await expect(pp.getByTestId('photo-lightbox')).toBeVisible()
+    await expect(pp.getByTestId('photo-lightbox-image')).toHaveJSProperty('complete', true)
+    expect(await pp.getByTestId('photo-lightbox-image').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0)
+    await pp.getByTestId('photo-lightbox-close').click()
+    await expect(pp.getByTestId('photo-lightbox')).toHaveCount(0)
     // The uploaded photo is served back (same-origin, participants only).
     const detail = await (await pp.request.get(`/api/visits/${encodeURIComponent(visitId)}`)).json()
     expect(detail.photos).toHaveLength(1)
@@ -162,7 +172,17 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     await attach.getByTestId('photo-input').setInputFiles([await pngFile(lp, 'three.png', '#6d3b5c')])
     await expect(attach.getByTestId('photo-status')).toHaveText('1 photo added.', { timeout: SLOW })
     await lp.waitForFunction((v) => (window.__ESCAPE__!.store.getState().reviews.find((r) => r.id === v)?.photos.length ?? 0) === 2, visitId, { timeout: SLOW })
-    // Removing an uploaded photo can be undone: nothing is deleted on the server.
+    // Tap a photo to see it full size; the arrows page and Esc closes only the photo.
+    await attach.getByRole('button', { name: 'Open photo 1' }).click()
+    await expect(lp.getByRole('dialog', { name: 'Photo 1 of 2' })).toBeVisible()
+    await lp.keyboard.press('ArrowRight')
+    await expect(lp.getByRole('dialog', { name: 'Photo 2 of 2' })).toBeVisible()
+    await lp.keyboard.press('Escape')
+    await expect(lp.getByTestId('photo-lightbox')).toHaveCount(0)
+    await expect(lp.getByTestId('review-overlay')).toBeVisible()
+    // Removing an uploaded photo (behind "Edit photos") can be undone: nothing is deleted on the server.
+    await expect(attach.getByRole('button', { name: /Remove photo/ })).toHaveCount(0)
+    await attach.getByTestId('photo-edit-toggle').click()
     await attach.getByRole('button', { name: 'Remove photo 2' }).click()
     await expect(attach.getByTestId('photo-undo')).toContainText('Photo removed')
     await expect(attach.getByTestId('photo-tile')).toHaveCount(1)
@@ -193,6 +213,11 @@ test('review form: room search, photos while reviewing, on the phone and in the 
       } as never)
     })
     await expect(lp.getByTestId('confirm-overlay')).toBeVisible()
+    // Nothing is red before the user has touched anything; the footer says what's still needed.
+    await expect(lp.locator('[data-testid^="error-"]')).toHaveCount(0)
+    // The features have "Not sure", and it isn't required.
+    await lp.getByTestId('field-review.flashlights-unsure').click()
+    await expect(lp.getByTestId('field-review.flashlights')).toHaveAttribute('data-value', 'unset')
     // Genre is optional, as on the phone; an unset score would show "Tap to rate" (all are set here).
     await expect(lp.getByTestId('field-room.genre')).toHaveValue('')
     await expect(lp.getByTestId('error-room.genre')).toHaveCount(0)

@@ -8,7 +8,8 @@ Browser side of visit photos. Light (no three.js): the phone app uses it too.
 | `resize.ts` | `resizePhoto(file)`: decode (EXIF rotation applied), fit the long side to 1600 px and re-encode as JPEG under ~400 KB, shrinking further if needed (server ceiling 1 MB). |
 | `upload.ts` | `uploadPhotoWithProgress(visitId, photo, { onProgress, signal })`: multipart `POST /api/visits/:id/photos` via XMLHttpRequest (fetch has no upload progress); errors are `ApiCallError`s. `uploadErrorMessage`, `isPermanentUploadError`. |
 | `queue.ts` | `usePhotoQueue`: one Zustand store for every pending photo in the app, so uploads keep going after the form that started them closes. |
-| `PhotoAttach.tsx` | The "Add photos" control: picker (and drop target on desktops), thumbnails, remove (a small dot in a 40 px corner tap target), per-photo progress bar, Retry / Retry all, "N of 30", a polite live status line that also lists skipped files ("notes.txt isn't a photo, so it was skipped."). |
+| `PhotoAttach.tsx` | The "Add photos" control: picker (and drop target on desktops), thumbnails, remove (a small dot in a 40 px corner tap target), per-photo progress bar, Retry / Retry all, "N of 30", a polite live status line that also lists skipped files ("notes.txt isn't a photo, so it was skipped."). Tapping a thumbnail opens the `Lightbox` (saved and just-added photos, in tile order). `editToggle` (read views: review overlay, phone room page) hides the × on saved photos behind "Edit photos" / "Done"; uploads in progress or failed keep theirs. |
+| `Lightbox.tsx` | `Lightbox`: a photo full size over everything (portal on `body`): ← → or a swipe pages (wrapping), Esc / × / a tap beside the photo closes, focus is trapped and given back. `isLightboxOpen()` lets overlays with their own window key listeners stand aside. `PhotoThumbs`: a read-only grid of thumbnails that open in it. |
 | `index.tsx` | Exports, plus the older `PhotoUploader` and `PhotoGrid`. |
 
 ## The queue
@@ -22,4 +23,5 @@ Browser side of visit photos. Light (no three.js): the phone app uses it too.
 
 ## Where it is used
 - Desktop confirm overlay (`src/ui/confirm`) and the phone log flow (`src/mobile/log`): queued while writing, uploaded right after save; the phone's "Saved!" screen shows progress and takes more.
-- The 3D room's review overlay (`src/ui/review/VisitPhotos.tsx`) and the phone's room page (`src/mobile/list`, participants only): add to an existing visit, remove your own.
+- The 3D room's review overlay (`src/ui/review/VisitPhotos.tsx`) and the phone's room page (`src/mobile/list`, participants only): add to an existing visit, remove your own (behind "Edit photos"). Others who can see the visit get `PhotoThumbs`.
+- Every thumbnail opens full size; so does the review overlay's polaroid (`src/ui/review/Gallery.tsx`).

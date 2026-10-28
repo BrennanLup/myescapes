@@ -9,7 +9,9 @@ Reads `rooms`, `reviews` and `boardPins` from the store and shows the room's lat
 - Header: genre chip (`GENRE_COLORS`), date, room name (font-display), company + city, crew initial avatars,
   website link (http(s) only) and a Google Maps link for the address, an "ESCAPED! 52 min" / "Trapped" stamp,
   and a sticky-note "crew verdict" with the overall score and comment.
-- Polaroid gallery of room + review photos (deduped by URL): prev/next buttons, swipe, counter.
+- Polaroid gallery of room + review photos (deduped by URL): prev/next buttons, swipe, counter. Tap the photo
+  (`gallery-open`) to see it full size in the shared `Lightbox` (`src/ui/photos`).
+- The room-fact badges show yes, no, or a dashed "Not sure" (`data-value="unknown"`) for a feature saved as `null`.
   No photos -> a genre-coloured placeholder card with a doodle per genre.
 - Ratings: five animated 1-100 bars (`role="meter"`) with the comment beneath.
 - Yes/no badges: escaped (with time), visible timer, multi-room, flashlights, live actors.
@@ -36,6 +38,7 @@ Reads `rooms`, `reviews` and `boardPins` from the store and shows the room's lat
 
 ## Photos (Phase 3, workstream A)
 - Signed in (`dataSource === 'postgres'`, where a review id is the visit id), the overlay has a **Photos** card (`VisitPhotos.tsx`) under the puzzles: it loads the visit (`ROUTES.visit`) for its photos with uploader ids, and renders `PhotoAttach` so you can add photos (resized in the browser, progress, Retry) and remove your own. Uploads started from the confirm form show here too, including failed ones with Retry. Someone only tagged (pending) sees "Accept the tag on this visit to add photos." Hidden in the signed-out demo.
+- Read view: the remove × on saved photos is behind an **Edit photos** toggle (`PhotoAttach editToggle`); uploads in progress or failed keep theirs. Tap a thumbnail to open it full size. While the lightbox is open the overlay's key listener (Esc, ← →, Tab trap) stands aside (`isLightboxOpen()`).
 - `photoSync.ts` keeps the store in step: a finished upload is added to that review's `photos` (gallery and polaroid update without a reload) and a removed photo is taken out.
 - The focus trap now includes inputs (the file picker).
 - Tests: `VisitPhotos.test.tsx`.
