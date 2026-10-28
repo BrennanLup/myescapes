@@ -61,6 +61,12 @@ describe('applyMessage', () => {
     apply({ type: 'player_left', sid: 's-guest2', userId: guest.id, reason: 'disconnected' })
     expect(toast()).toBe('Sam left')
     expect(useRealtime.getState().players).toEqual({})
+    // A replace in the hub's real order (left first, then joined): still no "came in" toast.
+    apply({ type: 'player_joined', player: { sid: 's-guest3', user: guest, isOwner: false, state: null, outfit: null, joinedAt: 3 } })
+    useShell.setState({ toast: null })
+    apply({ type: 'player_left', sid: 's-guest3', userId: guest.id, reason: 'replaced' })
+    apply({ type: 'player_joined', player: { sid: 's-guest4', user: guest, isOwner: false, state: null, outfit: null, joinedAt: 4 } })
+    expect(toast()).toBeNull()
   })
 
   it('a visitor hears the host is home', () => {

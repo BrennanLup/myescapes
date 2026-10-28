@@ -38,7 +38,14 @@ export function loadHome(handle: string, opts: { spoilers?: boolean } = {}): Pro
 
 /** Fetch a room ahead (the route checks access first); the 3D room's first load reuses it. */
 export function preloadHome(handle: string): Promise<HomeView> {
-  if (preloaded?.handle !== handle) preloaded = { handle, promise: loadHome(handle) }
+  if (preloaded?.handle !== handle) {
+    const entry = { handle, promise: loadHome(handle) }
+    preloaded = entry
+    // Don't keep a failure: "Try again" must reach the network.
+    entry.promise.catch(() => {
+      if (preloaded === entry) preloaded = null
+    })
+  }
   return preloaded.promise
 }
 

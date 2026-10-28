@@ -23,6 +23,8 @@ import { BUBBLE_MS, CHAT_LOG_MAX, EMOTE_MS, firstName, outfitFor, poseBuffer, po
 
 /** How often the local pose is checked for changes (the client throttles to the server's rate). */
 const PUBLISH_MS = 100
+/** People whose old tab just stepped out for a new one: their next arrival is not news. */
+const justReplaced = new Set<string>()
 /** Presence list refresh (the socket keeps it live in between). */
 const PRESENCE_REFRESH_MS = 60_000
 
@@ -103,6 +105,7 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       return
     case 'joined': {
       poses.clear()
+      justReplaced.clear()
       const players: Record<string, Player> = {}
       for (const p of msg.players) {
         players[p.sid] = toPlayer(p)
@@ -113,6 +116,7 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
     }
     case 'left': {
       poses.clear()
+      justReplaced.clear()
       const home = rt.home
       set({ home: null, players: {}, bubbles: {}, emotes: {} })
       if (msg.reason === 'kicked' && home) {
@@ -131,7 +135,9 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       const p = toPlayer(msg.player)
       if (msg.player.state) poseBuffer(p.sid).push(c.clock.now(now), msg.player.state)
       // A second tab of the same person replaces the first: no new toast for them.
-      const already = Object.values(rt.players).some((x) => x.user.id === p.user.id)
+      // The hub sends `player_left` (replaced) before the new tab's `player_joined`, so also
+      // remember who was just replaced.
+      const already = Object.values(rt.players).some((x) => x.user.id === p.user.id) || justReplaced.delete(p.user.id)
       set({ players: { ...rt.players, [p.sid]: p } })
       if (!already && p.user.id !== rt.me?.id) {
         const name = firstName(p.user)
@@ -148,6 +154,7 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       const { [msg.sid]: _b, ...bubbles } = rt.bubbles
       const { [msg.sid]: _e, ...emotes } = rt.emotes
       set({ players, bubbles, emotes })
+      if (msg.reason === 'replaced') justReplaced.add(gone.user.id)
       if (msg.reason !== 'replaced' && !Object.values(players).some((x) => x.user.id === gone.user.id)) toast(`${firstName(gone.user)} left`)
       return
     }
