@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify'
 import { authRoutes } from '../auth'
 import type { AppContext } from '../context'
 import { enrichRoutes } from '../enrich'
+import { realtimeRoutes } from '../realtime'
 import { seoRoutes } from '../seo'
 import { adminRoutes } from './admin'
 import { claimsRoutes } from './claims'
@@ -13,6 +14,7 @@ import { dailyRoutes } from './daily'
 import { directoryRoutes } from './directory'
 import { extractRoutes } from './extract'
 import { friendsRoutes } from './friends'
+import { homesRoutes } from './homes'
 import { logsRoutes } from './logs'
 import { phase1Routes } from './logs.phase1'
 import { photosRoutes } from './photos'
@@ -48,6 +50,9 @@ export const ROUTE_MODULES: readonly RouteModule[] = [
   { ws: 33, name: 'reviews', file: 'server/routes/reviews.ts', register: reviewsRoutes },
   { ws: 34, name: 'claims', file: 'server/routes/claims.ts', register: claimsRoutes },
   { ws: 25, name: 'room crawler', file: 'server/enrich/index.ts', register: enrichRoutes },
+  // Phase 3 workstream C (ws 303): the websocket hub and friends' homes / presence.
+  { ws: 303, name: 'realtime', file: 'server/realtime/index.ts', register: realtimeRoutes },
+  { ws: 303, name: 'homes and presence', file: 'server/routes/homes.ts', register: homesRoutes },
 ]
 
 export async function registerRoutes(app: FastifyInstance, ctx: AppContext) {

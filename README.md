@@ -61,6 +61,7 @@ The round buttons at the top right open the wish list, the year wrap, the voice 
 - **Reviews.** Public by default, or friends only, or private. Comments can be marked as spoilers. Admins can hide reviews, photos, games and venues that were reported.
 - **Escape of the Day.** Six guesses, hints that cost points, a spoiler-free share grid, streaks counted against the server's record of your day, and a friends leaderboard. Play it on `/daily` or walk through it in 3D at `/daily/room` (src/daily/room/README.md).
 - **Wish list** and the **Year in Escape Rooms** wrap (now with your #1 teammate).
+- **Visiting friends (Phase 3, server side).** A websocket at `/api/realtime` lets friends share a room live (poses at 10 Hz, emotes, short chat that is never stored, "Mia is in your room" presence), and `GET /api/homes/:handle` returns a friend's room read-only with only what you may already see. Friends only; signed-out visitors get no socket. See [`server/realtime/README.md`](server/realtime/README.md).
 
 ## Configuration
 
@@ -125,6 +126,7 @@ server/                 Fastify server
   auth/                 Better Auth with Google, sessions, handles, account rules
   extract/              Claude and mock extractors, directory hints
   routes/               One module per workstream, listed in routes/registry.ts
+  realtime/             Phase 3: websocket hub for friends' homes (poses, chat, emotes, presence)
   seo/                  Meta and Open Graph tags, robots.txt, sitemap
   static.ts             dist/, the static pages, SPA fallback
 src/

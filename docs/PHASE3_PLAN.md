@@ -147,3 +147,11 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
   view preference.
 - (D) Small shared edits: one route line in `src/router.tsx`, one `<DailyWelcome />` mount in
   `src/App.tsx` (the "welcome home" toast), and a "Play in 3D" link in the door overlay and on `/daily`.
+- (C server) Homes are addressed by @handle; strangers get 403 and a block in either direction 404, so a block never reveals the home exists.
+- (C server) Poses are coalesced server-side and broadcast at 10 Hz per home with a server timestamp: one clock for client interpolation and bounded fan-out.
+- (C server) A visitor sees only visits whose owner review they could already see, no transcripts, crew by public name only (guests become "Guest"), puzzle text and spoiler comments hidden unless `?spoilers=1`: keeps the existing privacy rules intact.
+- (C server) Guests' access is re-checked every 60 s instead of hooking the friends routes: unfriend/block takes effect within a minute without editing workstream 31's files.
+- (C server) Transport pings (20 s) decide dead sockets and a 10-minute silence decides idle ones, because background tabs throttle timers but still answer pings.
+- (C server) Outfits are relayed as a small bounded record until workstream B's `Outfit` schema exists; the integrator can swap it in.
+- (C server) The privacy policy now says friends can visit your room and that presence/position/chat are shared live and not stored: the old "your room: you only" line would have become untrue.
+- (C server) Route contract entries use `ws: 303` (Phase 3, workstream C), since `RouteSpec.ws` is a number.

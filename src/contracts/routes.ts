@@ -65,6 +65,7 @@ import {
   VisitPuzzleInputSchema,
   WishlistItemV2Schema,
 } from './models'
+import { HomeViewSchema, PresenceListSchema } from './realtime'
 import { DatasetSchema, EntryInputSchema, EntrySchema, ReviewDraftSchema } from './types'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -490,6 +491,20 @@ export const ROUTES = {
     method: 'POST', path: '/api/admin/hide', auth: 'admin', ws: 25,
     summary: 'Hide or unhide a review, photo, game or venue directly.',
     body: z.object({ targetType: z.enum(['review', 'photo', 'game', 'venue']), targetId: z.string().min(1), hidden: z.boolean() }), response: Ok,
+  }),
+
+  // -------------------------------------------------------------------------
+  // Phase 3, workstream C: homes and presence (the websocket is REALTIME_PATH in realtime.ts)
+  // -------------------------------------------------------------------------
+  home: route({
+    method: 'GET', path: '/api/homes/:handle', auth: 'user', ws: 303,
+    summary: "A user's room, read-only, for the owner and their accepted friends (403 forbidden for others, 404 unknown or blocked). `?spoilers=1` reveals spoiler text.",
+    params: z.object({ handle: z.string().trim().min(1).max(40) }), query: z.object({ spoilers: z.string().max(8).optional() }), response: HomeViewSchema,
+  }),
+  presence: route({
+    method: 'GET', path: '/api/presence', auth: 'user', ws: 303,
+    summary: 'Which friends are online and where (relative to me), and who is in my home now.',
+    response: PresenceListSchema,
   }),
 } as const satisfies Record<string, RouteSpec>
 

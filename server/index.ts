@@ -9,10 +9,12 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify'
 import fastifyCookie from '@fastify/cookie'
 import fastifyMultipart from '@fastify/multipart'
 import fastifyRateLimit from '@fastify/rate-limit'
+import fastifyWebsocket from '@fastify/websocket'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { authMode, resolveUser } from './auth'
 import { createContext, type AppContext, type DbState } from './context'
+import { REALTIME_LIMITS } from '../src/contracts/realtime'
 import type { DbHandle } from './db/client'
 import { installErrorHandler } from './http'
 import { trustProxyFor } from './proxy'
@@ -64,6 +66,8 @@ export async function buildServer(opts: BuildServerOptions = {}): Promise<Escape
   await app.register(fastifyMultipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 20 } })
   // Opt-in per route: defineRoute(..., { config: { rateLimit: { max, timeWindow } } }).
   await app.register(fastifyRateLimit, { global: false, keyGenerator: rateLimitKey(ctx) })
+  // Websocket routes (server/realtime). Messages over 4 KB close the socket (1009).
+  await app.register(fastifyWebsocket, { options: { maxPayload: REALTIME_LIMITS.MAX_MESSAGE_BYTES } })
   await registerRoutes(app, ctx)
   const distReady = await registerStatic(app, opts.distDir ?? path.join(ROOT, 'dist'), { headTags: (url) => headTagsFor(url, ctx) })
   app.decorate('distReady', distReady)
