@@ -5,7 +5,14 @@ import { useStore } from '@/state/store'
 import { newProgress, type Progress } from '../ui/state'
 import { clearWelcomeNote, readWelcomeNote, takeWelcomeNote, welcomeLine } from '../ui/welcome'
 import { takeArrivingFromDaily } from '../ui/welcomeNote'
-import { THIRD_PERSON } from '@/player/camera'
+import { clearDistance, DESKTOP_RIG, orbitPitch, THIRD_PERSON, thirdPersonOffset, TOUCH_RIG, type CameraRig } from '@/player/camera'
+import { gateColliders } from '@/gate/colliders'
+import { wallColliders } from '@/world/room/layout'
+import { boardColliders } from '@/world/board/colliders'
+import { wishlistColliders } from '@/world/wishlist/colliders'
+import { LIVING_COLLIDERS } from '@/world/props/living/layout'
+import { deskColliders } from '@/world/props/desk/layout'
+import { wrapColliders } from '@/ui/wrap/colliders'
 import { exitTarget, homeArrivalPose, walkHome } from './exit'
 
 const solved: Progress = { ...newProgress('2026-10-28', 3), status: 'solved', startedAt: 1000, finishedAt: 61_000, guesses: [['1', '2', '3']], grid: [['hit', 'hit', 'hit']] }
@@ -29,6 +36,40 @@ describe('leaving the puzzle room', () => {
     // Far enough in that the third-person camera behind you clears the south wall.
     expect(ANCHORS.gateDoor.position[2] - p.position[2]).toBeGreaterThanOrEqual(THIRD_PERSON.distance)
     expect(p.yaw).toBe(0)
+  })
+
+  /** How much of a rig's distance the third-person camera keeps at the arrival pose, with every static collider of the main room. */
+  function keptAtArrival(rig: CameraRig, doorOpen: boolean): number {
+    const p = homeArrivalPose()
+    const pivot: [number, number, number] = [p.position[0], p.position[1] - THIRD_PERSON.pivotDrop, p.position[2]]
+    const want = thirdPersonOffset(p.yaw, orbitPitch(p.pitch, pivot[1], rig), rig.distance, rig.side, rig.up)
+    const boxes = [...wallColliders(), ...gateColliders(doorOpen), ...boardColliders(), ...wishlistColliders(), ...LIVING_COLLIDERS, ...deskColliders(), ...wrapColliders()]
+    return Math.min(1, clearDistance(pivot, want, boxes) / Math.hypot(...want))
+  }
+
+  it('arrives where the third-person camera keeps its full distance, door open or closed', () => {
+    // After a solved day the door leaf stands open into the room: it used to pull the camera to about 2 m.
+    for (const open of [false, true]) {
+      expect(keptAtArrival(DESKTOP_RIG, open)).toBeGreaterThan(0.99)
+      // Touch-screen laptops and tablets that get the 3D room: higher and further back, nearly all of it.
+      expect(keptAtArrival(TOUCH_RIG, open)).toBeGreaterThan(0.9)
+    }
+  })
+
+  it('the open door leaf stays out of a wide (21:9) third-person view at the arrival', () => {
+    const p = homeArrivalPose()
+    const want = thirdPersonOffset(p.yaw, 0, DESKTOP_RIG.distance, DESKTOP_RIG.side, DESKTOP_RIG.up)
+    const cam = [p.position[0] + want[0], p.position[2] + want[2]]
+    const leaf = gateColliders(true).find((b) => b.id === 'gate:door-leaf')!
+    // Horizontal half field of view of a 21:9 screen at the room's 70 degree vertical one: about 59 degrees.
+    const half = Math.atan(Math.tan((35 * Math.PI) / 180) * (21 / 9))
+    for (const x of [leaf.min[0], leaf.max[0]]) {
+      for (const z of [leaf.min[2], leaf.max[2]]) {
+        const ahead = cam[1] - z
+        if (ahead <= 0) continue
+        expect(Math.atan2(Math.abs(x - cam[0]), ahead)).toBeGreaterThan(half)
+      }
+    }
   })
 
   it('walks home: pose, a clean shell, a welcome note and the navigation', () => {
