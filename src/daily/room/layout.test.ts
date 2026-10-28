@@ -113,7 +113,7 @@ describe('third-person camera in the puzzle room', () => {
 
   it('the phone rig is closer and higher than the main room one', () => {
     expect(ROOM_RIGS.touch.distance).toBeLessThan(THIRD_PERSON.distance)
-    expect(ROOM_RIGS.touch.up).toBeGreaterThan(0.5)
+    expect(ROOM_RIGS.touch.up).toBeGreaterThan(THIRD_PERSON.up)
   })
 
   it('the pendant lamp never hides the banner above the door from the spawn', () => {

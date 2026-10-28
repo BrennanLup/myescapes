@@ -50,7 +50,7 @@ export const SPAWN = { position: [0, PLAYER.eyeHeight, 2.4] as Vec3, yaw: 0, pit
  * shared over-the-shoulder rig, a little shorter.
  */
 export const ROOM_RIGS = {
-  touch: { distance: 2.2, side: 0, up: 0.6 },
+  touch: { distance: 2.5, side: 0, up: 0.8 },
   desktop: { distance: 2.4, side: 0.55, up: 0.35 },
 } as const
 
