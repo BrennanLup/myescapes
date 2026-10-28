@@ -105,8 +105,12 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
   const hidden = (photoId: string | null | undefined) => !!photoId && (undo?.photoId === photoId || deleting === photoId || gone.has(photoId))
   const shownExisting = existing.filter((p) => !queued.has(p.id) && !hidden(p.id))
   const shownItems = items.filter((i) => !hidden(i.photo?.id))
-  // A photo in its Undo window still counts: it is on the server until the window ends.
-  const used = existing.filter((p) => !queued.has(p.id) && !gone.has(p.id)).length + items.filter((i) => !(i.status === 'error' && i.permanent)).length
+  // Photos that are in the list (and on the server, or on their way there).
+  const onServer = existing.filter((p) => !queued.has(p.id) && !gone.has(p.id)).length + items.filter((i) => !(i.status === 'error' && i.permanent)).length
+  // A photo in its Undo window (or being deleted) is still on the server, but it is gone from what
+  // you see, so it isn't in "N of 30" either. Picking more photos makes the removal final first.
+  const leaving = new Set([undo?.photoId, deleting].filter((id): id is string => !!id && !gone.has(id)))
+  const used = Math.max(0, onServer - leaving.size)
   const slots = Math.max(0, MAX_PHOTOS_PER_VISIT - used)
   const sum = summarize(shownItems)
   const canRemoveSaved = !editToggle || editing
@@ -122,6 +126,14 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
   const pick = (files: FileList | File[] | null) => {
     const list = files ? [...files] : []
     if (!list.length) return
+    // The photo in its Undo window gave its place to these: its removal is final now.
+    const pending = undoRef.current
+    if (pending) {
+      clearTimeout(undoTimer.current)
+      undoRef.current = null
+      setUndo(null)
+      void commitDelete(pending)
+    }
     const res = addFiles(target, list, { slots })
     setRejected(res.rejected)
     if (input.current) input.current.value = ''
