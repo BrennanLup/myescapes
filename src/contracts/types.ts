@@ -133,6 +133,8 @@ export const WishlistItemSchema = z.object({
   priority: z.number().int(),
   /** Extension beyond the brief: lets the crew mark a wish as done. */
   done: z.boolean().default(false),
+  /** The directory room this wish points at, when picked from the room directory. */
+  gameId: z.string().nullable().optional(),
 })
 export type WishlistItem = z.infer<typeof WishlistItemSchema>
 
