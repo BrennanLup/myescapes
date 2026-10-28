@@ -267,7 +267,7 @@ function DesktopDock({ panel, toggle, close, chatFocus }: { panel: Panel; toggle
 }
 
 function Kbd({ children, on }: { children: ReactNode; on: boolean }) {
-  return <kbd className={`rounded-md border-b-2 px-1.5 font-mono text-[11px] font-semibold ${on ? 'border-white/40 bg-white/15' : 'border-panel-edge bg-paper text-ink-soft'}`}>{children}</kbd>
+  return <kbd className={`rounded-md border-b-2 px-1.5 font-mono text-[11px] font-semibold ${on ? 'border-white/60 bg-white text-ink' : 'border-panel-edge bg-paper text-ink'}`}>{children}</kbd>
 }
 
 function Badge({ n }: { n: number }) {
@@ -438,7 +438,7 @@ function ChatInput({ onClose, focusKey = 0 }: { onClose(): void; focusKey?: numb
           <IconSend width={20} height={20} />
         </button>
       </div>
-      <p aria-live="polite" className={`m-0 px-2 text-xs ${note ? 'text-bad' : 'text-ink-soft'}`}>
+      <p aria-live="polite" className={`m-0 px-2 text-xs ${note ? 'text-bad' : 'text-ink/80'}`}>
         {note ?? (left < 40 ? `${left} characters left` : touch ? 'Never saved' : 'Enter sends · Esc closes · never saved')}
       </p>
     </form>

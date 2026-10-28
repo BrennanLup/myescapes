@@ -96,7 +96,7 @@ export function VisitError({ problem, handle, onRetry }: { problem: VisitProblem
     <main data-testid="visit-error" data-problem={problem} className="flex min-h-full items-center justify-center bg-[linear-gradient(180deg,#4a2f48,var(--color-night)_420px)] bg-no-repeat px-4 py-10">
       <div className="w-full max-w-md rounded-[var(--radius-cozy)] bg-panel p-6 text-center text-ink shadow-[var(--shadow-cozy)]">
         <DoorIcon />
-        <h1 className="m-0 mt-3 font-display text-2xl font-semibold">{copy.title(handle)}</h1>
+        <h1 className="m-0 mt-3 font-display text-2xl font-semibold [overflow-wrap:anywhere] [text-wrap:balance]">{copy.title(handle)}</h1>
         <p className="m-0 mt-2 text-ink-soft">{copy.body}</p>
         <div className="mt-5 flex flex-wrap justify-center gap-3">
           <a href={homeUrl()} data-testid="visit-back" className="inline-flex min-h-11 items-center rounded-full bg-accent px-5 font-display text-base font-semibold text-accent-ink shadow-sm">

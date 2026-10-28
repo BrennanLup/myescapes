@@ -87,7 +87,7 @@ export function CharacterHud() {
           {third ? <IconPerson width={20} height={20} /> : <IconEye width={20} height={20} />}
         </span>
         <span className="text-sm font-bold">{third ? 'Third person' : 'First person'}</span>
-        <kbd className={`rounded-md border-b-2 px-1.5 font-mono text-[11px] font-semibold ${third ? 'border-white/40 bg-white/15' : 'border-panel-edge bg-paper text-ink-soft'}`}>V</kbd>
+        <kbd className={`rounded-md border-b-2 px-1.5 font-mono text-[11px] font-semibold ${third ? 'border-white/60 bg-white text-ink' : 'border-panel-edge bg-paper text-ink'}`}>V</kbd>
       </button>
       <button
         type="button"

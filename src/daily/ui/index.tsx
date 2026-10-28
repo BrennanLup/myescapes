@@ -39,10 +39,12 @@ export function DailyPage(_props: Partial<RouteProps>) {
         <div className="mt-2">
           <PlayIn3D />
         </div>
-        <div className="mt-3 flex-1 rounded-cozy bg-white/60 px-3 py-5 shadow-sm ring-1 ring-panel-edge sm:px-6">
+        {/* The card sizes to its content; the footer takes the leftover height, so a short state
+            (the start screen) doesn't leave a tall empty card. */}
+        <div className="mt-3 rounded-cozy bg-white/60 px-3 py-5 shadow-sm ring-1 ring-panel-edge sm:px-6">
           <DailyGame />
         </div>
-        <footer className="mt-6 flex justify-center gap-4 text-xs text-ink-soft underline">
+        <footer className="mt-auto flex justify-center gap-4 pt-6 text-xs text-ink-soft underline">
           <a href="/about">About</a>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
