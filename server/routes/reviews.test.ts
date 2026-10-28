@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { eq } from 'drizzle-orm'
 import { ReviewPageSchema, ReviewV2Schema } from '../../src/contracts/models'
 import { FX } from '../db/fixtures'
-import { reviews, users } from '../db/schema'
+import { games, reviews, users, venues } from '../db/schema'
 import { decodeCursor, encodeCursor, gameAggregate, gameSummaries, puzzleHighlights } from './reviews.lib'
 import { facts, ratings, socialKit, text, U, type Kit } from './visits.testkit'
 
@@ -121,6 +121,42 @@ describe('change visibility or the spoiler flag', () => {
     expect((await k.api(null, 'GET', `/api/reviews/${R.bobTogether}`)).body.ratings.overall.comment).toBe('Bob thought the ending twist was great.')
     expect((await k.api(U.bob, 'PATCH', `/api/reviews/${R.bobTogether}`, { visibility: 'private' })).status).toBe(200)
     expect((await k.api(U.alice, 'GET', `/api/reviews/${R.bobTogether}`)).status).toBe(404)
+  })
+})
+
+describe('review feed and spoiler filter', () => {
+  it('the feed lists public reviews of every room with the room attached', async () => {
+    const page = ReviewPageSchema.parse((await k.api(null, 'GET', '/api/reviews')).body)
+    expect(page.reviews.map((x) => x.id)).toEqual(expect.arrayContaining([R.aliceTogether, R.carol, R.alicePending]))
+    expect(page.reviews.map((x) => x.id)).not.toContain(R.bobTogether) // friends-only
+    expect(page.reviews.every((x) => x.game)).toBe(true)
+    const vault = page.reviews.find((x) => x.id === R.alicePending)!
+    expect(vault.game).toMatchObject({ id: FX.games.vault, slug: S.vault })
+    // Game pages don't repeat the game on every review.
+    expect(ReviewPageSchema.parse((await k.api(null, 'GET', `/api/games/${S.observatory}/reviews`)).body).reviews[0].game).toBeUndefined()
+  })
+
+  it('filters spoiler-free and spoilers-only, on the feed and on a game page', async () => {
+    const free = ReviewPageSchema.parse((await k.api(U.alice, 'GET', `/api/games/${S.observatory}/reviews?filter=free`)).body)
+    expect(free.reviews.every((x) => !x.containsSpoilers)).toBe(true)
+    expect(free.reviews.map((x) => x.id)).not.toContain(R.bobTogether)
+    const only = ReviewPageSchema.parse((await k.api(U.alice, 'GET', `/api/games/${S.observatory}/reviews?filter=only`)).body)
+    expect(only.reviews.map((x) => x.id)).toEqual([R.bobTogether])
+    const feedOnly = ReviewPageSchema.parse((await k.api(U.alice, 'GET', '/api/reviews?filter=only')).body)
+    expect(feedOnly.reviews.every((x) => x.containsSpoilers)).toBe(true)
+    expect(feedOnly.reviews.map((x) => x.id)).toContain(R.bobTogether)
+    expect((await k.api(null, 'GET', '/api/reviews?filter=nope')).status).toBe(400)
+  })
+
+  it('narrows to a city and leaves out hidden games', async () => {
+    const city = (await k.t.db.select({ c: venues.citySlug }).from(venues).innerJoin(games, eq(games.venueId, venues.id)).where(eq(games.id, FX.games.vault)))[0].c
+    const inCity = ReviewPageSchema.parse((await k.api(null, 'GET', `/api/reviews?city=${city}`)).body)
+    expect(inCity.reviews.length).toBeGreaterThan(0)
+    expect(inCity.reviews.every((x) => x.game?.venueId === FX.venues.starlight)).toBe(true)
+    expect(ReviewPageSchema.parse((await k.api(null, 'GET', '/api/reviews?city=nowhere-xx')).body).reviews).toEqual([])
+    await k.t.db.update(games).set({ status: 'hidden' }).where(eq(games.id, FX.games.vault))
+    const after = ReviewPageSchema.parse((await k.api(null, 'GET', '/api/reviews')).body)
+    expect(after.reviews.map((x) => x.id)).not.toContain(R.alicePending)
   })
 })
 
