@@ -392,7 +392,7 @@ export function PlayerController({ firstPersonOnly = false, rigs }: PlayerContro
         const w = c.crane
         for (let i = 0; i < 3; i++) camPos[i] += (pivot[i] + sm[i] - camPos[i]) * w
         // Keep your look pitch, tilting down at most CRANE.maxTilt (never towards a top-down view).
-        camPitch += (Math.min(camPitch, c.cranePitch) - camPitch) * w
+        camPitch += (Math.max(-CRANE.maxTilt, Math.min(camPitch, c.cranePitch)) - camPitch) * w
         c.distance = Math.hypot(camPos[0] - pivot[0], camPos[1] - pivot[1], camPos[2] - pivot[2])
       }
     } else c.craning = false

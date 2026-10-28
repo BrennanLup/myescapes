@@ -170,9 +170,10 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   const onSuggestion = (game: GameSummary | null) => {
     setSuggested(game)
     if (!game || autoTried.current) return
-    autoTried.current = true
-    // Not while someone is typing in the search box: it would vanish under them.
+    // Not while someone is typing in the search box: it would vanish under them. Try again on the
+    // next suggestion instead of giving up.
     if (document.activeElement?.id === 'cf-room-search') return
+    autoTried.current = true
     if (canAutoLink(formRef.current, game)) pickRoom({ kind: 'game', game }, true)
   }
 
