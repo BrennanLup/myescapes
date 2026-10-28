@@ -14,6 +14,7 @@ import { WishlistBoard } from './wishlist'
 import { GateDoor } from '@/gate'
 import { WrapTrophy } from '@/ui/wrap'
 import { PlayerController } from '@/player'
+import { LocalAvatar } from './avatars'
 import { InteractionSystem } from '@/interaction'
 import { PerfMonitor } from '@/ui/shell'
 
@@ -32,6 +33,7 @@ export function World() {
       <GateDoor />
       <WrapTrophy />
       <PlayerController />
+      <LocalAvatar />
       <InteractionSystem />
       <PerfMonitor />
     </>

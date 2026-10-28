@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { DEFAULT_INTERACT_DISTANCE } from '@/contracts/interaction'
+import { playerView } from '@/player/view'
 import { selectControlsEnabled, useStore } from '@/state/store'
 import { setHoveredSpec } from './controller'
 import { attachInteractionInput } from './input'
@@ -85,6 +86,8 @@ export function InteractionSystem() {
   castRef.current = (ndc) => {
     const st = state.current
     raycaster.setFromCamera(ndc, camera)
+    // Third person: start at the character (reach is from you, and your own body never blocks).
+    if (playerView.rayStart > 0) raycaster.ray.origin.addScaledVector(raycaster.ray.direction, playerView.rayStart)
     raycaster.near = 0
     raycaster.far = st.maxFar + 0.5
     const ray = raycaster.ray
