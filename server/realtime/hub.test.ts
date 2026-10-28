@@ -17,11 +17,24 @@ class Graph implements HubAccess {
   blocked = new Set(['alice|eve'])
   calls = 0
   private key = (a: string, b: string) => [a, b].sort().join('|')
+  /** Users who changed their @handle (id -> their user now). */
+  renamed = new Map<string, PublicUser>()
+  private current(id: string): PublicUser | undefined {
+    return this.renamed.get(id) ?? (U as Record<string, PublicUser>)[id]
+  }
   async homeOwner(handle: string): Promise<HomeOwner | null> {
     this.calls++
     const h = handle.replace(/^@/, '').toLowerCase()
-    const u = (U as Record<string, PublicUser>)[h]
+    const u = Object.keys(U).map((id) => this.current(id)!).find((x) => x.handle?.toLowerCase() === h)
     return u ? { id: u.id, handle: u.handle!, user: u } : null
+  }
+  async homeOwnerById(id: string): Promise<HomeOwner | null> {
+    const u = this.current(id)
+    return u ? { id: u.id, handle: u.handle!, user: u } : null
+  }
+  rename(id: string, handle: string, displayName?: string) {
+    const u = this.current(id)!
+    this.renamed.set(id, { ...u, handle, displayName: displayName ?? u.displayName })
   }
   async visitAccess(viewer: string, owner: string): Promise<VisitAccess> {
     if (viewer === owner) return 'owner'
@@ -397,6 +410,40 @@ describe('realtime hub: state, chat, emotes', () => {
     for (let i = 0; i <= REALTIME_LIMITS.FLOOD_MESSAGES_PER_SECOND; i++) await send(b.conn, { type: 'ping' })
     expect(b.peer.closed?.code).toBe(CLOSE_CODES.FLOOD)
     expect(hub.peopleInHome('alice').map((u) => u.id)).toEqual(['alice'])
+  })
+
+  it('never reports a flood close as the owner asking someone to leave', async () => {
+    const { a, b, send } = await room()
+    for (let i = 0; i <= REALTIME_LIMITS.FLOOD_MESSAGES_PER_SECOND; i++) await send(b.conn, { type: 'ping' })
+    expect(b.peer.last('left')).toMatchObject({ reason: 'disconnected' })
+    expect(a.peer.last('player_left')).toMatchObject({ userId: 'bob', reason: 'disconnected' })
+    expect([...b.peer.of('left'), ...a.peer.of('player_left')].some((m) => m.reason === 'kicked')).toBe(false)
+  })
+
+  it('follows an owner who changes @handle mid-visit: guests reconnecting by the old one still get in', async () => {
+    const { a, b, send, connect, graph, hub } = await room()
+    graph.rename('alice', 'alicia', 'Alicia')
+    // Bob's connection drops and comes back, still knowing only the old address.
+    hub.disconnect(b.conn)
+    const b2 = await connect(U.bob)
+    await send(b2.conn, { type: 'join', home: 'alice' })
+    expect(b2.peer.last('error')).toBeUndefined()
+    expect(b2.peer.last('joined')).toMatchObject({ home: { handle: 'alicia', owner: { displayName: 'Alicia' } } })
+    expect(hub.peopleInHome('alice').map((u) => u.id).sort()).toEqual(['alice', 'bob'])
+    // The new address works too, and the owner's own resync hears the new handle.
+    a.peer.clear()
+    await send(a.conn, { type: 'join', home: 'alicia' })
+    expect(a.peer.last('joined')).toMatchObject({ home: { handle: 'alicia' } })
+  })
+
+  it('does not resolve a stale @handle once nobody is in that home', async () => {
+    const { a, b, send, connect, graph, hub } = await room()
+    graph.rename('alice', 'alicia')
+    hub.disconnect(a.conn)
+    hub.disconnect(b.conn)
+    const b2 = await connect(U.bob)
+    await send(b2.conn, { type: 'join', home: 'alice' })
+    expect(b2.peer.last('error')).toMatchObject({ code: 'not_found' })
   })
 
   it('lets the owner ask a guest to leave, and nobody else', async () => {

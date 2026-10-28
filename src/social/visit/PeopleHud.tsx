@@ -17,7 +17,9 @@ import { useStore } from '@/state/store'
 import { isTypingTarget } from '@/ui/shell/logic'
 import { useShell } from '@/ui/shell/shellStore'
 import { chatSlowDown, kickPlayer, realtimeClient, sendChat, sendEmote } from '@/net/session'
-import { firstName, friendsInOrder, playersInOrder, useRealtime, whereLabel, type ChatLine, type Player } from '@/net/store'
+import { firstName, friendsInOrder, playersInOrder, useRealtime, type ChatLine, type Player } from '@/net/store'
+import { EmoteEcho } from './EmoteEcho'
+import { presenceText } from './presence'
 import { homeUrl, pageNav, setSpoilersShown, spoilersShown, visitUrl } from './state'
 import { IconBack, IconChat, IconCheer, IconClose, IconDance, IconEyeOff, IconHome, IconPeople, IconSend, IconWave } from './icons'
 
@@ -166,7 +168,7 @@ function VisitBanner({ touch }: { touch: boolean }) {
           <span data-testid="visit-banner-title" className="font-bold">
             {wide ? name : shortName}'s room
           </span>
-          <span className="hidden text-ink-soft sm:inline"> · {outside ? joinError.message : 'look around, nothing here changes'}</span>
+          <span className="hidden text-ink-soft sm:inline"> · {outside ? joinError.message : 'look-only'}</span>
         </span>
         <button
           type="button"
@@ -179,6 +181,8 @@ function VisitBanner({ touch }: { touch: boolean }) {
           className={`flex h-9 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition disabled:opacity-50 ${spoilers ? 'bg-warn/25 text-[#8a5d0c]' : 'text-ink-soft hover:bg-[rgba(224,123,57,.12)]'}`}
         >
           <IconEyeOff width={16} height={16} />
+          {/* Phones too: a bare eye-off icon said nothing. The pressed state shows it is on. */}
+          <span className="sm:hidden">Spoilers</span>
           <span className="hidden sm:inline">{spoilers ? 'Spoilers on' : 'Spoilers'}</span>
         </button>
         <button
@@ -208,6 +212,7 @@ function DesktopDock({ panel, toggle, close, chatFocus }: { panel: Panel; toggle
     <div className="pointer-events-none fixed z-30 flex flex-col items-start gap-2 font-body text-ink" style={{ left: SAFE.left, bottom: SAFE.bottom }}>
       {panel === 'people' ? <PeoplePanel onClose={close} className="w-[340px]" /> : null}
       <ConnectionChip touch={false} />
+      <EmoteEcho />
       <ChatArea open={panel === 'chat'} onClose={close} focusKey={chatFocus} />
       <div data-testid="people-dock" className="flex items-center gap-2">
         <button
@@ -461,6 +466,8 @@ function PeoplePanel({ onClose, className = '' }: { onClose(): void; className?:
   const here = useMemo(() => playersInOrder(players), [players])
   const friends = useMemo(() => friendsInOrder(friendsMap), [friendsMap])
   const hereIds = useMemo(() => new Set(here.map((p) => p.user.id)), [here])
+  // Friends already in this room are listed under "Here now": not again under "Visit a friend".
+  const elsewhere = useMemo(() => friends.filter((f) => !hereIds.has(f.user.id)), [friends, hereIds])
   const dialog = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
@@ -531,14 +538,15 @@ function PeoplePanel({ onClose, className = '' }: { onClose(): void; className?:
           {loaded && !friends.length ? (
             <p className="m-0 text-sm text-ink-soft">
               No friends yet.{' '}
-              <a href="/settings#friends" className="font-bold text-teal underline">
+              <a href="/settings#friends" className="font-bold text-[#1f6b67] underline">
                 Invite someone
               </a>{' '}
               to visit each other's rooms.
             </p>
           ) : null}
+          {loaded && friends.length > 0 && !elsewhere.length ? <p className="m-0 text-sm text-ink-soft">All your friends are here with you.</p> : null}
           <ul data-testid="visit-friends" className="m-0 list-none space-y-1 p-0">
-            {friends.map((f) => (
+            {elsewhere.map((f) => (
               <FriendRow key={f.user.id} friend={f} current={visiting?.handle === f.user.handle} withYou={hereIds.has(f.user.id) || (!visiting && f.where === 'your_home')} />
             ))}
           </ul>
@@ -612,10 +620,9 @@ function PersonRow({ user, note, you, action }: { user: PublicUser; note: string
 }
 
 function FriendRow({ friend, current, withYou }: { friend: FriendPresence; current: boolean; withYou: boolean }) {
-  const { user, online, where, homeCount } = friend
+  const { user, online } = friend
   const handle = user.handle
-  const note = withYou && !current ? 'In this room' : online ? whereLabel(where, firstName(user)) : 'Offline'
-  const extra = homeCount > 0 && where !== 'your_home' && !withYou ? ` · ${homeCount} in their room` : ''
+  const note = withYou && !current ? 'In this room' : (presenceText(friend) ?? 'Offline')
   return (
     <li data-testid="visit-friend" data-handle={handle ?? ''} data-online={online ? 'true' : 'false'} className="flex min-h-12 items-center gap-2.5 rounded-xl px-1">
       <MiniAvatar user={user} online={online} />
@@ -624,11 +631,10 @@ function FriendRow({ friend, current, withYou }: { friend: FriendPresence; curre
         <span className="block truncate text-xs text-ink-soft">
           <span className="sr-only">{online ? 'Online. ' : 'Offline. '}</span>
           {note}
-          {extra}
         </span>
       </span>
       {withYou && !current ? (
-        <span data-testid="friend-here" className="shrink-0 px-2 text-xs font-bold text-teal">
+        <span data-testid="friend-here" className="shrink-0 px-2 text-xs font-bold text-[#1f6b67]">
           Here with you
         </span>
       ) : handle && !current ? (
@@ -637,12 +643,12 @@ function FriendRow({ friend, current, withYou }: { friend: FriendPresence; curre
           data-testid="visit-friend-button"
           aria-label={`Visit ${user.displayName}'s room`}
           onClick={() => pageNav.go(visitUrl(handle, { autostart: true }))}
-          className="min-h-9 shrink-0 rounded-full bg-teal px-3.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110 active:scale-95"
+          className="min-h-9 shrink-0 rounded-full bg-[#1f6b67] px-3.5 text-xs font-bold text-white shadow-sm transition hover:brightness-110 active:scale-95"
         >
           Visit
         </button>
       ) : current ? (
-        <span className="shrink-0 px-2 text-xs font-bold text-teal">You're here</span>
+        <span className="shrink-0 px-2 text-xs font-bold text-[#1f6b67]">You're here</span>
       ) : null}
     </li>
   )
@@ -695,6 +701,7 @@ function TouchControls({ panel, toggle, close }: { panel: Panel; toggle(p: Exclu
   return (
     <>
       <div data-testid="people-dock" className="pointer-events-none fixed z-30 flex flex-col items-end gap-2.5" style={pos}>
+        <EmoteEcho />
         <ConnectionChip touch />
         <button type="button" data-testid="people-button" aria-expanded={panel === 'people'} aria-label={`People: ${count ? `${count} here with you` : 'nobody else here'}`} onPointerDown={(e) => e.stopPropagation()} onClick={() => toggle('people')} className={btn(panel === 'people')}>
           <IconPeople width={24} height={24} />

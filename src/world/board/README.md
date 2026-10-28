@@ -37,7 +37,7 @@
   - Seven paper tabs along the top edge (the six Phase 1 sorts in their original places, then Crew; key 7 also picks Crew) use `interactable({ id: 'sort:<key>', kind: 'sort', label: 'Sort by <Label>', maxDistance: 7 })`. The board listens for `bus.on('interact')` and calls `setSort` when one is clicked.
   - The active tab is highlighted orange.
 - **Crew stickers:** up to four round avatar stickers on each photo's bottom-right corner (`drawCrewStickers`, `stickerSlots`): the friend's picture (`avatars.ts`, CORS, no referrer) or coloured initials, pending tags faded, "+N" for bigger crews.
-- **Extras:** a "Sort by:" sticky note, an "N rooms escaped!" counter note, an empty-state note when there are no rooms (signed in: "Your board is empty! Log your first escape at the desk or from your phone."), and one AABB collider for the board.
+- **Extras:** a "Sort by:" sticky note, an "N rooms escaped!" counter note, an empty-state note when there are no rooms (signed in: "Your board is empty! Log your first escape at the desk or from your phone."; in a friend's room: "Vera hasn't pinned any escapes yet!", since visitors can't log there), and one AABB collider for the board.
 
 ## Simplifications
 - When a sort changes, the group label cards pop in fresh instead of flying.

@@ -39,6 +39,19 @@ export async function homeOwnerByHandle(db: Db, rawHandle: string): Promise<Home
   return { id: u.id, handle: u.handle, user: toPublicUser(u) }
 }
 
+/** The onboarded user with this id as a home owner, or null (no handle yet, or gone). */
+export async function homeOwnerById(db: Db, userId: string): Promise<HomeOwner | null> {
+  const u = (
+    await db
+      .select({ id: users.id, handle: users.handle, displayName: users.displayName, name: users.name, image: users.image })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+  )[0]
+  if (!u?.handle || !u.displayName) return null
+  return { id: u.id, handle: u.handle, user: toPublicUser(u) }
+}
+
 /** Can `viewerId` enter `ownerId`'s home? */
 export async function visitAccess(db: Db, viewerId: string, ownerId: string): Promise<VisitAccess> {
   if (viewerId === ownerId) return 'owner'

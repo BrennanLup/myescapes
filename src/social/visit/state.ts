@@ -14,6 +14,8 @@ import { runtime } from '@/contracts/runtime'
 import { ANCHORS } from '@/contracts/scene'
 import { setDataLoader, useStore } from '@/state/store'
 
+import { visitHandleFromPath, visitUrl } from './urls'
+
 export { homeUrl, pageNav, visitHandleFromPath, visitUrl } from './urls'
 
 export type VisitProblem = 'not_found' | 'forbidden' | 'signed_out' | 'unavailable' | 'removed' | 'kicked'
@@ -77,17 +79,37 @@ export function installVisit(handle: string): void {
   runtime.player.position = [...VISITOR_SPAWN]
   runtime.player.yaw = ANCHORS.spawn.rotationY
   setDataLoader(async () => {
+    // The owner may have changed @handle since the page opened (followVisitHandle keeps this current).
+    const current = useStore.getState().visiting?.handle ?? handle
     let view: HomeView
-    if (preloaded?.handle === handle && !spoilers) {
+    if (preloaded?.handle === current && !spoilers) {
       const p = preloaded.promise
       preloaded = null
-      view = await p.catch(() => loadHome(handle, { spoilers }))
+      view = await p.catch(() => loadHome(current, { spoilers }))
     } else {
-      view = await loadHome(handle, { spoilers })
+      view = await loadHome(current, { spoilers })
     }
     useStore.setState({ visiting: { handle: view.owner.handle ?? handle, owner: view.owner } })
     return view.dataset
   })
+}
+
+/**
+ * The realtime server says the room you are visiting now goes by another @handle (its owner just
+ * changed it): reload its data, and share links, by the new one, and show it in the address bar.
+ */
+export function followVisitHandle(ownerId: string, handle: string): void {
+  const v = useStore.getState().visiting
+  if (!v || !handle || v.handle.toLowerCase() === handle.toLowerCase()) return
+  if (v.owner && v.owner.id !== ownerId) return
+  useStore.setState({ visiting: { ...v, handle } })
+  try {
+    if (typeof window !== 'undefined' && visitHandleFromPath(window.location.pathname)) {
+      window.history.replaceState(window.history.state, '', `${visitUrl(handle)}${window.location.search}${window.location.hash}`)
+    }
+  } catch {
+    /* no history (tests) */
+  }
 }
 
 // ---------------------------------------------------------------------------

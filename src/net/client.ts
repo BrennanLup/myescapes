@@ -171,23 +171,31 @@ export class RealtimeClient {
   stop(): void {
     this.clearTimers()
     this.setStatus('idle')
-    const s = this.socket
-    this.socket = null
-    if (s) {
-      s.onclose = s.onmessage = s.onerror = s.onopen = null
-      try {
-        s.close(CLOSE_CODES.NORMAL, 'bye')
-      } catch {
-        /* already closed */
-      }
-    }
+    this.dropSocket()
     this.greeted = false
     this.currentHome = null
+  }
+
+  /** Detach the current socket's handlers and close it (no reconnect follows). */
+  private dropSocket(): void {
+    const s = this.socket
+    this.socket = null
+    if (!s) return
+    s.onclose = s.onmessage = s.onerror = s.onopen = null
+    try {
+      s.close(CLOSE_CODES.NORMAL, 'bye')
+    } catch {
+      /* already closed */
+    }
   }
 
   /** Skip the wait and try now (the network came back, the tab became visible, the person is back). */
   reconnectNow(): void {
     if (this.status !== 'reconnecting' && this.status !== 'paused') return
+    // An attempt is already on its way (the status stays 'reconnecting' until `hello`): a phone
+    // waking up fires 'online' and 'visibilitychange' together, and a second socket here would
+    // be an orphan that steals the sid, doubles every message and takes a per-user slot.
+    if (this.socket) return
     if (this.retryTimer !== null) this.opts.timers.clearTimeout(this.retryTimer)
     this.retryTimer = null
     this.attempt = 0
@@ -324,6 +332,8 @@ export class RealtimeClient {
 
   private connect(status: 'connecting' | 'reconnecting'): void {
     this.setStatus(status)
+    // Never two sockets: detach and close any previous one first (as stop() does).
+    this.dropSocket()
     const url = this.opts.url ?? realtimeUrl()
     let socket: SocketLike
     try {

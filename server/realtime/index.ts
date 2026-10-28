@@ -15,7 +15,7 @@ import { CLOSE_CODES, REALTIME_PATH, type RealtimeOutfit } from '../../src/contr
 import type { AppContext } from '../context'
 import { httpError } from '../http'
 import { outfitForUser } from '../routes/avatar.lib'
-import { acceptedFriendIds, blockedIdsFor, homeOwnerByHandle, visitAccess } from './access'
+import { acceptedFriendIds, blockedIdsFor, homeOwnerByHandle, homeOwnerById, visitAccess } from './access'
 import { RealtimeHub, type HubAccess, type HubLimits } from './hub'
 
 const hubs = new WeakMap<AppContext, RealtimeHub>()
@@ -38,6 +38,7 @@ export function existingHub(ctx: AppContext): RealtimeHub | null {
 export function dbAccess(ctx: AppContext): HubAccess {
   return {
     homeOwner: (handle) => homeOwnerByHandle(ctx.db(), handle),
+    homeOwnerById: (userId) => homeOwnerById(ctx.db(), userId),
     visitAccess: (viewerId, ownerId) => visitAccess(ctx.db(), viewerId, ownerId),
     friendIds: (userId) => acceptedFriendIds(ctx.db(), userId),
     // Others only ever see the look you saved (and so own), never one a client made up.

@@ -32,8 +32,11 @@ export interface Visiting {
   owner: PublicUser | null
 }
 
-/** Overlays that would change the room: closed to visitors (logging a room, the wish list). */
-export const VISITOR_BLOCKED_OVERLAYS: ReadonlySet<Overlay['kind']> = new Set(['record', 'confirm', 'wishlist'])
+/**
+ * Overlays closed to visitors: the ones that would change the room (logging a room, the wish
+ * list), and the Wrapped story, which speaks to its owner ("Your year...") about their rooms.
+ */
+export const VISITOR_BLOCKED_OVERLAYS: ReadonlySet<Overlay['kind']> = new Set(['record', 'confirm', 'wishlist', 'wrap'])
 
 /** Where the room's data comes from: your own room, or a friend's while visiting. */
 let dataLoader: () => Promise<Dataset> = () => apiClient.getData()
