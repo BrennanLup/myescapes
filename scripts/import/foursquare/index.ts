@@ -22,6 +22,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { COUNTRY_CODES, COUNTRY_NAMES } from '../countries'
 import type { RawPlace, Region } from '../types'
 import { REGIONS } from '../types'
 
@@ -37,11 +38,10 @@ export const FSQ_SOURCE_COOP_BASE = `https://s3.us-west-2.amazonaws.com/us-west-
 export const FSQ_HF_DATASET = 'foursquare/fsq-os-places'
 
 /**
- * Regions this importer covers: the shared list (US, Canada, then major cities in Europe, Asia
- * and Australia) plus more big escape-room cities. Bboxes are [south, west, north, east].
+ * City regions beyond the shared list: more big escape-room cities. Bboxes are
+ * [south, west, north, east].
  */
-export const FSQ_REGIONS: Region[] = [
-  ...REGIONS,
+export const FSQ_CITY_REGIONS: Region[] = [
   { id: 'gb-manchester', name: 'Manchester', country: 'GB', bbox: [53.34, -2.42, 53.58, -2.08] },
   { id: 'ie-dublin', name: 'Dublin', country: 'IE', bbox: [53.22, -6.45, 53.45, -6.04] },
   { id: 'pt-lisbon', name: 'Lisbon', country: 'PT', bbox: [38.68, -9.25, 38.81, -9.09] },
@@ -71,6 +71,26 @@ export const FSQ_REGIONS: Region[] = [
   { id: 'nz-auckland', name: 'Auckland', country: 'NZ', bbox: [-37.1, 174.6, -36.7, 175.0] },
 ]
 
+/** A whole-country region: id is the lowercase ISO code (`gb`, `de`), so `us` and `ca` keep theirs. */
+export function countryRegion(country: string): Region {
+  return { id: country.toLowerCase(), name: COUNTRY_NAMES[country] ?? country, country, unifyCities: true }
+}
+
+/**
+ * Every country without a whole-country region yet (all but the US and Canada), in code order.
+ * A place in a city region's bbox stays in the city region (see `regionForPlace`); the rest of
+ * the country lands here, so every escape room worldwide has a region. Countries with no escape
+ * rooms produce no file.
+ */
+export const FSQ_COUNTRY_REGIONS: Region[] = COUNTRY_CODES.filter((cc) => !REGIONS.some((r) => r.country === cc && !r.bbox)).map(countryRegion)
+
+/**
+ * Regions this importer covers, in seed order: the shared list (US, Canada, then major cities in
+ * Europe, Asia and Australia), more big cities, then every other country. New regions go at the
+ * end so existing ones keep their order (and their venues' slugs).
+ */
+export const FSQ_REGIONS: Region[] = [...REGIONS, ...FSQ_CITY_REGIONS, ...FSQ_COUNTRY_REGIONS]
+
 /** The Parquet columns the importer reads for a matching row group. */
 export const PLACE_COLUMNS = [
   'fsq_place_id', 'name', 'latitude', 'longitude', 'address', 'locality', 'post_town', 'region', 'admin_region',
@@ -79,7 +99,7 @@ export const PLACE_COLUMNS = [
 export const CATEGORY_COLUMN = 'fsq_category_ids'
 export const CATEGORY_LABEL_COLUMN = 'fsq_category_labels'
 /** Bump when the matching rules change, so cached per-file results are re-read. */
-export const SCAN_RULES_VERSION = 2
+export const SCAN_RULES_VERSION = 4
 
 export type FsqRow = Partial<Record<(typeof PLACE_COLUMNS)[number], unknown>> & {
   fsq_category_ids?: unknown
@@ -98,22 +118,58 @@ export function isEscapeRoom(ids: unknown, labels?: unknown): boolean {
 
 /**
  * Many escape rooms sit in older or broader categories ("Entertainment Service", "Arcade", no
- * category at all). A name that says so ("... Escape Room", "Escape Game ...", "방탈출", "脱出ゲーム")
- * counts too, unless its categories say it is something else (a bar, a hotel, a shop...).
+ * category at all). A name that says so ("... Escape Room", "Escape Game ...", "방탈출", "脱出ゲーム",
+ * "Evden Kaçış Oyunu", "Szabadulószoba", "Úniková hra", "Pokój zagadek", "חדר בריחה") counts
+ * too, unless its categories say it is something else (a bar, a hotel, a shop...).
  */
 export const ESCAPE_NAME_RE =
-  /\b(escape[\s-]?rooms?|escape[\s-]?games?|room[\s-]?escapes?|escapology|escape[\s-]?hunt|exit[\s-]?games?|puzzle[\s-]?rooms?|breakout[\s-]?games|mystery[\s-]?rooms?|all in adventures|escape[\s-]?(house|zone|quest|rush|experience|experiences|adventures?|challenge|mansion|factory|artist|the room)|salle d'?[eé]vasion|escape[\s-]?(salle|spiel)|fluchtspiel|raum[\s-]?flucht|sala de escape|quest[\s-]?room)\b|방탈출|脱出ゲーム|リアル脱出|謎解き|密室逃[脱脫]|密室|實境解謎|实景解谜/i
-/** Categories that rule out a name match ("Great Escape Pub", "Escape Room Supplies Store"). */
-export const NOT_ESCAPE_LABEL_RE = /^(Dining and Drinking|Retail|Travel and Transportation|Health and Medicine|Landmarks and Outdoors|Sports and Recreation > (Gym|Golf)|Business and Professional Services > (Real Estate|Health|Automotive|Financial|Legal)|Arts and Entertainment > (Movie Theater|Museum|Performing Arts Venue|Strip Club|Night ?club))/i
+  /\b(escape[\s-]?rooms?|escape[\s-]?games?|room[\s-]?escapes?|escapology|escape[\s-]?hunt|exit[\s-]?games?|puzzle[\s-]?rooms?|breakout[\s-]?games|mystery[\s-]?rooms?|all in adventures|escape[\s-]?(house|zone|quest|rush|experience|experiences|adventures?|challenge|mansion|factory|artist|the room)|salle d'?[eé]vasion|escape[\s-]?(salle|spiel)|fluchtspiel|raum[\s-]?flucht|salas? de escape|quest[\s-]?rooms?)\b|fluchtr[aä]um|r[aä]tselr[aä]um|ka[çc][ıi][şs] oyun|szabadul[oó]s[\s-]?(szoba|j[aá]t[eé]k)|szabadul[oó]szob|kijut[oó]s j[aá]t[eé]k|[uú]nikov[aá] (hra|m[ií]stnost)|[uú]nikovk|pok[oó]j zagad|חדר בריחה|эскейп[\s-]?рум|방탈출|脱出ゲーム|リアル脱出|謎解き|密室逃[脱脫]|密室|實境解謎|实景解谜/i
 
-export function nameLooksLikeEscapeRoom(name: unknown): boolean {
-  return typeof name === 'string' && ESCAPE_NAME_RE.test(name)
+/**
+ * Names that usually mean an escape room but are also used for other things: Russian/Ukrainian
+ * "Квест" (also any quiz or city game), "Exit Room" and "Locked Room" (also meeting rooms),
+ * "Live Escape", "Real Escape", "Enigma Room", Japanese "脱出" alone. These count only with an
+ * entertainment category (or, for "Квест ...", with no category at all).
+ */
+export const WEAK_ESCAPE_NAME_RE =
+  /(?<![\p{L}\p{N}])(квест(ы|ов|а|ам|ами|ах)?(?!\p{L})|exit[\s-]?rooms?|exit the room|locked[\s-]?rooms?|live[\s-]?escape|real[\s-]?escape|enigma[\s-]?rooms?)|脱出/iu
+/**
+ * The weak names that may also count with no category at all: "Квест ..." (Russian listings
+ * often have none), but not a bare "КВЕСТ" (usually a company of that name).
+ */
+const WEAK_UNCATEGORISED_RE = /(?<![\p{L}\p{N}])квест(ы|ов|а|ам|ами|ах)?(?!\p{L})/iu
+
+/** Categories that rule out a name match ("Great Escape Pub", "Escape Room Supplies Store"). */
+export const NOT_ESCAPE_LABEL_RE =
+  /^(Dining and Drinking|Retail|Travel and Transportation|Health and Medicine|Landmarks and Outdoors|Sports and Recreation > (Gym|Golf)|Business and Professional Services > (Real Estate|Health|Automotive|Financial|Legal)|Arts and Entertainment > (Movie Theater|Museum|Performing Arts Venue|Strip Club|Night ?club|Zoo)|Community and Government > Residential Building)/i
+
+/** Categories a weak name match needs (one of them). */
+export const ENTERTAINMENT_LABEL_RE =
+  /^(Arts and Entertainment|Sports and Recreation|Event|Business and Professional Services > (Entertainment Service|Event Space|Event Service))/i
+
+/** "strong": the name alone says escape room; "weak": only with fitting categories; null: no. */
+export function escapeNameMatch(name: unknown): 'strong' | 'weak' | null {
+  if (typeof name !== 'string') return null
+  if (ESCAPE_NAME_RE.test(name)) return 'strong'
+  return WEAK_ESCAPE_NAME_RE.test(name) ? 'weak' : null
 }
 
-/** A name match is kept unless every category it has is one that rules it out. */
-export function categoriesAllowNameMatch(labels: unknown): boolean {
-  if (!Array.isArray(labels) || !labels.length) return true
-  return !labels.every((l) => typeof l === 'string' && NOT_ESCAPE_LABEL_RE.test(l))
+export function nameLooksLikeEscapeRoom(name: unknown): boolean {
+  return escapeNameMatch(name) != null
+}
+
+/**
+ * A name match is kept unless every category it has is one that rules it out. A weak name
+ * match (pass the name) needs an entertainment category instead, or for "Квест ..." none.
+ */
+export function categoriesAllowNameMatch(labels: unknown, name?: unknown): boolean {
+  const list = Array.isArray(labels) ? labels.filter((l): l is string => typeof l === 'string') : []
+  if (typeof name === 'string' && escapeNameMatch(name) === 'weak') {
+    if (list.length) return list.some((l) => ENTERTAINMENT_LABEL_RE.test(l))
+    return WEAK_UNCATEGORISED_RE.test(name) && !/^\P{L}*квест\P{L}*$/iu.test(name)
+  }
+  if (!list.length) return true
+  return !list.every((l) => NOT_ESCAPE_LABEL_RE.test(l))
 }
 
 const str = (v: unknown): string | null => {
@@ -160,14 +216,18 @@ export function inBbox(lat: number | null, lng: number | null, bbox: [number, nu
   return lat >= s && lat <= n && lng >= w && lng <= e
 }
 
-/** The first region a place belongs to (city regions need the point inside the bbox). */
+/**
+ * The region a place belongs to: the first city region of its country whose bbox holds it, else
+ * its country's whole-country region, else null.
+ */
 export function regionForPlace(p: Pick<RawPlace, 'country' | 'lat' | 'lng'>, regions: readonly Region[]): Region | null {
+  let country: Region | null = null
   for (const r of regions) {
     if (r.country !== p.country) continue
-    if (r.bbox && !inBbox(p.lat, p.lng, r.bbox)) continue
-    return r
+    if (!r.bbox) country ??= r
+    else if (inBbox(p.lat, p.lng, r.bbox)) return r
   }
-  return null
+  return country
 }
 
 export interface RowGroupStats {
@@ -223,9 +283,7 @@ export interface ScanProgress {
   cached: boolean
 }
 
-export interface ScanOptions {
-  /** Row groups read in parallel within a file (default 4). */
-  concurrency?: number
+export interface ScanOptions extends ScanFileOptions {
   /** Per-file results cache folder (resumable runs). */
   cacheDir?: string
   onProgress?(p: ScanProgress): void
@@ -246,8 +304,23 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) 
   return out
 }
 
+export interface ScanFileOptions {
+  /** Row groups read in parallel within a file (default 4). */
+  concurrency?: number
+  /**
+   * Regions a place is assigned with (default `regions`). With the full list, a run for `gb`
+   * alone still leaves London's venues to `gb-london`: places are assigned against every region
+   * and only those landing in `regions` are kept.
+   */
+  classifyWith?: readonly Region[]
+  /** Called for an escape room that no region takes (a country code with no region). */
+  onUnassigned?(place: RawPlace): void
+}
+
 /** Escape rooms of one Parquet file, tagged with their region. */
-export async function scanFile(reader: ParquetFileReader, regions: readonly Region[], opts: { concurrency?: number } = {}): Promise<{ hits: ScanHit[]; read: number; skipped: number }> {
+export async function scanFile(reader: ParquetFileReader, regions: readonly Region[], opts: ScanFileOptions = {}): Promise<{ hits: ScanHit[]; read: number; skipped: number }> {
+  const wanted = new Set(regions.map((r) => r.id))
+  const classifyWith = opts.classifyWith ?? regions
   const groups = reader.rowGroups.filter((rg) => rowGroupMayMatch(rg, regions))
   const perGroup = await mapLimit(groups, opts.concurrency ?? 4, async (rg) => {
     const cats = await reader.read([CATEGORY_COLUMN, 'name'], rg.rowStart, rg.rowEnd)
@@ -268,12 +341,13 @@ export async function scanFile(reader: ParquetFileReader, regions: readonly Regi
     const hits: ScanHit[] = []
     for (const i of matches) {
       const row = rows[i - first] as FsqRow
-      if (byName.has(i) && !categoriesAllowNameMatch(row[CATEGORY_LABEL_COLUMN])) continue
+      if (byName.has(i) && !categoriesAllowNameMatch(row[CATEGORY_LABEL_COLUMN], row.name)) continue
       const place = rowToRawPlace(row)
       if (!place) continue
       if (byName.has(i)) place.raw.matched_by = 'name'
-      const region = regionForPlace(place, regions)
-      if (region) hits.push({ regionId: region.id, place })
+      const region = regionForPlace(place, classifyWith)
+      if (!region) opts.onUnassigned?.(place)
+      else if (wanted.has(region.id)) hits.push({ regionId: region.id, place })
     }
     return hits
   })
@@ -284,7 +358,8 @@ export async function scanFile(reader: ParquetFileReader, regions: readonly Regi
 export async function* scanFoursquare(source: ParquetSource, regions: readonly Region[], opts: ScanOptions = {}): AsyncGenerator<ScanHit> {
   let files = await source.listFiles()
   if (opts.maxFiles != null) files = files.slice(0, opts.maxFiles)
-  const regionKey = `v${SCAN_RULES_VERSION}:${regions.map((r) => r.id).sort().join(',')}`
+  const ids = (rs: readonly Region[]) => rs.map((r) => r.id).sort().join(',')
+  const regionKey = `v${SCAN_RULES_VERSION}:${ids(regions)}${opts.classifyWith ? `|${ids(opts.classifyWith)}` : ''}`
   for (let fi = 0; fi < files.length; fi++) {
     const file = files[fi]
     const cacheFile = opts.cacheDir ? path.join(opts.cacheDir, `${file.replace(/[^A-Za-z0-9._-]+/g, '_')}.json`) : null
@@ -305,7 +380,7 @@ export async function* scanFoursquare(source: ParquetSource, regions: readonly R
     }
     if (!hits) {
       const reader = await source.open(file)
-      const r = await scanFile(reader, regions, { concurrency: opts.concurrency })
+      const r = await scanFile(reader, regions, opts)
       hits = r.hits
       read = r.read
       skipped = r.skipped
@@ -454,7 +529,7 @@ function argValue(args: string[], name: string): string | undefined {
 
 async function main() {
   const args = process.argv.slice(2)
-  const { buildSeeds, writeSeeds, DEFAULT_SEED_DIR } = await import('../dedupe')
+  const { buildSeeds, writeSeeds, seedPrimaryIds, seedSlugsById, DEFAULT_SEED_DIR } = await import('../dedupe')
   const regionArg = argValue(args, '--region')
   const regions = args.includes('--all') || !regionArg ? FSQ_REGIONS : FSQ_REGIONS.filter((r) => regionArg.split(',').includes(r.id))
   if (!regions.length) throw new Error(`unknown region "${regionArg}". Known: ${FSQ_REGIONS.map((r) => r.id).join(', ')}`)
@@ -465,8 +540,12 @@ async function main() {
   console.log(`[fsq] Scanning ${base === 'hf' ? `Hugging Face ${FSQ_HF_DATASET}` : base} for ${regions.length} regions...`)
   const started = Date.now()
   const byRegion = new Map<string, RawPlace[]>()
+  const unassigned = new Map<string, number>()
   for await (const hit of scanFoursquare(httpParquetSource({ base, hfToken: process.env.HF_TOKEN }), regions, {
     cacheDir,
+    // Assign against every region, so `--region gb` leaves London's venues to gb-london.
+    classifyWith: FSQ_REGIONS,
+    onUnassigned: (p) => unassigned.set(p.country, (unassigned.get(p.country) ?? 0) + 1),
     concurrency: Number(argValue(args, '--concurrency') ?? 4),
     maxFiles: maxFiles ? Number(maxFiles) : undefined,
     onProgress: (p) =>
@@ -476,7 +555,14 @@ async function main() {
     list.push(hit.place)
     byRegion.set(hit.regionId, list)
   }
-  const seeds = buildSeeds(regions, byRegion)
+  if (unassigned.size) console.warn(`[fsq] Escape rooms in countries with no region (skipped): ${[...unassigned].map(([c, n]) => `${c} ${n}`).join(', ')}`)
+  // Venues keep the slugs and primary records they had in the committed seed (URLs and database
+  // rows never change on a re-run).
+  const seeds = buildSeeds(regions, byRegion, {
+    previousSlugs: seedSlugsById(outDir),
+    previousPrimaries: seedPrimaryIds(outDir),
+    cityRegions: FSQ_REGIONS.filter((r) => r.bbox),
+  })
   const manifest = writeSeeds(outDir, seeds, { merge: !args.includes('--all') })
   console.log(`[fsq] Wrote ${seeds.length} region seeds to ${outDir} (version ${manifest.version}).`)
   for (const r of manifest.regions) console.log(`  ${r.id.padEnd(16)} ${String(r.venues).padStart(6)} venues  ${String(r.read).padStart(6)} read  ${String(r.merged).padStart(5)} merged  ${r.cities} cities`)

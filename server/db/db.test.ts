@@ -175,6 +175,12 @@ describe('util', () => {
     expect(slugify('Maple & Key: Haunted Lighthouse!')).toBe('maple-and-key-haunted-lighthouse')
     expect(slugify('Café Évasion')).toBe('cafe-evasion')
     expect(slugify('???')).toBe('item')
+    // Cyrillic, Greek and the Latin letters NFKD leaves whole are transliterated.
+    expect(slugify('Квест-комната "Тайник"')).toBe('kvest-komnata-tainik')
+    expect(slugify('Θεσσαλονίκη')).toBe('thessaloniki')
+    expect(slugify('Evden Kaçış Oyunu')).toBe('evden-kacis-oyunu')
+    expect(slugify('Łódź Straße')).toBe('lodz-strasse')
+    expect(citySlug('Москва', '', 'RU')).toBe('moskva-ru')
     expect(citySlug('San Francisco', 'CA', 'US')).toBe('san-francisco-ca-us')
     expect(citySlug('‘Aiea', 'HI', 'US')).toBe('aiea-hi-us')
     expect(citySlug('Itemville', 'TX', 'US')).toBe('itemville-tx-us')
