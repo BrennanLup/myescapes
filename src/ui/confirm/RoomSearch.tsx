@@ -111,7 +111,9 @@ export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function
               // With a phone keyboard up, bring the field to the top so the results fit under it.
               const el = e.currentTarget
               setTimeout(() => {
-                if (document.activeElement === el && keyboardInset() > 0) el.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+                // Read the element's own document/window: the page may be gone when the timer fires.
+                const win = el.ownerDocument?.defaultView
+                if (win && el.ownerDocument.activeElement === el && keyboardInset(win) > 0) el.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
               }, 420)
             },
           }}
