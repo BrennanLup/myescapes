@@ -21,7 +21,7 @@ import { callApi, ROUTES } from '@/contracts/routes'
 import { runtime } from '@/contracts/runtime'
 import { playerView, useCameraMode } from '@/player/view'
 import { useStore } from '@/state/store'
-import { endVisit } from '@/social/visit/state'
+import { endVisit, followVisitHandle } from '@/social/visit/state'
 import { useShell } from '@/ui/shell/shellStore'
 import { useWardrobe } from '@/ui/wardrobe/store'
 import { RealtimeClient, type SendResult } from './client'
@@ -151,6 +151,7 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
         if (p.state) poseBuffer(p.sid).push(msg.serverTime, p.state)
       }
       set({ home: { handle: msg.home.handle, owner: msg.home.owner, isOwner: msg.isOwner }, sid: msg.sid, players, joinError: null, bubbles: {}, emotes: {} })
+      if (!msg.isOwner) followVisitHandle(msg.home.owner.id, msg.home.handle)
       return
     }
     case 'left': {

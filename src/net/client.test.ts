@@ -181,6 +181,41 @@ describe('RealtimeClient', () => {
     expect(FakeSocket.all).toHaveLength(2)
   })
 
+  it('keeps one socket when asked to reconnect twice before the first attempt opens (phone waking up)', () => {
+    const c = make()
+    c.join('mia')
+    c.start()
+    last().open()
+    last().serverSays(hello('s1'))
+    last().drop()
+    // 'online' and 'visibilitychange' fire together.
+    c.reconnectNow()
+    c.reconnectNow()
+    expect(FakeSocket.all).toHaveLength(2)
+    const live = last()
+    live.open()
+    live.serverSays(hello('s2'))
+    expect(c.sid).toBe('s2')
+    expect(c.status).toBe('open')
+    // The backoff timer from the drop was cancelled: no third socket later either.
+    vi.advanceTimersByTime(BACKOFF_MS[BACKOFF_MS.length - 1] * 2)
+    expect(FakeSocket.all).toHaveLength(2)
+    expect(live.sent.filter((m) => m.type === 'join')).toHaveLength(1)
+  })
+
+  it('closes and detaches an earlier socket if a new connection is ever opened over it', () => {
+    const c = make()
+    c.start()
+    const first = last()
+    // Force a second connect while the first is still handshaking (defence in depth).
+    ;(c as unknown as { connect(s: string): void }).connect('reconnecting')
+    expect(FakeSocket.all).toHaveLength(2)
+    expect(first.closedWith).toBe(CLOSE_CODES.NORMAL)
+    expect(first.onmessage).toBeNull()
+    first.serverSays(hello('orphan'))
+    expect(c.sid).toBeNull()
+  })
+
   it('slows down when the socket never opens (signed out, server down)', () => {
     const c = make()
     c.start()

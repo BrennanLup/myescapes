@@ -57,6 +57,11 @@ export interface Peer {
 
 export interface HubAccess {
   homeOwner(handle: string): Promise<HomeOwner | null>
+  /**
+   * The owner behind a user id. Used when a join names a home by an @handle its owner has just
+   * changed (a guest reconnecting mid-visit still knows only the old one). Unset: no fallback.
+   */
+  homeOwnerById?(userId: string): Promise<HomeOwner | null>
   visitAccess(viewerId: string, ownerId: string): Promise<VisitAccess>
   friendIds(userId: string): Promise<Set<string>>
   /**
@@ -172,8 +177,9 @@ export class Home {
   readonly members = new Map<string, Connection>()
   constructor(
     readonly ownerId: string,
-    readonly handle: string,
-    readonly owner: PublicUser,
+    /** Refreshed on every join: the owner can change their @handle or name while people are inside. */
+    public handle: string,
+    public owner: PublicUser,
   ) {}
 }
 
@@ -342,7 +348,9 @@ export class RealtimeHub {
     }
     if (++conn.floodCount > this.limits.FLOOD_MESSAGES_PER_SECOND) {
       this.log(`[realtime] ${conn.user.handle ?? conn.user.id} closed for flooding`)
-      this.close(conn, CLOSE_CODES.FLOOD, 'too many messages', 'kicked')
+      // 'disconnected', not 'kicked': only a real "Ask to leave" from the owner may say the owner
+      // asked someone to leave. The client reconnects (with backoff) and walks back in.
+      this.close(conn, CLOSE_CODES.FLOOD, 'too many messages', 'disconnected')
       return
     }
     if (raw.length > this.limits.MAX_MESSAGE_BYTES) return this.error(conn, 'invalid', 'Message too large.')
@@ -454,7 +462,7 @@ export class RealtimeHub {
     const wait = conn.join.take(now)
     if (wait) return this.error(conn, 'rate_limited', 'Too many joins. Wait a moment.', 'join', wait)
     const seq = ++conn.joinSeq
-    const owner = await this.access.homeOwner(handle)
+    const owner = await this.lookupOwner(handle)
     if (conn.closed || seq !== conn.joinSeq) return
     if (!owner) return this.error(conn, 'not_found', 'There is no room with that @handle.', 'join')
     const outfitSeq = ++conn.outfitSeq
@@ -478,6 +486,7 @@ export class RealtimeHub {
       const mins = Math.max(1, Math.ceil((kickedUntil - now) / 60_000))
       return this.error(conn, 'forbidden', `${owner.user.displayName} asked you to leave. You can come back in ${mins} min.`, 'join', kickedUntil - now)
     }
+    if (home) this.refreshHome(home, owner)
     if (conn.home && conn.home === home) {
       // Already there: take the pose and outfit it sent, let the others see them, and answer
       // again so a reconnecting client can resync.
@@ -507,6 +516,7 @@ export class RealtimeHub {
       home = new Home(owner.id, owner.handle, owner.user)
       this.homes.set(owner.id, home)
     }
+    this.refreshHome(home, owner)
     // Only now that the join can't fail: a refused join must not change the pose used where it is.
     if (outfit) conn.outfit = outfit
     if (state) {
@@ -520,6 +530,26 @@ export class RealtimeHub {
     this.broadcast(home, { type: 'player_joined', player: this.remote(conn) }, conn, conn)
     if (home.ownerId !== conn.user.id) this.notifyOwner(home, conn.user, true)
     this.announce(conn.user)
+  }
+
+  /**
+   * The owner of the home `handle` names. When no user has that @handle any more but a home that
+   * is open right now still goes by it (its owner just changed handle while people were inside),
+   * that home's owner is looked up by id instead, so guests reconnecting mid-visit are not turned
+   * away as "no such room". Access is still checked afterwards as for any join.
+   */
+  private async lookupOwner(handle: string): Promise<HomeOwner | null> {
+    const owner = await this.access.homeOwner(handle)
+    if (owner || !this.access.homeOwnerById) return owner
+    const wanted = handle.trim().replace(/^@/, '').toLowerCase()
+    const stale = [...this.homes.values()].find((h) => h.handle.toLowerCase() === wanted)
+    return stale ? this.access.homeOwnerById(stale.ownerId) : null
+  }
+
+  /** Keep an open home's address and owner card in step with the owner's profile. */
+  private refreshHome(home: Home, owner: HomeOwner): void {
+    home.handle = owner.handle
+    home.owner = owner.user
   }
 
   /** Take a connection out of its home, telling it and everyone else there. */
