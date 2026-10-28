@@ -32,4 +32,4 @@ title reads "Robin's escapes" and the phone controls hint and toasts sit below t
 ## Tests
 
 `FriendsOnline.test.tsx`: the phone row. `visit.test.tsx`: addresses, the read-only store, the notices, the route's sign-in, error and own-room
-cases, and the people HUD on desktop and touch. End to end: `e2e/multiplayer.spec.ts`.
+cases (and the room closing when you are removed or asked to leave), and the people HUD on desktop and touch. End to end: `e2e/multiplayer.spec.ts` and `e2e/multiplayer-leave.spec.ts` (the phone's Friends online row, Ask to leave closing the room and holding after the home empties).
