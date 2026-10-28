@@ -11,6 +11,7 @@ import { useCameraMode } from '@/player/view'
 import { interactHovered, useInteraction } from './controller'
 import { touchPrompt } from './logic'
 import { useShell } from '@/ui/shell/shellStore'
+import { visitorPromptLabel } from '@/social/visit/notices'
 
 /** Pointer lock happened at least once on this page. */
 let everLocked = false
@@ -21,6 +22,7 @@ export function Reticle() {
   const isTouch = useStore((s) => s.isTouch)
   const storeLocked = useStore((s) => s.pointerLocked)
   const hovered = useInteraction((s) => s.hovered)
+  const visiting = useStore((s) => s.visiting)
   const docLocked = useInteraction((s) => s.locked)
   const locked = storeLocked || docLocked
   // The controls hint card already explains click-to-look and sits in the same spot.
@@ -37,6 +39,8 @@ export function Reticle() {
 
   const third = useCameraMode((s) => s.mode === 'third')
   const active = !!hovered
+  // In a friend's room the desk, wish list and trophy say whose they are (look only).
+  const label = hovered ? visitorPromptLabel(hovered, visiting) : ''
   const corner = isTouch && third
   const cornerAt = useCornerBottom(corner && active && !overlay && worldReady)
 
@@ -74,7 +78,7 @@ export function Reticle() {
           >
             E
           </kbd>
-          <span>{hovered.label}</span>
+          <span>{label}</span>
         </div>
       )}
 
@@ -85,17 +89,17 @@ export function Reticle() {
           style={{ right: 'max(14px, env(safe-area-inset-right))', bottom: cornerAt === null ? CORNER_FALLBACK : cornerAt }}
         >
           <span className="max-w-[min(260px,70vw)] truncate rounded-full bg-panel/95 px-3 py-1 font-display text-[15px] font-medium text-ink shadow-[0_4px_12px_rgba(40,20,20,0.3)]">
-            {hovered.label}
+            {label}
           </span>
-          <TapButton label={hovered.label} />
+          <TapButton label={label} />
         </div>
       )}
 
       {active && isTouch && !corner && (
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 translate-y-8 flex-col items-center gap-2">
-          <TapButton label={hovered.label} />
+          <TapButton label={label} />
           <span className="whitespace-nowrap rounded-full bg-panel/95 px-3 py-1 font-display text-[15px] font-medium text-ink shadow-[0_4px_12px_rgba(40,20,20,0.3)]">
-            {hovered.label}
+            {label}
           </span>
         </div>
       )}

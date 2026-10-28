@@ -11,9 +11,9 @@ import { useStore } from '@/state/store'
 import { resetShellForTests, useShell } from '@/ui/shell/shellStore'
 import { installBridge } from '@/state/bridge'
 import { HomeVisitPage } from './HomeVisitPage'
-import { installVisitNotices } from './notices'
+import { installVisitNotices, visitorPromptLabel } from './notices'
 import { PeopleHud } from './PeopleHud'
-import { endVisit, installVisit, pageNav, resetVisitForTests, useVisitEnded, visitHandleFromPath, visitProblem, visitUrl, VISITOR_SPAWN } from './state'
+import { endVisit, followVisitHandle, installVisit, pageNav, resetVisitForTests, useVisitEnded, visitHandleFromPath, visitProblem, visitUrl, VISITOR_SPAWN } from './state'
 
 vi.mock('../../desktop', () => ({ DesktopApp: () => <div data-testid="desktop-room" /> }))
 
@@ -95,6 +95,42 @@ describe("a friend's room is read-only", () => {
     expect(useShell.getState().toast?.text).toBe("This is Robin's room, so it's look-only. Log rooms and wishes in your own.")
     off()
     offBridge()
+  })
+
+  it("keeps the owner's Wrapped closed and says why", () => {
+    const offBridge = installBridge()
+    const off = installVisitNotices()
+    useStore.setState({ visiting: { handle: 'robin', owner: host } })
+    bus.emit('wrap:open')
+    expect(useStore.getState().overlay).toBeNull()
+    expect(useShell.getState().toast?.text).toBe("Robin's Wrapped is theirs to open. Yours is on the shelf in your own room.")
+    off()
+    offBridge()
+  })
+
+  it('labels the desk, wish list and trophy as look-only while visiting', () => {
+    const desk = { id: 'desk', kind: 'desk' as const, label: 'Log a new escape room', event: { type: 'record:open' as const, payload: {} } }
+    const wish = { id: 'wl', kind: 'wishlist' as const, label: 'Open the wish list', event: { type: 'wishlist:open' as const, payload: {} } }
+    const trophy = { id: 'tr', kind: 'wrap' as const, label: 'Your year in escape rooms', event: { type: 'wrap:open' as const, payload: {} } }
+    const photo = { id: 'p', kind: 'photo' as const, label: 'Read review' }
+    const v = { handle: 'robin', owner: host }
+    expect(visitorPromptLabel(desk, v)).toBe("Robin's desk (look only)")
+    expect(visitorPromptLabel(wish, v)).toBe("Robin's wish list (look only)")
+    expect(visitorPromptLabel(trophy, v)).toBe("Robin's trophy shelf (look only)")
+    expect(visitorPromptLabel(photo, v)).toBe('Read review')
+    expect(visitorPromptLabel(desk, null)).toBe('Log a new escape room')
+  })
+
+  it('follows the owner to a new @handle (reloads and the address bar use it)', () => {
+    window.history.replaceState(null, '', '/home/robin?autostart=1')
+    useStore.setState({ visiting: { handle: 'robin', owner: host } })
+    followVisitHandle(host.id, 'robbie')
+    expect(useStore.getState().visiting?.handle).toBe('robbie')
+    expect(window.location.pathname + window.location.search).toBe('/home/robbie?autostart=1')
+    // Someone else's room never renames this one.
+    followVisitHandle('u-other', 'mallory')
+    expect(useStore.getState().visiting?.handle).toBe('robbie')
+    window.history.replaceState(null, '', '/')
   })
 })
 
@@ -232,18 +268,14 @@ describe('PeopleHud', () => {
     fireEvent.click(screen.getByTestId('people-button'))
     const here = screen.getAllByTestId('person-row').map((r) => r.dataset.handle)
     expect(here).toEqual(['sam', 'robin'])
+    // Robin is listed under "Here now" already, so not again under "Visit a friend".
     const friends = screen.getAllByTestId('visit-friend')
-    expect(friends.map((f) => [f.dataset.handle, f.dataset.online])).toEqual([
-      ['robin', 'true'],
-      ['kim', 'false'],
-    ])
-    // Already in Robin's room: no Visit button for Robin; Kim's opens her room.
-    expect(friends[0].textContent).toContain("You're here")
+    expect(friends.map((f) => [f.dataset.handle, f.dataset.online])).toEqual([['kim', 'false']])
     fireEvent.click(screen.getByLabelText("Visit Kim's room"))
     expect(go).toHaveBeenCalledWith('/home/kim?autostart=1')
   })
 
-  it('offers "Here with you" instead of Visit for a friend in your room', () => {
+  it('does not list a guest who is here again under "Visit a friend"', () => {
     useRealtime.setState({
       status: 'open',
       me: host,
@@ -256,9 +288,71 @@ describe('PeopleHud', () => {
     render(<PeopleHud />)
     fireEvent.click(screen.getByTestId('people-button'))
     expect(screen.getByRole('heading', { name: 'People' })).toBeTruthy()
-    const row = screen.getAllByTestId('visit-friend')[0]
-    expect(row.textContent).toContain('Here with you')
+    expect(screen.getAllByTestId('person-row').map((r) => r.dataset.handle)).toEqual(['robin', 'sam'])
+    expect(screen.queryAllByTestId('visit-friend')).toEqual([])
+    expect(screen.getByText('All your friends are here with you.')).toBeTruthy()
     expect(screen.queryByLabelText("Visit Sam Guest's room")).toBeNull()
+  })
+
+  it('says "Here with you" for a friend on their way into your room (not listed yet)', () => {
+    useRealtime.setState({
+      status: 'open',
+      me: host,
+      sid: 's-host',
+      home: { handle: 'robin', owner: host, isOwner: true },
+      players: {},
+      friends: { [guest.id]: { user: guest, online: true, where: 'your_home', homeCount: 0 } },
+      friendsLoaded: true,
+    })
+    render(<PeopleHud />)
+    fireEvent.click(screen.getByTestId('people-button'))
+    expect(screen.getAllByTestId('visit-friend')[0].textContent).toContain('Here with you')
+  })
+
+  it("counts the people in a friend's room only when someone is with them", () => {
+    const kim = { id: 'u-3', handle: 'kim', displayName: 'Kim Lee', image: null }
+    const ana = { id: 'u-4', handle: 'ana', displayName: 'Ana', image: null }
+    useRealtime.setState({
+      status: 'open',
+      me: guest,
+      sid: 's-guest',
+      home: { handle: 'sam', owner: guest, isOwner: true },
+      players: {},
+      friends: {
+        [kim.id]: { user: kim, online: true, where: 'own_home', homeCount: 1 },
+        [ana.id]: { user: ana, online: true, where: 'own_home', homeCount: 3 },
+      },
+      friendsLoaded: true,
+    })
+    render(<PeopleHud />)
+    fireEvent.click(screen.getByTestId('people-button'))
+    const rows = Object.fromEntries(screen.getAllByTestId('visit-friend').map((r) => [r.dataset.handle, r.textContent ?? '']))
+    expect(rows.kim).toContain('In their room')
+    expect(rows.kim).not.toMatch(/1 in their room|·/)
+    expect(rows.ana).toContain('In their room with 2 friends')
+  })
+
+  it('shows what your emote did, even in first person where your character is hidden', () => {
+    online()
+    useStore.setState({ visiting: { handle: 'robin', owner: host } })
+    render(<PeopleHud />)
+    expect(screen.queryByTestId('emote-echo')).toBeNull()
+    act(() => useRealtime.setState({ emotes: { 's-guest': { emote: 'wave', at: Date.now() } } }))
+    expect(screen.getByTestId('emote-echo').textContent).toBe('You waved · Robin sees it')
+  })
+
+  it('says nobody saw an emote when you are alone', () => {
+    useRealtime.setState({ status: 'open', me: guest, sid: 's-guest', friendsLoaded: true, emotes: { 's-guest': { emote: 'cheer', at: Date.now() } } })
+    render(<PeopleHud />)
+    expect(screen.getByTestId('emote-echo').textContent).toBe('You cheered · nobody else is here to see it')
+  })
+
+  it('labels the spoiler toggle on phones and calls the room look-only', () => {
+    useStore.setState({ visiting: { handle: 'robin', owner: host } })
+    render(<PeopleHud />)
+    expect(screen.getByTestId('visit-spoilers').textContent).toContain('Spoilers')
+    expect(screen.getByTestId('visit-banner').textContent).toContain('look-only')
+    expect(screen.getByTestId('visit-banner').textContent).not.toContain('nothing here changes')
   })
 
   it('calls the dock button People, like the panel', () => {

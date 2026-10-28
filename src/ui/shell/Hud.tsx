@@ -96,9 +96,11 @@ function HudBar() {
           <IconStar />
         </RoundButton>
       ) : null}
-      <RoundButton label="Year in Escape Rooms" onClick={() => bus.emit('wrap:open')} testId="wrap-button">
-        <IconTrophy />
-      </RoundButton>
+      {!visiting ? (
+        <RoundButton label="Year in Escape Rooms" onClick={() => bus.emit('wrap:open')} testId="wrap-button">
+          <IconTrophy />
+        </RoundButton>
+      ) : null}
       {!visiting ? (
         <RoundButton label="Log a new room" onClick={() => bus.emit('record:open')} testId="record-button" accent>
           <IconMic />
@@ -364,6 +366,8 @@ function ControlsHint() {
 }
 
 const TOAST_MS = 4500
+/** Desktop: below the button row and the sort chips under it, so a long toast covers neither. */
+const TOAST_WIDE_TOP_PX = 112
 
 function Toast() {
   const toast = useShell((s) => s.toast)
@@ -376,7 +380,7 @@ function Toast() {
   }, [toast])
   if (!toast) return null
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-[60] flex justify-center px-4" style={{ top: `calc(${SAFE.top} + ${wide ? 56 : HUD_STACK_PX + (visiting ? VISIT_BANNER_PX : 0)}px)` }}>
+    <div className="pointer-events-none fixed inset-x-0 z-[60] flex justify-center px-4" style={{ top: `calc(${SAFE.top} + ${wide ? TOAST_WIDE_TOP_PX : HUD_STACK_PX + (visiting ? VISIT_BANNER_PX : 0)}px)` }}>
       <div data-testid="shell-toast" role="status" className="rounded-full bg-ink/90 px-4 py-2 text-sm font-semibold text-paper shadow-cozy">
         {toast.text}
       </div>
