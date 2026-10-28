@@ -4,12 +4,15 @@ import { ANCHORS } from '@/contracts/scene'
 import { useStore } from '@/state/store'
 import { newProgress, type Progress } from '../ui/state'
 import { clearWelcomeNote, readWelcomeNote, takeWelcomeNote, welcomeLine } from '../ui/welcome'
+import { takeArrivingFromDaily } from '../ui/welcomeNote'
+import { THIRD_PERSON } from '@/player/camera'
 import { exitTarget, homeArrivalPose, walkHome } from './exit'
 
 const solved: Progress = { ...newProgress('2026-10-28', 3), status: 'solved', startedAt: 1000, finishedAt: 61_000, guesses: [['1', '2', '3']], grid: [['hit', 'hit', 'hit']] }
 
 afterEach(() => {
   clearWelcomeNote()
+  takeArrivingFromDaily()
   window.history.replaceState(null, '', '/')
 })
 
@@ -22,7 +25,9 @@ describe('leaving the puzzle room', () => {
   it('arrives just inside the room door, facing the board', () => {
     const p = homeArrivalPose()
     expect(p.position[2]).toBeLessThan(ANCHORS.gateDoor.position[2])
-    expect(p.position[2]).toBeGreaterThan(ANCHORS.gateDoor.position[2] - 3)
+    expect(p.position[2]).toBeGreaterThan(ANCHORS.gateDoor.position[2] - 4)
+    // Far enough in that the third-person camera behind you clears the south wall.
+    expect(ANCHORS.gateDoor.position[2] - p.position[2]).toBeGreaterThanOrEqual(THIRD_PERSON.distance)
     expect(p.yaw).toBe(0)
   })
 
@@ -38,6 +43,9 @@ describe('leaving the puzzle room', () => {
     const note = readWelcomeNote()
     expect(note).toMatchObject({ number: 3, solved: true, guesses: 1, maxGuesses: 6, timeMs: 60_000, signedIn: true })
     expect(welcomeLine(note!)).toBe('You escaped #3 in 1/6 · 1:00')
+    // The main room skips its first "How to play" card.
+    expect(takeArrivingFromDaily()).toBe(true)
+    expect(takeArrivingFromDaily()).toBe(false)
   })
 
   it('leaving before finishing leaves no celebration', () => {

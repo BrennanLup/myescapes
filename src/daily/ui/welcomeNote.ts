@@ -28,6 +28,24 @@ export function isFromDaily(search: string): boolean {
 
 let pending: WelcomeNote | null = null
 
+/**
+ * Set by the puzzle room's exit just before it navigates to the main room (a client-side
+ * navigation, so memory is enough): the main room then skips its automatic "How to play" card,
+ * which would cover the "welcome home" moment. A reload or a later visit shows it as usual.
+ */
+let arrivingFromDaily = false
+
+export function markArrivingFromDaily(): void {
+  arrivingFromDaily = true
+}
+
+/** True once after the puzzle room's exit; clears the flag. */
+export function takeArrivingFromDaily(): boolean {
+  const v = arrivingFromDaily
+  arrivingFromDaily = false
+  return v
+}
+
 export function leaveWelcomeNote(note: WelcomeNote): void {
   pending = note
   try {
