@@ -119,7 +119,12 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
     const tx = txRaw as unknown as Db
     const venueName = room.company.trim() || room.name.trim()
     const cslug = citySlug(room.city, '', '')
-    let venue = (
+    // Room.id is a game id when the room came from the directory picker (or is already on the
+    // board): use that game and its venue as they are instead of matching by name.
+    const picked = room.id.startsWith('gam_')
+      ? (await tx.select({ game: games, venue: venues }).from(games).innerJoin(venues, eq(venues.id, games.venueId)).where(and(eq(games.id, room.id), ne(games.status, 'hidden'))).limit(1))[0]
+      : undefined
+    let venue = picked?.venue ?? (
       await tx
         .select()
         .from(venues)
@@ -135,7 +140,7 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
           .returning()
       )[0]
     }
-    let game = (
+    let game = picked?.game ?? (
       await tx
         .select()
         .from(games)

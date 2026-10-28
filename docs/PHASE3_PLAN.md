@@ -112,3 +112,21 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
 - Realtime uses WebSockets on the same Railway service with an in-memory hub; one instance is enough
   for now.
 - Visiting a home is friends-only, read-only.
+- (A) The review form uses the shared `src/ui/roompicker` from `main` (merged into the workstream
+  branch), wrapped in `src/ui/confirm/RoomSearch.tsx` with "Near me" and an exact-match "Is it ...?"
+  suggestion, so both forms share one picker.
+- (A) "Near me" is opt-in per press, rounded to about 1 km, sent only as search parameters and never
+  stored; only on/off is remembered on the device. `public/privacy.html` now says so: location was
+  not covered by the policy before.
+- (A) A room picked from the directory in the 3D room's form is saved against that game: the form
+  sends the game id as `room.id` and `saveEntryForUser` (`server/db/dataset.ts`, a few lines, not the
+  wishlist functions) uses it, so the brand-vs-venue-name mismatch no longer creates duplicate venues.
+- (A) The phone keeps its "Which room was it?" step before the form (it auto-matches the voice note
+  and the existing e2e suites rely on it); the form itself gets the search-as-you-type room search,
+  and a venue or "Add" opens the matcher's venue or new-venue screen.
+- (A) Photos picked before saving are resized at once (thumbnails right away), held under a draft
+  key, then moved onto the saved visit and uploaded one at a time; a failed one stays on the visit so
+  Retry works from the review overlay or the phone's room page. Uploads use XMLHttpRequest for real
+  progress. Removing a photo that already uploaded deletes it on the server.
+- (A) While a phone keyboard is open the phone form's Save bar drops into the page flow instead of
+  floating over the field, and the focused field is scrolled to the middle of what is still visible.

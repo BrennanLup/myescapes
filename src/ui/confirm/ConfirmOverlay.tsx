@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { bus } from '@/contracts/events'
+import { callApi, ROUTES } from '@/contracts/routes'
 import { COMMON_TOOLS, GENRES, PUZZLE_TYPES, RATING_KEYS, type ReviewDraft } from '@/contracts/types'
 import { PUZZLE_TYPE_COLORS } from '@/contracts/style'
 import { useStore } from '@/state/store'
+import { PhotoAttach, newDraftTarget, summarize, usePhotoQueue } from '@/ui/photos'
+import type { RoomPick } from '@/ui/roompicker'
+import { ensureRoomPhotoSync } from '@/ui/review/photoSync'
+import { useKeyboardInset, useRevealFocusedField } from './keyboard'
+import { followUploads } from './photosAfterSave'
+import { RoomSearch } from './RoomSearch'
 import {
   BOOL_FEATURES,
   FEATURE_LABELS,
@@ -11,6 +18,10 @@ import {
   draftToForm,
   findExistingRoom,
   labelFor,
+  linkGame,
+  linkMatches,
+  linkVenue,
+  newRoomNamed,
   puzzleKey,
   shiftPuzzleFlags,
   validateForm,
@@ -49,6 +60,22 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [discarding, setDiscarding] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const dataSource = useStore((s) => s.dataSource)
+  const signedIn = dataSource === 'postgres'
+  // Photos picked before the visit exists wait under this key, then upload right after save.
+  const [photoTarget] = useState(newDraftTarget)
+  const pendingPhotos = usePhotoQueue((s) => s.items.filter((i) => i.target === photoTarget).length)
+  const savedRef = useRef(false)
+  const keyboard = useKeyboardInset()
+  useRevealFocusedField(scrollRef)
+
+  useEffect(() => {
+    ensureRoomPhotoSync()
+    // Closing without saving drops the queued photos.
+    return () => {
+      if (!savedRef.current) usePhotoQueue.getState().clear(photoTarget)
+    }
+  }, [photoTarget])
 
   const errors = useMemo(() => validateForm(form), [form])
   const errorKeys = Object.keys(errors)
@@ -65,16 +92,52 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
     setForm((f) => {
       const n = clone(f)
       mut(n)
+      // Renaming the room (or its company or city) means it is no longer the directory game.
+      if (n.link && !linkMatches(n)) n.link = null
       return n
     })
     clearFlag(path)
     setSaveError(null)
   }
 
+  const focusField = (path: string) => {
+    // After React has rendered the new values.
+    setTimeout(() => document.getElementById(inputId(path))?.focus(), 0)
+  }
+
+  const clearFlags = (paths: string[]) => setFlags((fl) => fl.filter((x) => !paths.includes(x)))
+
+  const pickRoom = (pick: RoomPick) => {
+    setSaveError(null)
+    if (pick.kind === 'game') {
+      const game = pick.game
+      setForm((f) => linkGame(f, game))
+      clearFlags(['room.name', 'room.company', 'room.city', ...(game.genre ? ['room.genre'] : [])])
+      // The game summary has no address: fill it in from the venue when we can (best effort).
+      callApi(ROUTES.venuePage, { params: { slug: game.venueSlug } })
+        .then((page) => setForm((f) => (f.link?.gameId === game.id && linkMatches(f) ? linkGame(f, game, { ...page.venue, address: f.room.address || page.venue.address }) : f)))
+        .catch(() => {})
+      if (!game.genre) focusField('room.genre')
+    } else {
+      setForm((f) => linkVenue(f, pick.venue))
+      clearFlags(['room.company', 'room.city'])
+      focusField('room.name')
+    }
+  }
+
+  const newRoom = (text: string) => {
+    setForm((f) => newRoomNamed(f, text))
+    clearFlags(['room.name'])
+    focusField(form.room.company.trim() ? 'room.city' : 'room.company')
+  }
+
   // Esc asks to discard (capture phase so nothing else closes the overlay first).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      // An open room-search list closes itself first.
+      const t = e.target as HTMLElement | null
+      if (t?.getAttribute?.('role') === 'combobox' && t.getAttribute('aria-expanded') === 'true') return
       e.preventDefault()
       e.stopPropagation()
       if (saving) return
@@ -100,9 +163,23 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
     setSaveError(null)
     try {
       const entry = draftToEntry(form, useStore.getState().rooms)
-      await useStore.getState().addEntry(entry)
-      showToast('Pinned to the board!')
+      // A successful save closes this overlay (entry:saved) before addEntry returns, and the
+      // unmount must not drop the queued photos, so mark it saved first (undone on failure).
+      savedRef.current = true
+      const saved = await useStore.getState().addEntry(entry)
+      const queue = usePhotoQueue.getState()
+      const photos = summarize(queue.items.filter((i) => i.target === photoTarget))
+      if (signedIn && photos.total > 0) {
+        // In the 3D room a review id is the visit id.
+        queue.attachToVisit(photoTarget, saved.review.id)
+        showToast(`Pinned to the board! Uploading ${photos.total} photo${photos.total === 1 ? '' : 's'}…`)
+        followUploads(saved.review.id, saved.room.name)
+      } else {
+        queue.clear(photoTarget)
+        showToast('Pinned to the board!')
+      }
     } catch (err) {
+      savedRef.current = false
       setSaveError(err instanceof Error ? err.message : String(err))
       setSaving(false)
     }
@@ -153,7 +230,13 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
         </header>
 
         {/* Body */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+        <div
+          ref={scrollRef}
+          data-testid="confirm-scroll"
+          className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5"
+          // While a phone keyboard is up, leave room to scroll the last fields above it.
+          style={keyboard ? { paddingBottom: keyboard + 24, scrollPaddingBottom: keyboard + 24 } : undefined}
+        >
           {initial.notes.length > 0 && (
             <div data-testid="confirm-draft-note" role="note" className="mb-4 rounded-2xl border-2 border-teal/40 bg-teal/10 p-3 text-sm text-ink sm:p-4">
               {initial.notes.map((n) => (
@@ -195,6 +278,40 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
           <div className="grid gap-5 lg:grid-cols-2">
             <div className="flex flex-col gap-5">
               <Section title="Room" icon="🗝">
+                {form.link && linkMatches(form) ? (
+                  <div data-testid="confirm-room-linked" className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-teal/40 bg-teal/10 px-3 py-2">
+                    <span aria-hidden className="text-xl">🗝️</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-bold tracking-wide text-teal uppercase">From the room directory</span>
+                      <span className="block truncate font-bold">{form.link.name}</span>
+                      <span className="block truncate text-sm text-ink-soft">
+                        {[form.link.venueName, form.link.city].filter(Boolean).join(' · ')}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="confirm-room-unlink"
+                      onClick={() => {
+                        setForm((f) => ({ ...f, link: null }))
+                        setTimeout(() => document.getElementById('cf-room-search')?.focus(), 0)
+                      }}
+                      className="min-h-10 rounded-full px-3 text-sm font-bold text-teal underline underline-offset-2 hover:bg-teal/10"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : (
+                  <RoomSearch
+                    key={form.link ? 'linked' : 'search'}
+                    initialQuery={form.room.name}
+                    label="Find it in the room directory"
+                    onPick={pickRoom}
+                    onCreate={newRoom}
+                    inputTestId="confirm-room-search"
+                    suggestFor={{ name: initial.form.room.name, city: initial.form.room.city }}
+                    inputProps={{ id: 'cf-room-search', className: INPUT }}
+                  />
+                )}
                 {revisit && (
                   <p data-testid="confirm-revisit" className="rounded-xl bg-teal/10 px-3 py-2 text-sm text-teal">
                     <b>Revisit!</b> {revisit.name} is already on the board, so this review joins it.
@@ -402,6 +519,14 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                 </button>
               </Section>
 
+              <Section title="Photos" icon="📷">
+                <PhotoAttach
+                  target={photoTarget}
+                  testId="confirm-photos"
+                  disabledReason={signedIn ? null : 'Sign in to add photos to your reviews.'}
+                />
+              </Section>
+
               <Section title="Transcript" icon="🎙">
                 <details data-testid="field-review.voiceTranscript" id={anchorId('review.voiceTranscript')} className="rounded-xl bg-paper px-3 py-2">
                   <summary className="min-h-10 cursor-pointer py-2 font-bold text-ink-soft">
@@ -432,7 +557,10 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                 </button>
               </p>
             ) : (
-              <p className="text-good font-bold">All set. Ready to pin it!</p>
+              <p className="text-good font-bold">
+                All set. Ready to pin it!
+                {signedIn && pendingPhotos > 0 && <span className="font-normal text-ink-soft"> Your {pendingPhotos === 1 ? 'photo uploads' : `${pendingPhotos} photos upload`} right after.</span>}
+              </p>
             )}
           </div>
           <div className="flex gap-2">

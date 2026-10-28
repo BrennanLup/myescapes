@@ -2,8 +2,10 @@
  * Pure form logic for the confirm screen: draft -> editable form -> Entry.
  * No React in here so it is easy to unit test.
  */
+import type { GameSummary, VenueSummary } from '@/contracts/models'
 import {
   EntrySchema,
+  GENRES,
   makeId,
   RATING_KEYS,
   type Entry,
@@ -40,8 +42,19 @@ export interface FormPuzzle {
   memorable: boolean
 }
 
+/** The directory game the room fields came from (picked in the room search). */
+export interface DirectoryLink {
+  gameId: string
+  name: string
+  venueName: string
+  city: string
+  country: string
+}
+
 export interface FormState {
   room: { name: string; company: string; city: string; genre: Genre | ''; address: string; website: string }
+  /** Set while the room fields still describe a directory game; saving then reuses that game. */
+  link: DirectoryLink | null
   review: {
     date: string
     crew: string[]
@@ -117,6 +130,7 @@ export function draftToForm(
       address: draft.room.address ?? '',
       website: draft.room.website ?? '',
     },
+    link: null,
     review: {
       date,
       crew: uniq(d.crew ?? []),
@@ -220,7 +234,8 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
   const keys = Object.keys(errors)
   if (keys.length) throw new Error(`Form is not complete: ${keys.map(labelFor).join(', ')}`)
   const f = form.room
-  const existing = findExistingRoom(f, existingRooms)
+  const linked = form.link && linkMatches(form) ? form.link : null
+  const existing = (linked && existingRooms.find((r) => r.id === linked.gameId)) || findExistingRoom(f, existingRooms)
   const room: Room = existing
     ? {
         ...existing,
@@ -228,7 +243,8 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
         website: existing.website || f.website.trim(),
       }
     : {
-        id: makeId('room'),
+        // A directory game id: the server saves the visit against that game (server/db/dataset.ts).
+        id: linked ? linked.gameId : makeId('room'),
         name: f.name.trim(),
         company: f.company.trim(),
         city: f.city.trim(),
@@ -280,4 +296,43 @@ export function shiftPuzzleFlags(flags: string[], idx: number): string[] {
     out.push(n > idx ? `review.puzzles.${n - 1}${m[2] ?? ''}` : fl)
   }
   return out
+}
+
+const isGenre = (g: string | null | undefined): g is Genre => !!g && (GENRES as readonly string[]).includes(g)
+
+/**
+ * Fill the room fields from a directory game. `venue`, when known, adds the address and prefers
+ * the venue's brand as the company. Keeps a genre the user already chose if the game has none.
+ */
+export function linkGame(form: FormState, game: GameSummary, venue?: Pick<VenueSummary, 'name' | 'brand' | 'address'> | null): FormState {
+  const company = (venue?.brand || game.venueName || venue?.name || '').trim()
+  return {
+    ...form,
+    room: {
+      ...form.room,
+      name: game.name,
+      company,
+      city: game.city,
+      genre: isGenre(game.genre) ? game.genre : form.room.genre,
+      address: venue?.address?.trim() || form.room.address,
+    },
+    link: { gameId: game.id, name: game.name, venueName: company, city: game.city, country: game.country },
+  }
+}
+
+/** A venue without a specific room: fill the company, city and address, keep the room name. */
+export function linkVenue(form: FormState, venue: Pick<VenueSummary, 'name' | 'brand' | 'address' | 'city'>): FormState {
+  return { ...form, room: { ...form.room, company: (venue.brand || venue.name).trim(), city: venue.city, address: venue.address || form.room.address }, link: null }
+}
+
+/** "Add a new room": the typed text becomes the room name, nothing is linked. */
+export function newRoomNamed(form: FormState, name: string): FormState {
+  return { ...form, room: { ...form.room, name: name.trim() }, link: null }
+}
+
+/** Whether the room fields still describe the linked game (editing the name, company or city unlinks it). */
+export function linkMatches(form: FormState): boolean {
+  const l = form.link
+  if (!l) return false
+  return norm(form.room.name) === norm(l.name) && norm(form.room.company) === norm(l.venueName) && norm(form.room.city) === norm(l.city)
 }

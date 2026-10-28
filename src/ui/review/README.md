@@ -33,3 +33,9 @@ Reads `rooms`, `reviews` and `boardPins` from the store and shows the room's lat
 ## Simplifications
 - Keyframes are injected with a small `<style>` tag inside the overlay (no edits to shared CSS).
 - No backdrop blur, to keep the WebGL canvas behind cheap to composite on mobile.
+
+## Photos (Phase 3, workstream A)
+- Signed in (`dataSource === 'postgres'`, where a review id is the visit id), the overlay has a **Photos** card (`VisitPhotos.tsx`) under the puzzles: it loads the visit (`ROUTES.visit`) for its photos with uploader ids, and renders `PhotoAttach` so you can add photos (resized in the browser, progress, Retry) and remove your own. Uploads started from the confirm form show here too, including failed ones with Retry. Someone only tagged (pending) sees "Accept the tag on this visit to add photos." Hidden in the signed-out demo.
+- `photoSync.ts` keeps the store in step: a finished upload is added to that review's `photos` (gallery and polaroid update without a reload) and a removed photo is taken out.
+- The focus trap now includes inputs (the file picker).
+- Tests: `VisitPhotos.test.tsx`.
