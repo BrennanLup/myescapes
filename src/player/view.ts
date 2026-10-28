@@ -46,6 +46,13 @@ export const useCameraMode = create<CameraModeState>()((set, get) => ({
   },
 }))
 
+declare global {
+  interface Window {
+    /** Read-mostly test hook (Playwright): the camera mode store and the per-frame view state. */
+    __ESCAPE_VIEW__?: { playerView: typeof playerView; cameraMode: typeof useCameraMode }
+  }
+}
+
 export const playerView = {
   /** The mode the controller is rendering (follows useCameraMode). */
   mode: 'first' as CameraMode,
@@ -64,3 +71,5 @@ export const playerView = {
   /** Horizontal speed, m/s (drives the walk animation). */
   speed: 0,
 }
+
+if (typeof window !== 'undefined') window.__ESCAPE_VIEW__ = { playerView, cameraMode: useCameraMode }

@@ -214,9 +214,15 @@ function PrimaryButton({ action, busy, onClick }: { action: ReturnType<typeof pr
   }
   if (action.kind === 'buy') {
     return (
-      <button type="button" data-testid="wardrobe-primary" disabled={busy || !action.affordable} onClick={onClick} className={`${base} bg-warn text-ink enabled:hover:scale-[1.02] disabled:opacity-55`}>
+      <button type="button" data-testid="wardrobe-primary" aria-label={busy ? undefined : `Unlock ${action.item.name} for ${action.item.price} keys`} disabled={busy || !action.affordable} onClick={onClick} className={`${base} bg-warn text-ink enabled:hover:scale-[1.02] disabled:opacity-55`}>
         <IconKey width={18} height={18} />
-        {busy ? 'Unlocking...' : `Unlock ${action.item.name} · ${action.item.price}`}
+        {busy ? (
+          'Unlocking...'
+        ) : (
+          <span className="whitespace-nowrap">
+            Unlock<span className="hidden sm:inline"> {action.item.name}</span> · {action.item.price}
+          </span>
+        )}
       </button>
     )
   }

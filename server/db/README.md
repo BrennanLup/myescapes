@@ -4,7 +4,7 @@ PostgreSQL through Drizzle ORM. `DATABASE_URL` selects node-postgres (Railway); 
 
 | File | What |
 | --- | --- |
-| `schema.ts` | Every table: Better Auth (`users`, `sessions`, `accounts`, `verifications`), directory (`cities`, `venues`, `games`, `sources`), visits (`visits`, `visit_participants`, `reviews`, `visit_puzzles`, `visit_photos`, `visit_edits`), social (`friendships`, `invites`, `notifications`), `wishlist_items`, Escape of the Day (`daily_puzzles`, `daily_results`), `reports`, `usage_counters` |
+| `schema.ts` | Every table: Better Auth (`users`, `sessions`, `accounts`, `verifications`), directory (`cities`, `venues`, `games`, `sources`), visits (`visits`, `visit_participants`, `reviews`, `visit_puzzles`, `visit_photos`, `visit_edits`), social (`friendships`, `invites`, `notifications`), `wishlist_items`, Escape of the Day (`daily_puzzles`, `daily_results`), `reports`, `usage_counters`, characters (`avatars`: one saved outfit per user; `avatar_purchases`: wardrobe items bought with keys, unique per user and item) |
 | `migrations/` | SQL migrations from `npm run db:generate`. `0000_extensions.sql` enables `pg_trgm`. Never edit one that has shipped |
 | `client.ts` | `createDb()`, `createPostgres(url)`, `createPglite(dir)`; `Db`, `Tx`, `DbHandle` types |
 | `migrate.ts` | `runMigrations(handle, { timeoutMs })` and the `npm run db:migrate` CLI |

@@ -45,6 +45,8 @@ Locally the database is PGlite (a WebAssembly Postgres in `DATA_DIR/pglite`), so
 | Look | Click the room to lock the mouse, then move it. `Esc` releases it | Drag anywhere |
 | Interact | Aim the centre dot at something and click or press `E` | Aim at it, then press the big **Tap** button (or tap the thing) |
 | Sort the board | Keys `1`-`6`, the sort chips at the top right, or the tabs on the board itself (the seventh tab, **Crew**, groups rooms by who you played with) | Sort button at the top right, or the tabs on the board |
+| Camera | `V` or the **First / Third person** button at the bottom right switches between your own eyes and a view from behind your character (remembered on this device) | The round eye button at the bottom right |
+| Your look | The **Wardrobe** button at the bottom right | The hanger button at the bottom right |
 | Close a panel | `Esc` or the × button | The × button |
 
 The round buttons at the top right open the wish list, the year wrap, the voice recorder, settings (sensitivity, invert Y, quality, head bob, and an Account link to `/settings` when signed in), sound and the controls help.
@@ -58,6 +60,7 @@ The round buttons at the top right open the wish list, the year wrap, the voice 
 - **Shared visits.** A visit (game, date, escaped, time, puzzles, photos) is logged once; each person writes their own review. Friends are mutual; only friends can tag you; tags wait in your inbox unless you turned on auto-accept for that friend. A joining friend's review starts as a copy that is left out of public averages until they change a score. Any accepted participant can edit the shared facts, with history.
 - **Reviews.** Public by default, or friends only, or private. Comments can be marked as spoilers. Admins can hide reviews, photos, games and venues that were reported.
 - **Escape of the Day.** Six guesses, hints that cost points, a spoiler-free share grid, streaks counted against the server's record of your day, and a friends leaderboard.
+- **Your character and the wardrobe.** A low-poly character you can see in third person, dressed in the wardrobe (skin tone, hair, top, bottom, shoes, hat, accessory, colours). Some items unlock with keys, earned by logging rooms (10) and solving Escape of the Day (5), plus 20 to start. No real money: there is no payment provider. Saved to your account (`GET/PUT /api/me/avatar`); in the demo room, free looks are kept on the device.
 - **Wish list** and the **Year in Escape Rooms** wrap (now with your #1 teammate).
 
 ## Configuration
