@@ -34,6 +34,12 @@ export const RATING_LABELS: Record<RatingKey, string> = {
   difficulty: 'Difficulty',
 }
 
+/** "an overall score", "a setting score" (for the "Set …" messages). */
+export function scoreName(k: RatingKey): string {
+  const w = RATING_LABELS[k].toLowerCase()
+  return `${/^[aeiou]/.test(w) ? 'an' : 'a'} ${w} score`
+}
+
 export interface FormPuzzle {
   /** Local React key; not saved. */
   key: string
@@ -159,11 +165,10 @@ export function validateForm(form: FormState): FormErrors {
   if (!room.name.trim()) e['room.name'] = 'Room name is required'
   if (!room.company.trim()) e['room.company'] = 'Company is required'
   if (!room.city.trim()) e['room.city'] = 'City is required'
-  if (!room.genre) e['room.genre'] = 'Pick a genre'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(review.date)) e['review.date'] = 'Pick the date you played'
   for (const k of RATING_KEYS) {
     const s = review.ratings[k].score
-    if (s === null || !Number.isFinite(s)) e[`review.ratings.${k}.score`] = `Set a ${RATING_LABELS[k].toLowerCase()} score`
+    if (s === null || !Number.isFinite(s)) e[`review.ratings.${k}.score`] = `Set ${scoreName(k)}`
     else if (!Number.isInteger(s) || s < 1 || s > 100) e[`review.ratings.${k}.score`] = 'Score must be a whole number 1-100'
   }
   if (review.escaped === null) e['review.escaped'] = 'Did you escape?'
@@ -248,7 +253,8 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
         name: f.name.trim(),
         company: f.company.trim(),
         city: f.city.trim(),
-        genre: f.genre as Genre,
+        // Genre is optional in the form ("Not sure"); a room still needs one, so it is "other".
+        genre: f.genre || 'other',
         address: f.address.trim(),
         website: f.website.trim(),
         photos: [],
