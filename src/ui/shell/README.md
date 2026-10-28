@@ -17,7 +17,7 @@ Wraps the room's `<Canvas>` in `App.tsx`. react-three-fiber rethrows a failed We
 - Top-left: a title chip with the room count, plus a "Demo mode" badge (`mode-badge`) when `/api/status` reports mock extraction or seed storage. The badge has a tooltip and opens settings when clicked.
 - Top-right round buttons: wish list (`wishlist:open`), year wrap (`wrap:open`), log a room (`record:open`), settings (`settings:open`, `settings-button`), `VolumeToggle` from `@/audio`, and help "?" (re-opens the controls hint).
 - Sort: at 768 px and wider, an always-visible chip group (`sort-<key>`). Narrower screens get a round sort button (`sort-button`) that opens the same chips. Keys 1-6 (top row or numpad) change the sort; they are ignored while typing in a field.
-- Controls hint (`controls-hint`): 4 lines (the last one is the camera switch) with desktop and touch variants (from `store.isTouch`). It appears the first time the world becomes ready, fades after 8 s, can be dismissed, and re-opens from "?".
+- Controls hint (`controls-hint`, lines from `hints.tsx`): desktop lists WASD, Click / E, Esc, V, then "F · T people here · chat" while the realtime room is live, and the Wardrobe button. Touch lists Left thumb, Drag and Tap, then a legend of the round buttons on the right (`hint-legend`, `hint-legend-<id>`: people, chat and emotes when live, then the camera and the wardrobe), top to bottom as they sit. It appears the first time the world becomes ready, fades after 8 s, can be dismissed, and re-opens from "?".
 - Toasts (`shell-toast`) are always rendered, e.g. the perf downgrade notice.
 
 ## SettingsOverlay (`data-testid="settings-overlay"`)

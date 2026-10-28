@@ -5,6 +5,8 @@ import { SORT_KEYS, SORT_LABELS, type SortKey } from '@/contracts/types'
 import { VolumeToggle } from '@/audio'
 import { isTypingTarget, sortForKey } from './logic'
 import { useServerStatus, useShell } from './shellStore'
+import { hintLines, TouchLegend } from './hints'
+import { useRealtime } from '@/net/store'
 import { IconClose, IconGear, IconHelp, IconLock, IconMic, IconSort, IconStar, IconTrophy } from './icons'
 
 export const HINT_AUTO_HIDE_MS = 8000
@@ -292,26 +294,12 @@ function ModeBadge() {
   )
 }
 
-const HINTS = {
-  desktop: [
-    ['WASD', 'to walk, mouse to look (click to lock)'],
-    ['Click / E', 'to interact'],
-    ['Esc', 'to release the mouse'],
-    ['V', 'to see your character (third person)'],
-  ],
-  touch: [
-    ['Left thumb', 'to walk'],
-    ['Drag', 'to look around'],
-    ['Tap', 'things to interact'],
-    ['Eye button', 'to see your character'],
-  ],
-} as const
-
 function ControlsHint() {
   const open = useShell((s) => s.hintOpen)
   const nonce = useShell((s) => s.hintNonce)
   const isTouch = useStore((s) => s.isTouch)
   const visiting = useStore((s) => s.visiting !== null)
+  const live = useRealtime((s) => s.status !== 'off')
   const [fading, setFading] = useState(false)
 
   useEffect(() => {
@@ -326,7 +314,7 @@ function ControlsHint() {
   }, [open, nonce])
 
   if (!open) return null
-  const lines = isTouch ? HINTS.touch : HINTS.desktop
+  const lines = hintLines(isTouch, live)
   return (
     <div
       className="pointer-events-none fixed inset-x-0 z-30 flex justify-center px-4"
@@ -357,7 +345,7 @@ function ControlsHint() {
             </li>
           ))}
         </ul>
-        {!isTouch ? <p className="mt-2 text-xs text-ink-soft/80">Keys 1-6 re-sort the board.</p> : null}
+        {isTouch ? <TouchLegend live={live} /> : <p className="mt-2 text-xs text-ink-soft/80">Keys 1-6 re-sort the board.</p>}
       </div>
     </div>
   )

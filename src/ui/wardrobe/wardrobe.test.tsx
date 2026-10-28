@@ -92,6 +92,45 @@ describe('WardrobeOverlay', () => {
     expect(useWardrobe.getState().keys?.balance).toBe(10)
   })
 
+  it('unlocking one item of a look you cannot finish yet wears that item (QA r3)', async () => {
+    await openLoaded()
+    fireEvent.click(screen.getByTestId('wardrobe-tab-top'))
+    fireEvent.click(screen.getByTestId('item-top-trench'))
+    // Trench alone: 50 keys, you have 20. "Wear what you own" would just be your saved look: hidden.
+    expect((screen.getByTestId('wardrobe-primary') as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.queryByTestId('wardrobe-wear-owned')).toBeNull()
+    fireEvent.click(screen.getByTestId('wardrobe-tab-extras'))
+    fireEvent.click(screen.getByTestId('item-acc-headphones'))
+    const primary = screen.getByTestId('wardrobe-primary')
+    expect(primary.textContent).toContain('Unlock Headphones')
+    expect(screen.getByTestId('wardrobe-message').textContent).toContain('Detective trench stays locked')
+    await act(async () => fireEvent.click(primary))
+    const post = server.calls.find((c) => c.url === '/api/me/avatar/purchases')!
+    // The headphones are worn at once; the trench goes back to the saved top.
+    expect(post.body).toEqual({ itemId: 'acc-headphones', wear: { ...DEFAULT_OUTFIT, accessory: 'acc-headphones' } })
+    expect(useWardrobe.getState().outfit.accessory).toBe('acc-headphones')
+    expect(screen.getByTestId('wardrobe-message').textContent).toMatch(/Unlocked Headphones and put it on\. Detective trench is still locked/)
+    // The worn tile is tagged; the button now names the trench, even on a phone.
+    expect(screen.getByTestId('item-acc-headphones').getAttribute('data-wearing')).toBe('true')
+    expect(screen.getByTestId('wardrobe-primary').textContent).toContain('Unlock Detective trench')
+  })
+
+  it('"Wear what you own" drops only the locked items you cannot afford', async () => {
+    await openLoaded()
+    fireEvent.click(screen.getByTestId('wardrobe-tab-hat'))
+    fireEvent.click(screen.getByTestId('item-hat-crown'))
+    fireEvent.click(screen.getByTestId('wardrobe-tab-body'))
+    fireEvent.click(screen.getByTestId('swatch-ebony'))
+    const wear = screen.getByTestId('wardrobe-wear-owned')
+    fireEvent.click(wear)
+    // The crown is gone, the new skin stays, and the look can be saved.
+    const save = screen.getByTestId('wardrobe-primary') as HTMLButtonElement
+    expect(save.textContent).toContain('Save look')
+    await act(async () => fireEvent.click(save))
+    const put = server.calls.find((c) => c.method === 'PUT')!
+    expect(put.body).toEqual({ outfit: { ...DEFAULT_OUTFIT, skin: 'ebony' } })
+  })
+
   it('too few keys: the unlock button is disabled and explains how to earn more', async () => {
     await openLoaded()
     fireEvent.click(screen.getByTestId('wardrobe-tab-hat'))
@@ -99,6 +138,12 @@ describe('WardrobeOverlay', () => {
     expect((screen.getByTestId('wardrobe-primary') as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByTestId('wardrobe-message').textContent).toContain('100 more keys')
     expect(screen.getByTestId('earn-info').textContent).toContain(`${KEY_REWARDS.roomLogged} keys for every room`)
+  })
+
+  it('explains a key debt after deleting rooms whose keys were spent', async () => {
+    server.state = { ...server.state, keys: keys({ balance: 0, earned: 30, spent: 50, rooms: 1 }) }
+    await openLoaded()
+    expect(screen.getByTestId('earn-owed').textContent).toContain('next 20 keys you earn pay that back first')
   })
 
   it('shows the server refusal', async () => {

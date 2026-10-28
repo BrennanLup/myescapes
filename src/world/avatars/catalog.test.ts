@@ -109,6 +109,15 @@ describe('ownership and keys', () => {
     expect(keyBalance({ rooms: 0, dailies: 0, spent: 500 }).balance).toBe(0)
   })
 
+  it('deleting rooms after spending their keys leaves a debt that new keys repay first (QA r3)', () => {
+    // 12 rooms logged, 140 keys spent, then the 12 rooms deleted: nothing to spend...
+    const spent = KEY_REWARDS.welcome + 12 * KEY_REWARDS.roomLogged
+    expect(keyBalance({ rooms: 0, dailies: 0, spent }).balance).toBe(0)
+    // ...and the next 12 real rooms only pay the debt back: still nothing to spend.
+    expect(keyBalance({ rooms: 12, dailies: 0, spent }).balance).toBe(0)
+    expect(keyBalance({ rooms: 13, dailies: 0, spent }).balance).toBe(KEY_REWARDS.roomLogged)
+  })
+
   it('sameOutfit', () => {
     expect(sameOutfit(DEFAULT_OUTFIT, { ...DEFAULT_OUTFIT })).toBe(true)
     expect(sameOutfit(DEFAULT_OUTFIT, { ...DEFAULT_OUTFIT, skin: 'ebony' })).toBe(false)

@@ -210,6 +210,73 @@ export function clearDistance(pivot: Vec3, offset: Vec3, boxes: readonly Pick<AA
 }
 
 /**
+ * The "crane" used when a wall or corner right behind you would pull the camera into your head
+ * (QA r3: 0.2-0.6 m with your back to the south wall or in a corner). Instead of a near first
+ * person view filled with whatever is behind you, the camera rises over your head and looks down
+ * at your character. It blends in as the normal spot gets squeezed (`craneAmount`).
+ */
+export const CRANE = {
+  /** Fully craned at or below this clear distance (metres). */
+  fullBelow: 0.55,
+  /** Starts craning below this clear distance (just above `hideBelow`, so the character stays visible). */
+  startBelow: 1.25,
+  /** Rise above the head pivot (metres), less when the ceiling is lower. */
+  rise: 1.25,
+  /** How far back the crane would like to be (metres); usually the wall allows less. */
+  back: 1.1,
+  /** Where the head lands below the view centre (radians, about 15 degrees: the lower part of the screen). */
+  headBelow: 0.26,
+  /** Easing rate (1/s) in and out of the crane, so backing into a wall never pops. */
+  rate: 6,
+} as const
+
+/** 0 (normal follow) to 1 (fully craned) for how far the normal camera spot was squeezed. */
+export function craneAmount(clear: number): number {
+  const t = (CRANE.startBelow - clear) / (CRANE.startBelow - CRANE.fullBelow)
+  return easeBlend(t)
+}
+
+/** Scratch points for craneSpot (per frame, no garbage). */
+const CRANE_TOP: Vec3 = [0, 0, 0]
+const CRANE_BACK: Vec3 = [0, 0, 0]
+
+/**
+ * The crane spot over the head: straight up from `pivot` as far as the ceiling and anything
+ * overhead allow, then back (opposite the look yaw) as far as the wall allows. Writes the camera
+ * position into `out` and returns the camera pitch that puts the head `CRANE.headBelow` under the
+ * centre of the view, plus the camera-to-pivot distance.
+ */
+export function craneSpot(
+  pivot: Vec3,
+  yaw: number,
+  boxes: readonly Pick<AABB, 'min' | 'max'>[],
+  out: Vec3,
+  ceiling: number = ROOM.height,
+  margin: number = THIRD_PERSON.margin,
+  interior: Interior = ROOM_INTERIOR,
+): { pitch: number; distance: number } {
+  // Up first (a shelf or lamp overhead stops it), never into the ceiling margin.
+  const wantUp = Math.max(0, Math.min(CRANE.rise, ceiling - margin - pivot[1]))
+  CRANE_TOP[0] = 0
+  CRANE_TOP[1] = wantUp
+  CRANE_TOP[2] = 0
+  const up = wantUp > 0 ? clearDistance(pivot, CRANE_TOP, boxes, margin, interior) : 0
+  const top: Vec3 = [pivot[0], pivot[1] + up, pivot[2]]
+  // Then back, away from where you look.
+  CRANE_BACK[0] = Math.sin(yaw) * CRANE.back
+  CRANE_BACK[1] = 0
+  CRANE_BACK[2] = Math.cos(yaw) * CRANE.back
+  const back = clearDistance(top, CRANE_BACK, boxes, margin, interior)
+  const k = back / CRANE.back
+  out[0] = top[0] + CRANE_BACK[0] * k
+  out[1] = top[1]
+  out[2] = top[2] + CRANE_BACK[2] * k
+  // The head is atan2(up, back) below the horizontal from here.
+  const pitch = CRANE.headBelow - Math.atan2(up, Math.max(back, 1e-3))
+  return { pitch: Math.min(0, pitch), distance: Math.hypot(up, back) }
+}
+
+/**
  * Next camera distance: pull in at once when something is in the way (never clip), ease back
  * out when the way clears.
  */

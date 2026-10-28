@@ -7,16 +7,21 @@
  * from 768 px. Esc, Cancel, the close button or a backdrop click close it; with an unsaved look
  * they first ask "Keep trying on / Discard", so a look is never thrown away by accident.
  */
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react'
 import { bus } from '@/contracts/events'
 import { useShell } from '@/ui/shell/shellStore'
 import { KEY_REWARDS, itemById, randomOutfit, sameOutfit, type CatalogItem, type ItemId, type Outfit, type Swatch } from '@/world/avatars/catalog'
 import { IconCheck, IconClose, IconKey, IconLockSmall, IconShuffle, IconUndo } from './icons'
-import { colorApplies, primaryAction, priceLabel, scrollEdges, SLOT_FIELD, stepIndex, tabItems, TABS, type TabId, type TabSpec } from './logic'
+import { colorApplies, listNames, primaryAction, priceLabel, scrollEdges, SLOT_FIELD, stepIndex, swatchColumns, tabItems, TABS, wearableDraft, type TabId, type TabSpec } from './logic'
 import { Preview } from './Preview'
 import { useWardrobe } from './store'
 
 const close = () => bus.emit('overlay:close')
+
+/** Darker than the brand teal so small selected text and the active tab pass WCAG AA (5.9:1 on white, 4.9:1 on the selected tile). */
+const TEAL_TEXT = 'text-[#1f6f6b]'
+const TEAL_BG = 'bg-[#1f6f6b]'
+const TEAL_RING = 'ring-[#1f6f6b]'
 
 export function WardrobeOverlay() {
   const status = useWardrobe((s) => s.status)
@@ -77,6 +82,9 @@ export function WardrobeOverlay() {
   const action = primaryAction(draft, saved, owned, keys?.balance ?? null, signedIn)
   const spec = TABS.find((t) => t.id === tab)!
   const describe = useMemo(() => describeOutfit(draft), [draft])
+  // With locked items you can't afford yet, offer to keep only the parts you own.
+  const ownable = useMemo(() => wearableDraft(draft, saved, owned), [draft, saved, owned])
+  const canWearOwned = action.kind === 'buy' && !action.affordable && !sameOutfit(ownable, saved)
 
   const onPrimary = async () => {
     setMessage(null)
@@ -86,12 +94,18 @@ export function WardrobeOverlay() {
         useShell.getState().showToast(signedIn ? 'Looking good! Your look is saved.' : 'Looking good! Saved on this device.')
         close()
       } else if (action.kind === 'buy' && action.affordable) {
-        await useWardrobe.getState().buy(action.item.id as ItemId, action.completes ? draft : undefined)
+        const id = action.item.id as ItemId
+        // Always wear what you just bought: the whole look when this was the last locked item,
+        // otherwise the look with the still-locked items swapped back to what you wear today.
+        await useWardrobe.getState().buy(id, action.completes ? draft : wearableDraft(draft, saved, [...owned, id]))
         bus.emit('sfx', { name: 'unlock' })
         if (action.completes) {
           useShell.getState().showToast(`Unlocked ${action.item.name}. Looking good!`)
           close()
-        } else setMessage({ tone: 'ok', text: `Unlocked ${action.item.name}. Unlock the rest to wear this look.` })
+        } else {
+          const n = action.rest.length
+          setMessage({ tone: 'ok', text: `Unlocked ${action.item.name} and put it on. ${listNames(action.rest)} ${n === 1 ? 'is' : 'are'} still locked: you're only trying ${n === 1 ? 'it' : 'them'} on.` })
+        }
       }
     } catch (err) {
       bus.emit('sfx', { name: 'error' })
@@ -156,18 +170,33 @@ export function WardrobeOverlay() {
                   </button>
                 </p>
               ) : null}
-              <TabBody tab={spec} draft={draft} owned={owned} set={set} />
+              <TabBody tab={spec} draft={draft} saved={saved} owned={owned} set={set} />
               <EarnInfo keys={keys} signedIn={signedIn} />
             </div>
           </div>
         </div>
 
         <footer className="flex flex-col gap-2 border-t border-panel-edge/70 px-4 py-3 md:flex-row md:items-center md:px-6" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-          <p role="status" aria-live="polite" data-testid="wardrobe-message" className={`min-h-5 flex-1 text-sm ${message?.tone === 'error' ? 'text-bad' : 'text-ink-soft'}`}>
-            {message?.text ?? footerHint(action)}
-          </p>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+            <p role="status" aria-live="polite" data-testid="wardrobe-message" className={`min-h-5 text-sm ${message?.tone === 'error' ? 'text-bad' : 'text-ink-soft'}`}>
+              {message?.text ?? footerHint(action)}
+            </p>
+            {canWearOwned ? (
+              <button
+                type="button"
+                data-testid="wardrobe-wear-owned"
+                onClick={() => {
+                  set(ownable)
+                  setMessage({ tone: 'ok', text: 'Locked items swapped back to what you wear now. Save to keep the rest.' })
+                }}
+                className={`min-h-9 rounded-full px-2 text-sm font-bold underline underline-offset-2 ${TEAL_TEXT} hover:bg-[rgba(47,143,138,.1)]`}
+              >
+                Wear what you own
+              </button>
+            ) : null}
+          </div>
           <div className="flex gap-2">
-            <button type="button" data-testid="wardrobe-cancel" onClick={requestClose} className="min-h-11 flex-1 rounded-full px-5 font-bold text-ink-soft ring-1 ring-panel-edge transition hover:bg-paper md:flex-none">
+            <button type="button" data-testid="wardrobe-cancel" onClick={requestClose} className="min-h-11 shrink-0 rounded-full px-4 font-bold text-ink-soft ring-1 ring-panel-edge transition hover:bg-paper md:px-5">
               Cancel
             </button>
             <PrimaryButton action={action} busy={busy} onClick={() => void onPrimary()} />
@@ -246,13 +275,18 @@ function footerHint(a: ReturnType<typeof primaryAction>): string {
       return 'Looks good? Save to wear it in your room.'
     case 'signin':
       return `${a.item.name} unlocks with keys. Sign in to earn them.`
-    case 'buy':
-      return a.affordable ? `You're trying on ${a.item.name} (${a.item.price} keys).` : `${a.item.name} needs ${a.short} more ${a.short === 1 ? 'key' : 'keys'}. Log rooms and solve Escape of the Day to earn them.`
+    case 'buy': {
+      const short = (n: number) => `${n} more ${n === 1 ? 'key' : 'keys'}`
+      if (!a.affordable) return `${a.item.name} needs ${short(a.short)}. Log rooms and solve Escape of the Day to earn them.`
+      if (a.completes) return `You're trying on ${a.item.name} (${a.item.price} keys).`
+      // Say up front that the rest stays locked, so an unlock never looks like it did nothing.
+      return `Unlock ${a.item.name} to wear it now. ${listNames(a.rest)} ${a.rest.length === 1 ? 'stays' : 'stay'} locked for now.`
+    }
   }
 }
 
 function PrimaryButton({ action, busy, onClick }: { action: ReturnType<typeof primaryAction>; busy: boolean; onClick(): void }) {
-  const base = 'flex min-h-11 flex-[2] items-center justify-center gap-2 rounded-full px-5 font-bold transition md:flex-none disabled:cursor-not-allowed'
+  const base = 'flex min-h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-5 font-bold transition md:flex-none disabled:cursor-not-allowed'
   if (action.kind === 'signin') {
     return (
       <a href="/welcome" data-testid="wardrobe-primary" className={`${base} bg-accent text-accent-ink hover:scale-[1.02]`}>
@@ -262,14 +296,24 @@ function PrimaryButton({ action, busy, onClick }: { action: ReturnType<typeof pr
   }
   if (action.kind === 'buy') {
     return (
-      <button type="button" data-testid="wardrobe-primary" aria-label={busy ? undefined : `Unlock ${action.item.name} for ${action.item.price} keys`} disabled={busy || !action.affordable} onClick={onClick} className={`${base} bg-warn text-ink enabled:hover:scale-[1.02] disabled:opacity-55`}>
-        <IconKey width={18} height={18} />
+      <button
+        type="button"
+        data-testid="wardrobe-primary"
+        aria-label={busy ? undefined : `Unlock ${action.item.name} for ${action.item.price} keys${action.completes ? '' : ' and wear it'}`}
+        title={`Unlock ${action.item.name} · ${action.item.price} keys`}
+        disabled={busy || !action.affordable}
+        onClick={onClick}
+        className={`${base} bg-warn text-ink enabled:hover:scale-[1.02] disabled:opacity-55`}
+      >
+        <IconKey width={18} height={18} className="shrink-0" />
         {busy ? (
           'Unlocking...'
         ) : (
-          <span className="whitespace-nowrap">
-            Unlock<span className="hidden sm:inline"> {action.item.name}</span> · {action.item.price}
-          </span>
+          // The item name always shows (truncated on a narrow phone), so you know what you pay for.
+          <>
+            <span className="min-w-0 truncate">Unlock {action.item.name}</span>
+            <span className="shrink-0">· {action.item.price}</span>
+          </>
         )}
       </button>
     )
@@ -381,7 +425,7 @@ function Tabs({ current, onPick, panelId }: { current: TabId; onPick(t: TabId): 
               onClick={() => onPick(t.id)}
               onKeyDown={(e) => onKeyDown(e, i)}
               // No colour transition: a half-faded pill could show teal text on teal.
-              className={`min-h-10 shrink-0 rounded-full px-3.5 text-sm font-bold ${on ? 'bg-teal text-white' : 'text-ink-soft hover:bg-[rgba(224,123,57,.12)] hover:text-ink'}`}
+              className={`min-h-10 shrink-0 rounded-full px-3.5 text-sm font-bold ${on ? `${TEAL_BG} text-white` : 'text-ink-soft hover:bg-[rgba(224,123,57,.12)] hover:text-ink'}`}
             >
               {t.label}
             </button>
@@ -397,7 +441,7 @@ function Tabs({ current, onPick, panelId }: { current: TabId; onPick(t: TabId): 
   )
 }
 
-function TabBody({ tab, draft, owned, set }: { tab: TabSpec; draft: Outfit; owned: ItemId[]; set(p: Partial<Outfit>): void }) {
+function TabBody({ tab, draft, saved, owned, set }: { tab: TabSpec; draft: Outfit; saved: Outfit; owned: ItemId[]; set(p: Partial<Outfit>): void }) {
   const items = tabItems(tab)
   return (
     <div className="flex flex-col gap-5">
@@ -405,7 +449,14 @@ function TabBody({ tab, draft, owned, set }: { tab: TabSpec; draft: Outfit; owne
         <Section title={tab.label === 'Extras' ? 'Accessory' : 'Style'}>
           <div role="group" aria-label={`${tab.label} styles`} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {items.map((item) => (
-              <ItemTile key={item.id} item={item} on={draft[SLOT_FIELD[tab.slot!]] === item.id} owned={owned} onPick={() => set({ [SLOT_FIELD[tab.slot!]]: item.id } as Partial<Outfit>)} />
+              <ItemTile
+                key={item.id}
+                item={item}
+                on={draft[SLOT_FIELD[tab.slot!]] === item.id}
+                wearing={saved[SLOT_FIELD[tab.slot!]] === item.id}
+                owned={owned}
+                onPick={() => set({ [SLOT_FIELD[tab.slot!]]: item.id } as Partial<Outfit>)}
+              />
             ))}
           </div>
         </Section>
@@ -428,7 +479,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function ItemTile({ item, on, owned, onPick }: { item: CatalogItem; on: boolean; owned: ItemId[]; onPick(): void }) {
+/**
+ * One item. Two separate cues: the teal ring and check mark what you are trying on (the draft),
+ * and a small "Wearing" tag marks what you wear today (the saved look).
+ */
+function ItemTile({ item, on, wearing, owned, onPick }: { item: CatalogItem; on: boolean; wearing: boolean; owned: ItemId[]; onPick(): void }) {
   const locked = item.price > 0 && !owned.includes(item.id as ItemId)
   const label = priceLabel(item, owned)
   return (
@@ -437,31 +492,39 @@ function ItemTile({ item, on, owned, onPick }: { item: CatalogItem; on: boolean;
       aria-pressed={on}
       data-testid={`item-${item.id}`}
       data-locked={locked ? 'true' : 'false'}
-      aria-label={`${item.name}, ${locked ? `locked, ${item.price} keys` : label.toLowerCase()}`}
+      data-wearing={wearing ? 'true' : 'false'}
+      aria-label={`${item.name}, ${locked ? `locked, ${item.price} keys` : label.toLowerCase()}${wearing ? ', wearing now' : ''}`}
       title={item.blurb ?? item.name}
       onClick={onPick}
       className={`relative flex min-h-16 flex-col items-start justify-between gap-1 rounded-2xl px-3 py-2.5 text-left ring-2 transition active:scale-[.98] ${
-        on ? 'bg-[rgba(47,143,138,.1)] ring-teal' : 'bg-paper ring-panel-edge/50 hover:ring-panel-edge'
+        on ? `bg-[rgba(47,143,138,.1)] ${TEAL_RING}` : 'bg-paper ring-panel-edge/50 hover:ring-panel-edge'
       }`}
     >
-      <span className={`font-display text-[15px] leading-tight font-semibold ${on ? 'text-teal' : ''}`}>{item.name}</span>
-      <span
-        className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-extrabold ${
-          locked ? 'bg-[rgba(224,169,58,.22)] text-[#8a5d0c]' : label === 'Owned' ? 'bg-[rgba(79,157,90,.15)] text-good' : 'bg-[rgba(122,98,88,.1)] text-ink-soft'
-        }`}
-      >
-        {locked ? <IconLockSmall width={11} height={11} strokeWidth={2.6} /> : null}
-        {locked ? (
-          <>
-            <IconKey width={11} height={11} strokeWidth={2.6} />
-            {item.price}
-          </>
-        ) : (
-          label
-        )}
+      <span className={`pr-6 font-display text-[15px] leading-tight font-semibold ${on ? TEAL_TEXT : ''}`}>{item.name}</span>
+      <span className="flex flex-wrap items-center gap-1">
+        <span
+          className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-extrabold ${
+            locked ? 'bg-[rgba(224,169,58,.22)] text-[#7a5208]' : label === 'Owned' ? 'bg-[rgba(79,157,90,.15)] text-[#2f6b38]' : 'bg-[rgba(122,98,88,.1)] text-[#5e4a42]'
+          }`}
+        >
+          {locked ? <IconLockSmall width={11} height={11} strokeWidth={2.6} /> : null}
+          {locked ? (
+            <>
+              <IconKey width={11} height={11} strokeWidth={2.6} />
+              {item.price}
+            </>
+          ) : (
+            label
+          )}
+        </span>
+        {wearing ? (
+          <span data-testid="wearing-tag" className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-extrabold text-paper">
+            Wearing
+          </span>
+        ) : null}
       </span>
       {on ? (
-        <span className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-teal text-white">
+        <span className={`absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full ${TEAL_BG} text-white`}>
           <IconCheck width={12} height={12} strokeWidth={3} />
         </span>
       ) : null}
@@ -470,8 +533,10 @@ function ItemTile({ item, on, owned, onPick }: { item: CatalogItem; on: boolean;
 }
 
 function Swatches({ swatches, value, label, onPick }: { swatches: readonly Swatch[]; value: string; label: string; onPick(id: string): void }) {
+  // Phones: a balanced grid (8 skin tones are 4 + 4, not 7 + 1); wider screens: one wrapping row.
+  const style = { '--swatch-cols': swatchColumns(swatches.length) } as CSSProperties
   return (
-    <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+    <div role="group" aria-label={label} data-testid="swatch-group" style={style} className="grid w-max grid-cols-[repeat(var(--swatch-cols),2.5rem)] gap-2 sm:flex sm:w-auto sm:flex-wrap">
       {swatches.map((s) => {
         const on = s.id === value
         return (
@@ -483,7 +548,7 @@ function Swatches({ swatches, value, label, onPick }: { swatches: readonly Swatc
             title={s.name}
             data-testid={`swatch-${s.id}`}
             onClick={() => onPick(s.id)}
-            className={`h-10 w-10 rounded-full transition hover:scale-110 active:scale-95 ${on ? 'ring-[3px] ring-teal ring-offset-2 ring-offset-panel' : 'ring-1 ring-black/15'}`}
+            className={`h-10 w-10 rounded-full transition hover:scale-110 active:scale-95 ${on ? `ring-[3px] ${TEAL_RING} ring-offset-2 ring-offset-panel` : 'ring-1 ring-black/15'}`}
             style={{ background: s.hex }}
           />
         )
@@ -506,10 +571,16 @@ function EarnInfo({ keys, signedIn }: { keys: ReturnType<typeof useWardrobe.getS
         {signedIn && keys ? (
           <p className="text-ink-soft" data-testid="earn-summary">
             So far: {keys.earned} earned ({KEY_REWARDS.welcome} welcome, {keys.rooms} {keys.rooms === 1 ? 'room' : 'rooms'}, {keys.dailies} {keys.dailies === 1 ? 'puzzle' : 'puzzles'}), {keys.spent} spent.
+            {keys.spent > keys.earned ? (
+              <span data-testid="earn-owed">
+                {' '}
+                Deleted rooms take their keys back, so the next {keys.spent - keys.earned} {keys.spent - keys.earned === 1 ? 'key' : 'keys'} you earn pay that back first.
+              </span>
+            ) : null}
           </p>
         ) : (
           <p className="text-ink-soft">
-            <a href="/welcome" className="font-bold text-teal underline">
+            <a href="/welcome" className={`font-bold underline ${TEAL_TEXT}`}>
               Sign in
             </a>{' '}
             to earn keys and keep your look on every device. In the demo, free looks are saved on this device.

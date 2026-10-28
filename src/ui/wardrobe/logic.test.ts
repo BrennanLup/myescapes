@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_OUTFIT, itemById, OUTFIT_SLOTS } from '@/world/avatars/catalog'
-import { colorApplies, primaryAction, priceLabel, scrollEdges, stepIndex, tabItems, TABS } from './logic'
+import { colorApplies, listNames, primaryAction, priceLabel, scrollEdges, stepIndex, swatchColumns, tabItems, TABS, wearableDraft } from './logic'
 
 describe('scrollEdges', () => {
   it('flags the edges that hide more tabs', () => {
@@ -48,7 +48,7 @@ describe('primaryAction', () => {
     expect(one).toMatchObject({ kind: 'buy', affordable: true, short: 0, completes: true })
     const two = primaryAction({ ...saved, accessory: 'acc-headphones', hat: 'hat-crown' }, saved, [], 20, true)
     // The affordable item is offered first.
-    expect(two).toMatchObject({ kind: 'buy', item: { id: 'acc-headphones' }, affordable: true, completes: false })
+    expect(two).toMatchObject({ kind: 'buy', item: { id: 'acc-headphones' }, affordable: true, completes: false, rest: [{ id: 'hat-crown' }] })
     const poor = primaryAction({ ...saved, hat: 'hat-tophat', accessory: 'acc-lantern' }, saved, [], 20, true)
     expect(poor).toMatchObject({ kind: 'buy', item: { id: 'hat-tophat' }, affordable: false, short: 25, completes: false })
     // Owned items don't need buying.
@@ -58,6 +58,38 @@ describe('primaryAction', () => {
   it('signed out: sign in to unlock', () => {
     const a = primaryAction({ ...saved, hat: 'hat-crown' }, saved, [], null, false)
     expect(a).toEqual({ kind: 'signin', item: itemById('hat-crown') })
+  })
+})
+
+describe('wearableDraft', () => {
+  const saved = { ...DEFAULT_OUTFIT, top: 'top-jersey', accessory: 'acc-none' } as const
+  it('swaps only the locked items back to what you wear, keeping colours and owned picks', () => {
+    const draft = { ...saved, top: 'top-trench', topColor: 'plum', accessory: 'acc-headphones', hair: 'hair-bob' } as const
+    // The QA case: trench (50) can't be afforded, headphones (10) were just bought.
+    expect(wearableDraft(draft, saved, ['top-jersey', 'acc-headphones'])).toEqual({ ...draft, top: 'top-jersey' })
+    expect(wearableDraft(draft, saved, ['top-jersey'])).toEqual({ ...draft, top: 'top-jersey', accessory: 'acc-none' })
+  })
+  it('falls back to the first free item when even the saved one is not owned', () => {
+    const draft = { ...DEFAULT_OUTFIT, hat: 'hat-crown' } as const
+    expect(wearableDraft(draft, { ...DEFAULT_OUTFIT, hat: 'hat-tophat' }, []).hat).toBe('hat-none')
+  })
+  it('leaves a wearable look alone', () => {
+    expect(wearableDraft(DEFAULT_OUTFIT, DEFAULT_OUTFIT, [])).toEqual(DEFAULT_OUTFIT)
+  })
+})
+
+describe('listNames and swatchColumns', () => {
+  it('lists names as a sentence', () => {
+    expect(listNames([])).toBe('')
+    expect(listNames([{ name: 'A' }])).toBe('A')
+    expect(listNames([{ name: 'A' }, { name: 'B' }, { name: 'C' }])).toBe('A, B and C')
+  })
+  it('balances swatch rows on phones', () => {
+    expect(swatchColumns(5)).toBe(5)
+    expect(swatchColumns(7)).toBe(7)
+    expect(swatchColumns(8)).toBe(4)
+    expect(swatchColumns(11)).toBe(6)
+    expect(swatchColumns(19)).toBe(7)
   })
 })
 

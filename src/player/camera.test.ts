@@ -3,6 +3,9 @@ import { HALF_D, HALF_W, ROOM, type Vec3 } from '@/contracts/scene'
 import {
   angleDelta,
   clearDistance,
+  CRANE,
+  craneAmount,
+  craneSpot,
   DESKTOP_RIG,
   orbitPitch,
   pitchLimits,
@@ -220,5 +223,54 @@ describe("third-person pitch (no worm's-eye view)", () => {
       // Never on the reticle, whatever the look pitch.
       expect(hatTop).toBeGreaterThan(0.53)
     }
+  })
+})
+
+describe('crane over the head when a wall squeezes the camera (QA r3)', () => {
+  it('blends in only once the normal spot is squeezed', () => {
+    expect(craneAmount(3.1)).toBe(0)
+    expect(craneAmount(CRANE.startBelow)).toBe(0)
+    expect(craneAmount(0.9)).toBeGreaterThan(0.3)
+    expect(craneAmount(0.9)).toBeLessThan(0.7)
+    expect(craneAmount(CRANE.fullBelow)).toBe(1)
+    expect(craneAmount(0.2)).toBe(1)
+  })
+
+  it('back to the south wall: the full rig collapses, the crane keeps the character in view', () => {
+    // The QA spot: (0, 1.6, 7.4) looking north (yaw 0), so the wall is right behind.
+    const pivot: Vec3 = [0, 1.55, HALF_D - 0.3]
+    const offset = thirdPersonOffset(0, 0, DESKTOP_RIG.distance, DESKTOP_RIG.side, DESKTOP_RIG.up)
+    const squeezed = clearDistance(pivot, offset, [])
+    expect(squeezed).toBeLessThan(THIRD_PERSON.hideBelow)
+    expect(craneAmount(squeezed)).toBe(1)
+    const out: Vec3 = [0, 0, 0]
+    const spot = craneSpot(pivot, 0, [], out)
+    expect(out[1]).toBeCloseTo(pivot[1] + CRANE.rise)
+    expect(out[2]).toBeLessThanOrEqual(HALF_D - THIRD_PERSON.margin + 1e-9)
+    expect(spot.distance).toBeGreaterThan(THIRD_PERSON.hideBelow)
+    // Looking down so the head sits CRANE.headBelow under the centre of the view.
+    const headAngle = Math.atan2(out[1] - pivot[1], out[2] - pivot[2])
+    expect(headAngle + spot.pitch).toBeCloseTo(CRANE.headBelow)
+  })
+
+  it('a corner: rises and backs off diagonally as far as both walls allow', () => {
+    const pivot: Vec3 = [HALF_W - 0.7, 1.55, HALF_D - 0.7]
+    const out: Vec3 = [0, 0, 0]
+    // Looking diagonally into the room (yaw PI/4: towards -x, -z).
+    const spot = craneSpot(pivot, Math.PI / 4, [], out)
+    expect(out[0]).toBeLessThanOrEqual(HALF_W - THIRD_PERSON.margin + 1e-9)
+    expect(out[2]).toBeLessThanOrEqual(HALF_D - THIRD_PERSON.margin + 1e-9)
+    expect(out[0]).toBeGreaterThan(pivot[0])
+    expect(spot.distance).toBeGreaterThan(1.2)
+  })
+
+  it('something overhead or a low ceiling limits the rise', () => {
+    const pivot: Vec3 = [0, 1.55, 0]
+    const out: Vec3 = [0, 0, 0]
+    const shelf = { min: [-1, 2.2, -1] as Vec3, max: [1, 2.4, 1] as Vec3 }
+    craneSpot(pivot, 0, [shelf], out)
+    expect(out[1]).toBeLessThanOrEqual(2.2 - THIRD_PERSON.margin + 1e-9)
+    craneSpot(pivot, 0, [], out, 2.5)
+    expect(out[1]).toBeCloseTo(2.5 - THIRD_PERSON.margin)
   })
 })
