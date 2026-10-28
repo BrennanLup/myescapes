@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { HALF_D, HALF_W, type Vec3 } from '@/contracts/scene'
+import { HALF_D, HALF_W, ROOM, type Vec3 } from '@/contracts/scene'
 import {
   angleDelta,
   clearDistance,
+  DESKTOP_RIG,
+  orbitPitch,
+  pitchLimits,
+  TOUCH_RIG,
   easeBlend,
   followDistance,
   interiorT,
@@ -14,7 +18,7 @@ import {
   thirdPersonOffset,
   yawOfVelocity,
 } from './camera'
-import { forwardVector } from './movement'
+import { forwardVector, MAX_PITCH } from './movement'
 
 const close = (a: number, b: number, eps = 1e-6) => expect(Math.abs(a - b)).toBeLessThan(eps)
 const len = (v: Vec3) => Math.hypot(v[0], v[1], v[2])
@@ -151,5 +155,47 @@ describe('rayStartDistance', () => {
     expect(rayStartDistance(eye, lookVector(0, 0), eye)).toBe(0)
     // Never negative (eye behind the camera).
     expect(rayStartDistance([0, 1.6, -1], lookVector(0, 0), eye)).toBe(0)
+  })
+})
+
+describe('third-person pitch (no worm's-eye view)', () => {
+  const deg = (d: number) => (d * Math.PI) / 180
+
+  it('narrows the look pitch smoothly while blending into third person', () => {
+    expect(pitchLimits(0, MAX_PITCH)).toEqual([-MAX_PITCH, MAX_PITCH])
+    const [lo, hi] = pitchLimits(1, MAX_PITCH)
+    close(lo, -THIRD_PERSON.maxPitchDown)
+    close(hi, THIRD_PERSON.maxPitchUp)
+    const mid = pitchLimits(0.5, MAX_PITCH)
+    expect(mid[1]).toBeLessThan(MAX_PITCH)
+    expect(mid[1]).toBeGreaterThan(THIRD_PERSON.maxPitchUp)
+  })
+
+  it('never puts the camera more than minBelowPivot under the head, however far up you look', () => {
+    for (const rig of [DESKTOP_RIG, TOUCH_RIG]) {
+      const pivotY = 1.55
+      const o = orbitPitch(THIRD_PERSON.maxPitchUp, pivotY, rig)
+      expect(o).toBeLessThan(THIRD_PERSON.maxPitchUp)
+      const off = thirdPersonOffset(0, o, rig.distance, rig.side, rig.up)
+      expect(off[1]).toBeGreaterThanOrEqual(-THIRD_PERSON.minBelowPivot - 1e-9)
+      // Full distance is kept: the camera tilts instead of diving to the floor.
+      close(Math.hypot(off[0], off[1], off[2]), Math.hypot(rig.distance, rig.side, rig.up), 0.5)
+    }
+  })
+
+  it('stops rising before the ceiling when looking down, instead of pulling into the head', () => {
+    const pivotY = 1.55
+    const o = orbitPitch(-deg(55), pivotY, DESKTOP_RIG)
+    const off = thirdPersonOffset(0, o, DESKTOP_RIG.distance, DESKTOP_RIG.side, DESKTOP_RIG.up)
+    expect(pivotY + off[1]).toBeLessThanOrEqual(ROOM.height - THIRD_PERSON.margin + 1e-9)
+    close(clearDistance([0, pivotY, 0], off, []), len(off), 1e-6)
+    // Gentle pitches are left alone.
+    close(orbitPitch(deg(-10), pivotY, DESKTOP_RIG), deg(-10))
+    close(orbitPitch(deg(5), pivotY, DESKTOP_RIG), deg(5))
+  })
+
+  it('touch centres the character and sits further back', () => {
+    expect(TOUCH_RIG.side).toBe(0)
+    expect(TOUCH_RIG.distance).toBeGreaterThan(DESKTOP_RIG.distance)
   })
 })

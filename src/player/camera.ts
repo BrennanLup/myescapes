@@ -33,14 +33,69 @@ export const THIRD_PERSON = {
   followRate: 16,
   /** Seconds to blend between first and third person. */
   blendSeconds: 0.35,
-  /** Below this camera-to-pivot distance the local character is hidden (camera inside the head). */
-  hideBelow: 0.55,
+  /**
+   * Below this camera-to-pivot distance the local character is hidden: closer than this it would
+   * fill the screen (camera pulled in by a wall) or sit inside your head.
+   */
+  hideBelow: 0.9,
+  /** Look pitch limits in third person (radians): steeper looks only make sense from your eyes. */
+  maxPitchUp: (50 * Math.PI) / 180,
+  maxPitchDown: (55 * Math.PI) / 180,
+  /** The camera never drops more than this below the head pivot (no worm's-eye view from the floor). */
+  minBelowPivot: 0.3,
 } as const
 
-/** Camera forward vector for a yaw/pitch. */
-export function lookVector(yaw: number, pitch: number): Vec3 {
+/** Where the third-person camera sits relative to the head pivot. */
+export interface CameraRig {
+  distance: number
+  side: number
+  up: number
+}
+
+/** Mouse and keyboard: over the right shoulder, so your head never covers the reticle. */
+export const DESKTOP_RIG: CameraRig = { distance: THIRD_PERSON.distance, side: THIRD_PERSON.side, up: THIRD_PERSON.up }
+
+/**
+ * Touch: centred and a little further back and higher, so the character stands in the middle,
+ * below the reticle, clear of the joystick on the left and the button column on the right.
+ */
+export const TOUCH_RIG: CameraRig = { distance: THIRD_PERSON.distance + 0.4, side: 0, up: 0.5 }
+
+/**
+ * Look pitch limits while blending into third person (`third` from 0 to 1): from the first-person
+ * limit `firstMax` down to the third-person ones, so entering third person tilts smoothly.
+ */
+export function pitchLimits(third: number, firstMax: number, out: [number, number] = [0, 0]): [number, number] {
+  const t = Math.min(1, Math.max(0, third))
+  out[0] = -(firstMax + (THIRD_PERSON.maxPitchDown - firstMax) * t)
+  out[1] = firstMax + (THIRD_PERSON.maxPitchUp - firstMax) * t
+  return out
+}
+
+/**
+ * The pitch used to place the camera around the pivot (the camera still looks along the real
+ * pitch). Looking up would swing the camera under your feet, and looking down through the
+ * ceiling would pull it into your head; so the orbit stops where the camera would go lower
+ * than `minBelowPivot` under the pivot, or closer than `margin` to the ceiling, and from there
+ * on the camera only tilts.
+ */
+export function orbitPitch(pitch: number, pivotY: number, rig: CameraRig, ceiling: number = ROOM.height, margin: number = THIRD_PERSON.margin): number {
+  if (rig.distance < 1e-6) return pitch
+  const asinSafe = (x: number) => Math.asin(Math.min(1, Math.max(-1, x)))
+  // Camera height above the pivot is up - sin(orbit) * distance.
+  const maxUp = asinSafe((rig.up + THIRD_PERSON.minBelowPivot) / rig.distance)
+  const rise = ceiling - margin - pivotY
+  const maxDown = rise > rig.up ? asinSafe((rise - rig.up) / rig.distance) : 0
+  return Math.min(maxUp, Math.max(-maxDown, pitch))
+}
+
+/** Camera forward vector for a yaw/pitch (written into `out` when given, to avoid allocations). */
+export function lookVector(yaw: number, pitch: number, out: Vec3 = [0, 0, 0]): Vec3 {
   const cp = Math.cos(pitch)
-  return [-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp]
+  out[0] = -Math.sin(yaw) * cp
+  out[1] = Math.sin(pitch)
+  out[2] = -Math.cos(yaw) * cp
+  return out
 }
 
 /** Camera right vector (horizontal) for a yaw. */
@@ -52,10 +107,23 @@ export function rightVector(yaw: number): Vec3 {
  * Unit direction from the pivot to the ideal third-person camera spot (behind, up and to the
  * side), plus its length. Scale with `distance` (blended) to get the wanted offset.
  */
-export function thirdPersonOffset(yaw: number, pitch: number, distance: number = THIRD_PERSON.distance, side: number = THIRD_PERSON.side, up: number = THIRD_PERSON.up): Vec3 {
-  const f = lookVector(yaw, pitch)
-  const r = rightVector(yaw)
-  return [-f[0] * distance + r[0] * side, -f[1] * distance + up, -f[2] * distance + r[2] * side]
+export function thirdPersonOffset(
+  yaw: number,
+  pitch: number,
+  distance: number = THIRD_PERSON.distance,
+  side: number = THIRD_PERSON.side,
+  up: number = THIRD_PERSON.up,
+  out: Vec3 = [0, 0, 0],
+): Vec3 {
+  const cp = Math.cos(pitch)
+  const fx = -Math.sin(yaw) * cp
+  const fy = Math.sin(pitch)
+  const fz = -Math.cos(yaw) * cp
+  // Right vector: (cos yaw, 0, -sin yaw).
+  out[0] = -fx * distance + Math.cos(yaw) * side
+  out[1] = -fy * distance + up
+  out[2] = -fz * distance - Math.sin(yaw) * side
+  return out
 }
 
 /** Room interior the camera must stay inside (walls have window openings, so colliders alone leak). */
@@ -109,6 +177,9 @@ export function interiorT(from: Vec3, to: Vec3, interior: Interior = ROOM_INTERI
   return t
 }
 
+/** Scratch end point for clearDistance (it runs every frame; no garbage). */
+const SEGMENT_END: Vec3 = [0, 0, 0]
+
 /**
  * How far along `offset` (from `pivot`) the camera may go before it would clip into a collider
  * or leave the room, as a distance in metres (|offset| when nothing is in the way).
@@ -116,7 +187,10 @@ export function interiorT(from: Vec3, to: Vec3, interior: Interior = ROOM_INTERI
 export function clearDistance(pivot: Vec3, offset: Vec3, boxes: readonly Pick<AABB, 'min' | 'max'>[], margin: number = THIRD_PERSON.margin, interior: Interior = ROOM_INTERIOR): number {
   const len = Math.hypot(offset[0], offset[1], offset[2])
   if (len < 1e-6) return 0
-  const to: Vec3 = [pivot[0] + offset[0], pivot[1] + offset[1], pivot[2] + offset[2]]
+  const to = SEGMENT_END
+  to[0] = pivot[0] + offset[0]
+  to[1] = pivot[1] + offset[1]
+  to[2] = pivot[2] + offset[2]
   let t = interiorT(pivot, to, interior, margin)
   for (const b of boxes) {
     const hit = segmentBoxT(pivot, to, b, margin)
