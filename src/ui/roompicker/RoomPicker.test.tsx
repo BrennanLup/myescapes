@@ -21,7 +21,7 @@ async function typeAndWait(text: string) {
 describe('RoomPicker', () => {
   it('searches after a pause and lists rooms then venues', async () => {
     vi.useFakeTimers()
-    const search = vi.fn(async () => ({ games: [game], venues: [venue] }))
+    const search = vi.fn(async (_q: { q: string }) => ({ games: [game], venues: [venue] }))
     render(<RoomPicker onPick={() => {}} search={search} />)
     await typeAndWait('v')
     expect(search).not.toHaveBeenCalled()
