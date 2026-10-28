@@ -175,6 +175,8 @@ export class Connection {
 
 export class Home {
   readonly members = new Map<string, Connection>()
+  /** Handles this home went by earlier while open (lower case): reconnects may still use them. */
+  readonly formerHandles = new Set<string>()
   constructor(
     readonly ownerId: string,
     /** Refreshed on every join: the owner can change their @handle or name while people are inside. */
@@ -542,12 +544,15 @@ export class RealtimeHub {
     const owner = await this.access.homeOwner(handle)
     if (owner || !this.access.homeOwnerById) return owner
     const wanted = handle.trim().replace(/^@/, '').toLowerCase()
-    const stale = [...this.homes.values()].find((h) => h.handle.toLowerCase() === wanted)
+    const stale = [...this.homes.values()].find((h) => h.handle.toLowerCase() === wanted || h.formerHandles.has(wanted))
     return stale ? this.access.homeOwnerById(stale.ownerId) : null
   }
 
   /** Keep an open home's address and owner card in step with the owner's profile. */
   private refreshHome(home: Home, owner: HomeOwner): void {
+    // Remember the old address: guests (and the owner's other tabs) reconnect with the handle
+    // their page was opened with, and must not be told the room is gone.
+    if (home.handle.toLowerCase() !== owner.handle.toLowerCase()) home.formerHandles.add(home.handle.toLowerCase())
     home.handle = owner.handle
     home.owner = owner.user
   }

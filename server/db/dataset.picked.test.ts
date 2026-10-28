@@ -68,3 +68,25 @@ describe('saveEntryForUser with a directory game id', () => {
     expect(saved.room.id).toBe(FX.games.vault)
   })
 })
+
+describe('saveEntryForUser matching a typed venue by city name', () => {
+  const twin = (slug: string, citySlug: string, country: string) => ({ slug, name: 'Twin Escape', address: '', city: 'Paris', citySlug, region: '', country })
+
+  it('links none when the same name and city exist in two countries', async () => {
+    const [fr, us] = await t.db.insert(venues).values([twin('twin-escape-paris-fr', 'paris-fr', 'FR'), twin('twin-escape-paris-tx-us', 'paris-tx-us', 'US')]).returning()
+    const e = base()
+    const room = { ...e.room, id: 'room_twin', name: 'The Atelier', company: 'Twin Escape', city: 'Paris' }
+    const saved = await saveEntryForUser(t.db, FX.users.carol, { ...e, room, review: { ...e.review, id: 'rev_twin_1' } })
+    const [g] = await t.db.select().from(games).where(eq(games.id, saved.room.id))
+    expect([fr.id, us.id]).not.toContain(g.venueId)
+  })
+
+  it('still links a venue whose imported slug carries a country, when only one country matches', async () => {
+    const [be] = await t.db.insert(venues).values({ slug: 'solo-escape-oostduinkerke-be', name: 'Solo Escape', address: '', city: 'Oostduinkerke', citySlug: 'oostduinkerke-be', region: '', country: 'BE' }).returning()
+    const e = base()
+    const room = { ...e.room, id: 'room_solo', name: 'The Dunes', company: 'Solo Escape', city: 'Oostduinkerke' }
+    const saved = await saveEntryForUser(t.db, FX.users.carol, { ...e, room, review: { ...e.review, id: 'rev_solo_1' } })
+    const [g] = await t.db.select().from(games).where(eq(games.id, saved.room.id))
+    expect(g.venueId).toBe(be.id)
+  })
+})

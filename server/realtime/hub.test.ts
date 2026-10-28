@@ -434,6 +434,12 @@ describe('realtime hub: state, chat, emotes', () => {
     a.peer.clear()
     await send(a.conn, { type: 'join', home: 'alicia' })
     expect(a.peer.last('joined')).toMatchObject({ home: { handle: 'alicia' } })
+    // After that refresh, another reconnect with the old address still finds the room.
+    hub.disconnect(b2.conn)
+    const b3 = await connect(U.bob)
+    await send(b3.conn, { type: 'join', home: 'alice' })
+    expect(b3.peer.last('error')).toBeUndefined()
+    expect(b3.peer.last('joined')).toMatchObject({ home: { handle: 'alicia' } })
   })
 
   it('does not resolve a stale @handle once nobody is in that home', async () => {

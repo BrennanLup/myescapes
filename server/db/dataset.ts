@@ -133,20 +133,25 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
     // Otherwise match by name (or brand) and city. Imported venues keep a country-suffixed city
     // slug ("oostduinkerke-be") while the form only knows the city, so the city name counts too.
     // Directory venues (a real country) win over ones a user typed in before ("ZZ").
-    let venue = picked?.venue ?? pickedVenue ?? (
-      await tx
-        .select()
-        .from(venues)
-        .where(
-          and(
-            sql`(lower(${venues.name}) = lower(${venueName}) or lower(${venues.brand}) = lower(${venueName}))`,
-            sql`(${venues.citySlug} = ${cslug} or lower(${venues.city}) = lower(${room.city.trim()}))`,
-            ne(venues.status, 'hidden'),
-          ),
-        )
-        .orderBy(sql`case when ${venues.country} = 'ZZ' then 1 else 0 end`, venues.createdAt)
-        .limit(1)
-    )[0]
+    // A bare city name is ambiguous (Paris, London, Portland): when matches by name span more
+    // than one country and none has this exact city slug, link none rather than guess.
+    const byName = picked || pickedVenue
+      ? []
+      : await tx
+          .select()
+          .from(venues)
+          .where(
+            and(
+              sql`(lower(${venues.name}) = lower(${venueName}) or lower(${venues.brand}) = lower(${venueName}))`,
+              sql`(${venues.citySlug} = ${cslug} or lower(${venues.city}) = lower(${room.city.trim()}))`,
+              ne(venues.status, 'hidden'),
+            ),
+          )
+          .orderBy(sql`case when ${venues.citySlug} = ${cslug} then 0 else 1 end`, sql`case when ${venues.country} = 'ZZ' then 1 else 0 end`, venues.createdAt)
+          .limit(10)
+    const exact = byName.find((v) => v.citySlug === cslug)
+    const countries = new Set(byName.filter((v) => v.country !== 'ZZ').map((v) => v.country))
+    let venue = picked?.venue ?? pickedVenue ?? exact ?? (countries.size <= 1 ? byName[0] : undefined)
     if (!venue) {
       const slug = await uniqueSlug(tx, venues, venues.slug, slugify(`${venueName} ${room.city}`))
       venue = (
