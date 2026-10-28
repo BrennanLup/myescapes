@@ -214,7 +214,7 @@ export const games = pgTable(
   ],
 )
 
-export const DIRECTORY_SOURCE = ['foursquare', 'osm', 'user', 'google'] as const
+export const DIRECTORY_SOURCE = ['foursquare', 'osm', 'user', 'google', 'website'] as const
 
 /** Where each fact came from (licensing and attribution). One row per entity per source record. */
 export const sources = pgTable(
@@ -224,7 +224,7 @@ export const sources = pgTable(
     entityType: text('entity_type', { enum: ['venue', 'game'] }).notNull(),
     entityId: text('entity_id').notNull(),
     source: text('source', { enum: DIRECTORY_SOURCE }).notNull(),
-    /** Foursquare fsq_id, OSM `node/123`, Google place id, or the contributing user id. */
+    /** Foursquare fsq_id, OSM `node/123`, Google place id, the contributing user id, or the venue page read (`website`). */
     sourceId: text('source_id').notNull(),
     /** e.g. `Apache-2.0`, `ODbL-1.0`, `user-contribution`. */
     license: text('license').notNull(),

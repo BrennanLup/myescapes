@@ -9,6 +9,8 @@
  *   /games/:slug      public game page (16)
  *   /venues/:slug     public venue page (17)
  *   /cities/:slug     public city page (17)
+ *   /reviews          public review feed, all rooms, spoiler filter (?city=<slug>)
+ *   /admin/rooms      room crawler status and start form (admins)
  *   /daily            Escape of the Day (22)
  *   /settings         account settings: name, handle, export, delete (35)
  *   /invite/:code     invite landing (35)
@@ -45,6 +47,8 @@ export const ROUTE_TABLE: RouteEntry[] = [
   { pattern: '/games/:slug', page: page(() => import('./public/game'), (m) => m.GamePage) },
   { pattern: '/venues/:slug', page: page(() => import('./public/venue'), (m) => m.VenuePage) },
   { pattern: '/cities/:slug', page: page(() => import('./public/city'), (m) => m.CityPage) },
+  { pattern: '/reviews', page: page(() => import('./public/feed'), (m) => m.ReviewsFeedPage) },
+  { pattern: '/admin/rooms', page: page(() => import('./public/admin/crawler'), (m) => m.CrawlerAdminPage) },
   { pattern: '/daily', page: page(() => import('./daily/ui'), (m) => m.DailyPage) },
   { pattern: '/settings', page: page(() => import('./social/settings'), (m) => m.SettingsPage) },
   { pattern: '/invite/:code', page: page(() => import('./social'), (m) => m.InvitePage) },
@@ -104,6 +108,11 @@ export function navigate(to: string, opts: { replace?: boolean } = {}) {
 
 export function usePathname(): string {
   return useSyncExternalStore(subscribe, getPath, () => '/')
+}
+
+/** The query string (`?a=b`), re-rendering on navigation between URLs with the same path. */
+export function useSearch(): string {
+  return useSyncExternalStore(subscribe, () => (typeof window === 'undefined' ? '' : window.location.search), () => '')
 }
 
 export function useRoute(): RouteProps & { pathname: string } {

@@ -17,6 +17,7 @@ import { defineRoute, HttpError } from '../http'
 import { friendIds } from './friends.lib'
 import {
   authorInfo,
+  publicReviewList,
   publicReviewPage,
   reviewVisibleTo,
   toReviewV2,
@@ -74,8 +75,12 @@ export async function reviewsRoutes(app: FastifyInstance, ctx: AppContext) {
     )[0]
     // Same 404 as the game page for a hidden game or a game at a hidden venue.
     if (!game || game.status === 'hidden' || game.venueStatus === 'hidden') throw new HttpError('not_found', 'Game not found.')
-    return publicReviewPage(db, game.id, user?.id ?? null, { cursor: query.cursor, limit: query.limit, revealSpoilers: wantsSpoilers(req.query) })
+    return publicReviewPage(db, game.id, user?.id ?? null, { cursor: query.cursor, limit: query.limit, filter: query.filter, revealSpoilers: wantsSpoilers(req.query) })
   })
+
+  defineRoute(app, ctx, ROUTES.reviewFeed, async ({ query, user, req }) =>
+    publicReviewList(ctx.db(), user?.id ?? null, { cursor: query.cursor, limit: query.limit, filter: query.filter, citySlug: query.city, revealSpoilers: wantsSpoilers(req.query) }),
+  )
 
   async function canSee(row: ReviewRow, viewer: string | null): Promise<boolean> {
     const db = ctx.db()

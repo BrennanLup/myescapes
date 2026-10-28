@@ -165,10 +165,18 @@ export function staticPageMeta(p: string): PageMeta | null {
       path: '/daily',
     }
   }
+  if (p === '/reviews') {
+    return {
+      title: `Escape room reviews · ${SITE_NAME}`,
+      description: 'What players thought of the escape rooms they played, newest first. Filter out reviews with spoilers.',
+      path: '/reviews',
+    }
+  }
   if (p.startsWith('/invite/')) {
     return { title: `You're invited to ${SITE_NAME}`, description: 'Join me on My Escapes to log the escape rooms we play together.', path: p, noindex: true, noUrl: true }
   }
   if (p === '/m' || p.startsWith('/m/')) return { title: SITE_NAME, description: DEFAULT_DESCRIPTION, path: '/m', noindex: true }
+  if (p.startsWith('/admin')) return { title: `Admin · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, path: p, noindex: true, noUrl: true }
   if (p === '/settings') return { title: `Settings · ${SITE_NAME}`, description: DEFAULT_DESCRIPTION, path: '/settings', noindex: true }
   return null
 }
@@ -330,7 +338,7 @@ export function sitemapXml(origin: string, urls: SitemapUrl[]): string {
  * venues with an indexed game or from an import, and cities with an active venue.
  */
 export async function sitemapUrls(ctx: AppContext, limit = SITEMAP_LIMIT): Promise<SitemapUrl[]> {
-  const urls: SitemapUrl[] = [{ path: '/' }, { path: '/daily' }, { path: '/about' }, { path: '/privacy' }, { path: '/terms' }]
+  const urls: SitemapUrl[] = [{ path: '/' }, { path: '/daily' }, { path: '/reviews' }, { path: '/about' }, { path: '/privacy' }, { path: '/terms' }]
   if (ctx.dbState.status !== 'ready') return urls
   const db = ctx.db()
   const hasPublicReview = sql`exists (

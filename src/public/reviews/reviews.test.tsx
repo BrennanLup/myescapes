@@ -148,7 +148,7 @@ describe('ReviewList', () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId('more-reviews'))
     })
-    expect(fetchPage).toHaveBeenCalledWith('c2')
+    expect(fetchPage).toHaveBeenCalledWith('c2', 'all')
     await waitFor(() => expect(screen.getAllByTestId('review-card')).toHaveLength(4))
     expect(screen.queryByTestId('more-reviews')).toBeNull()
   })
@@ -167,5 +167,57 @@ describe('ReviewList', () => {
     render(<ReviewList gameSlug="g" initial={{ reviews: [], nextCursor: 'c2' }} fetchPage={() => Promise.reject(new Error('x'))} />)
     fireEvent.click(screen.getByTestId('more-reviews'))
     expect((await screen.findByRole('alert')).textContent).toContain("Couldn't load more")
+  })
+})
+
+describe('spoiler filter and spoiler comments', () => {
+  const blank = (r: (typeof REVIEWS)[number]) => ({
+    ...r,
+    ratings: Object.fromEntries(Object.entries(r.ratings).map(([k, v]) => [k, { ...v, comment: '' }])) as typeof r.ratings,
+  })
+
+  it('loads the first page again when the filter changes', async () => {
+    const fetchPage = vi.fn(async (_c: string | undefined, f: string) => ({ reviews: f === 'only' ? [REVIEWS[1]] : [REVIEWS[0]], nextCursor: null }))
+    render(<ReviewList gameSlug="g" initial={{ reviews: REVIEWS, nextCursor: null }} fetchPage={fetchPage} />)
+    expect(screen.getByTestId('spoiler-filter-all').getAttribute('aria-pressed')).toBe('true')
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('spoiler-filter-only'))
+    })
+    expect(fetchPage).toHaveBeenLastCalledWith(undefined, 'only')
+    await waitFor(() => expect(screen.getAllByTestId('review-card')).toHaveLength(1))
+    expect(screen.getByTestId('review-card').dataset.reviewId).toBe(REVIEWS[1].id)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('spoiler-filter-free'))
+    })
+    expect(fetchPage).toHaveBeenLastCalledWith(undefined, 'free')
+    await waitFor(() => expect(screen.getByTestId('review-card').dataset.reviewId).toBe(REVIEWS[0].id))
+  })
+
+  it('says when a filter has nothing', async () => {
+    render(<ReviewList gameSlug="g" initial={{ reviews: REVIEWS, nextCursor: null }} fetchPage={async () => ({ reviews: [], nextCursor: null })} />)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('spoiler-filter-only'))
+    })
+    expect(screen.getByTestId('review-list').textContent).toContain('No reviews with spoilers yet.')
+  })
+
+  it('fetches blanked spoiler comments only when revealed', async () => {
+    const spoiler = blank(REVIEWS[1])
+    const loadSpoilers = vi.fn(async () => REVIEWS[1].ratings)
+    render(<ReviewCard review={spoiler} loadSpoilers={loadSpoilers} />)
+    expect(loadSpoilers).not.toHaveBeenCalled()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Show spoilers' }))
+    })
+    expect(loadSpoilers).toHaveBeenCalledWith(spoiler.id)
+    expect(await screen.findByText(/astronomer was the thief/)).toBeTruthy()
+  })
+
+  it('shows the room on feed cards', () => {
+    const game = { id: 'g1', slug: 'the-vault', name: 'The Vault', genre: null, status: 'active' as const, venueId: 'v1', venueName: 'Lockbox', venueSlug: 'lockbox', city: 'Toronto', country: 'CA', reviewCount: 1, avgOverall: 80 }
+    render(<ReviewCard review={{ ...REVIEWS[0], game }} />)
+    const line = screen.getByTestId('review-game')
+    expect(line.textContent).toContain('The Vault · Lockbox · Toronto')
+    expect(line.querySelector('a')?.getAttribute('href')).toBe('/games/the-vault')
   })
 })

@@ -64,7 +64,7 @@ export type Me = z.infer<typeof MeSchema>
 // Directory: cities, venues, games, sources (workstreams 5-9, 16, 17)
 // ---------------------------------------------------------------------------
 
-export const DIRECTORY_SOURCES = ['foursquare', 'osm', 'user', 'google'] as const
+export const DIRECTORY_SOURCES = ['foursquare', 'osm', 'user', 'google', 'website'] as const
 export const DirectorySourceSchema = z.enum(DIRECTORY_SOURCES)
 export type DirectorySource = z.infer<typeof DirectorySourceSchema>
 
@@ -388,6 +388,8 @@ export const PublicReviewSchema = z.object({
   playedWith: z.array(z.object({ reviewId: z.string(), author: PublicUserSchema })),
   photos: z.array(PhotoV2Schema),
   createdAt: Timestamp,
+  /** The reviewed room. Set on the all-rooms review feed, left out on a game page. */
+  game: GameSummarySchema.optional(),
 })
 export type PublicReview = z.infer<typeof PublicReviewSchema>
 
@@ -419,6 +421,11 @@ export const PuzzleHighlightSchema = z.object({
 export type PuzzleHighlight = z.infer<typeof PuzzleHighlightSchema>
 
 export const PageCursorSchema = z.string().nullable()
+
+/** Review list spoiler filter: everything, only reviews without spoilers, or only reviews with spoilers. */
+export const SPOILER_FILTERS = ['all', 'free', 'only'] as const
+export const SpoilerFilterSchema = z.enum(SPOILER_FILTERS)
+export type SpoilerFilter = z.infer<typeof SpoilerFilterSchema>
 
 export const ReviewPageSchema = z.object({ reviews: z.array(PublicReviewSchema), nextCursor: PageCursorSchema })
 export type ReviewPage = z.infer<typeof ReviewPageSchema>
@@ -699,3 +706,46 @@ export const AccountExportSchema = z.object({
   reports: z.array(ReportSchema),
 })
 export type AccountExport = z.infer<typeof AccountExportSchema>
+
+// ---------------------------------------------------------------------------
+// Room crawler (venue websites -> rooms), admin only
+// ---------------------------------------------------------------------------
+
+export const EnrichRunSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['admin', 'sample']),
+  status: z.enum(['running', 'done', 'failed', 'abandoned']),
+  limit: z.number().int(),
+  budgetUsd: z.number(),
+  spentUsd: z.number(),
+  venues: z.number().int(),
+  venuesWithRooms: z.number().int(),
+  roomsAdded: z.number().int(),
+  note: z.string().nullable(),
+  startedAt: Timestamp,
+  finishedAt: Timestamp.nullable(),
+})
+export type EnrichRun = z.infer<typeof EnrichRunSchema>
+
+export const EnrichStatusSchema = z.object({
+  model: z.string(),
+  running: EnrichRunSchema.nullable(),
+  runs: z.array(EnrichRunSchema),
+  venuesTried: z.number().int(),
+  venuesWithRooms: z.number().int(),
+  /** Venues with a website and no rooms that no run has read yet. */
+  venuesLeft: z.number().int(),
+  /** Rooms (games) in the directory. */
+  rooms: z.number().int(),
+  spentUsd: z.number(),
+  /** What reading every remaining venue would cost, from the average so far. */
+  estimatedUsdForRest: z.number(),
+})
+export type EnrichStatus = z.infer<typeof EnrichStatusSchema>
+
+export const EnrichStartSchema = z.object({
+  limit: z.number().int().min(1).max(5000),
+  budgetUsd: z.number().min(0.5).max(500),
+  country: z.string().length(2).optional(),
+})
+

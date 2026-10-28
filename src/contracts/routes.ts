@@ -43,6 +43,9 @@ import {
   PhotoV2Schema,
   PublicUserSchema,
   RelationSchema,
+  SpoilerFilterSchema,
+  EnrichStartSchema,
+  EnrichStatusSchema,
   ReportInputSchema,
   ReportSchema,
   ReviewInputSchema,
@@ -99,6 +102,8 @@ const SlugParams = z.object({ slug: z.string().min(1) })
 const CodeParams = z.object({ code: z.string().min(1) })
 const UserIdParams = z.object({ userId: z.string().min(1) })
 const Cursor = z.object({ cursor: z.string().optional(), limit: z.coerce.number().int().min(1).max(50).optional() })
+/** `filter`: spoiler filter. `spoilers=1`: include the comments of spoiler-flagged reviews. */
+const ReviewListQuery = Cursor.extend({ filter: SpoilerFilterSchema.optional(), spoilers: z.string().max(8).optional() })
 const TimeZoneQuery = z.object({ tz: z.string().max(64).optional() })
 
 /** Phase 2 status. Replaces Phase 1's `storage: google-sheet | seed`. */
@@ -322,7 +327,16 @@ export const ROUTES = {
     summary: 'Create or replace my review on a visit I accepted. Changing any score clears scoresCopied. Public needs onboarding (403 onboarding_required).',
     params: IdParams, body: ReviewInputSchema, response: ReviewV2Schema,
   }),
-  review: route({ method: 'GET', path: '/api/reviews/:id', auth: 'optional', ws: 33, summary: 'One review, if its visibility allows the viewer. 404 otherwise.', params: IdParams, response: ReviewV2Schema }),
+  review: route({
+    method: 'GET', path: '/api/reviews/:id', auth: 'optional', ws: 33,
+    summary: 'One review, if its visibility allows the viewer. 404 otherwise. Spoiler comments only with ?spoilers=1.',
+    params: IdParams, query: z.object({ spoilers: z.string().max(8).optional() }), response: ReviewV2Schema,
+  }),
+  reviewFeed: route({
+    method: 'GET', path: '/api/reviews', auth: 'optional', ws: 33,
+    summary: 'Public reviews of every room (plus friends-only ones the viewer may see), newest first, paged. Optional spoiler filter and city.',
+    query: ReviewListQuery.extend({ city: z.string().max(120).optional() }), response: ReviewPageSchema,
+  }),
   updateReview: route({
     method: 'PATCH', path: '/api/reviews/:id', auth: 'user', ws: 33,
     summary: 'Author only: change visibility or the spoiler flag.',
@@ -330,8 +344,8 @@ export const ROUTES = {
   }),
   gameReviews: route({
     method: 'GET', path: '/api/games/:slug/reviews', auth: 'optional', ws: 33,
-    summary: 'Public reviews of a game (plus friends-only ones the viewer may see), newest first, paged.',
-    params: SlugParams, query: Cursor, response: ReviewPageSchema,
+    summary: 'Public reviews of a game (plus friends-only ones the viewer may see), newest first, paged. Optional spoiler filter.',
+    params: SlugParams, query: ReviewListQuery, response: ReviewPageSchema,
   }),
 
   // -------------------------------------------------------------------------
@@ -461,6 +475,16 @@ export const ROUTES = {
     method: 'POST', path: '/api/admin/reports/:id/resolve', auth: 'admin', ws: 25,
     summary: 'Hide the target or dismiss the report.',
     params: IdParams, body: z.object({ action: z.enum(['hide', 'dismiss']) }), response: ReportSchema,
+  }),
+  adminEnrichStatus: route({
+    method: 'GET', path: '/api/admin/enrich', auth: 'admin', ws: 25,
+    summary: 'Room crawler: runs, totals, rooms in the directory, and the cost estimate for the rest.',
+    response: EnrichStatusSchema,
+  }),
+  adminEnrichStart: route({
+    method: 'POST', path: '/api/admin/enrich', auth: 'admin', ws: 25,
+    summary: 'Start a room crawler run in the background (one at a time; stops before passing budgetUsd). 409 when one is running.',
+    body: EnrichStartSchema, response: z.object({ id: z.string() }), status: 202,
   }),
   adminHide: route({
     method: 'POST', path: '/api/admin/hide', auth: 'admin', ws: 25,
