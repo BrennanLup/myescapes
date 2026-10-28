@@ -201,6 +201,18 @@ describe('ConfirmOverlay exact directory match', () => {
     expect(await screen.findByTestId('confirm-room-linked')).toBeTruthy()
   })
 
+  it('does not auto-link over a room the person chose themselves when the box loses focus', async () => {
+    render(<ConfirmOverlay draft={at({ company: null, city: 'san francisco' })} />)
+    const input = document.getElementById('cf-room-search') as HTMLInputElement
+    act(() => input.focus())
+    expect(await screen.findByTestId('room-search-suggestion')).toBeTruthy()
+    fireEvent.change(input, { target: { value: 'My own room' } })
+    fireEvent.click(await screen.findByTestId('roompicker-option-create'))
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    await act(() => new Promise((r) => setTimeout(r, 20)))
+    expect(screen.queryByTestId('confirm-room-linked')).toBeNull()
+  })
+
   it('does not link again after "Change"', async () => {
     render(<ConfirmOverlay draft={at({ company: null, city: 'San Francisco' })} />)
     fireEvent.click(await screen.findByTestId('confirm-room-unlink'))

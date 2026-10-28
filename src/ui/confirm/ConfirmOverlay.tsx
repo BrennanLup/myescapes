@@ -148,6 +148,8 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   const clearFlags = (paths: string[]) => setFlags((fl) => fl.filter((x) => !paths.includes(x)))
 
   const pickRoom = (pick: RoomPick, auto = false) => {
+    // Once the person has chosen for themselves, never auto-link over it (even after Change).
+    if (!auto) autoTried.current = true
     setSaveError(null)
     setAutoLinked(auto)
     if (pick.kind === 'game') {
@@ -187,14 +189,20 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
     if (!suggested) return
     const onOut = (e: FocusEvent) => {
       if ((e.target as HTMLElement | null)?.id !== 'cf-room-search' || autoTried.current) return
-      autoTried.current = true
-      if (canAutoLink(formRef.current, suggested)) pickRoomRef.current({ kind: 'game', game: suggested }, true)
+      // Wait for the render after whatever moved focus (a pick from the list unmounts the box), so
+      // the draft and autoTried are current.
+      setTimeout(() => {
+        if (autoTried.current) return
+        autoTried.current = true
+        if (canAutoLink(formRef.current, suggested)) pickRoomRef.current({ kind: 'game', game: suggested }, true)
+      }, 0)
     }
     document.addEventListener('focusout', onOut)
     return () => document.removeEventListener('focusout', onOut)
   }, [suggested])
 
   const newRoom = (text: string) => {
+    autoTried.current = true
     setForm((f) => newRoomNamed(f, text))
     clearFlags(['room.name'])
     focusField(form.room.company.trim() ? 'room.city' : 'room.company')
