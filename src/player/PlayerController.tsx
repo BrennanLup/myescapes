@@ -12,6 +12,9 @@ import { PLAYER, type Vec3 } from '@/contracts/scene'
 import { selectControlsEnabled, useStore } from '@/state/store'
 import {
   clearDistance,
+  craneAmount,
+  craneSpot,
+  CRANE,
   damp,
   DESKTOP_RIG,
   easeBlend,
@@ -83,6 +86,10 @@ export function PlayerController({ firstPersonOnly = false, rigs }: PlayerContro
     camPos: [0, 0, 0] as Vec3,
     forward: [0, 0, 0] as Vec3,
     limits: [0, 0] as [number, number],
+    /** 0..1: how far the camera has risen over your head because a wall behind squeezed it. */
+    crane: 0,
+    craneAt: [0, 0, 0] as Vec3,
+    full: [0, 0, 0] as Vec3,
   })
 
   // Collider cache (refresh on registry change).
@@ -310,13 +317,14 @@ export function PlayerController({ firstPersonOnly = false, rigs }: PlayerContro
 
     const rig = st.isTouch ? (rigs?.touch ?? TOUCH_RIG) : (rigs?.desktop ?? DESKTOP_RIG)
     // The camera may look a little below your look pitch (the phone rig), easing in with the blend.
-    const camPitch = s.pitch - rig.tilt * third
-    camera.rotation.set(camPitch, s.yaw, 0, 'YXZ')
+    let camPitch = s.pitch - rig.tilt * third
     const c = cam.current
     if (third <= 0) {
+      camera.rotation.set(camPitch, s.yaw, 0, 'YXZ')
       c.init = false
       c.distance = 0
       c.clear = 1
+      c.crane = 0
       view.cameraDistance = 0
       view.rayStart = 0
       camera.position.set(pos[0], pos[1], pos[2])
@@ -351,6 +359,22 @@ export function PlayerController({ firstPersonOnly = false, rigs }: PlayerContro
     camPos[0] = pivot[0] + want[0] * k
     camPos[1] = pivot[1] + want[1] * k
     camPos[2] = pivot[2] + want[2] * k
+    // Backed into a wall or a corner: rise over your head instead of collapsing into it.
+    // How squeezed the full (unblended) spot is decides how far; it eases in and out.
+    const full = thirdPersonOffset(s.yaw, orbit, rig.distance, rig.side, rig.up, c.full)
+    const fullClear = clearDistance(pivot, full, boxes.current)
+    c.crane = damp(c.crane, craneAmount(fullClear) * third, CRANE.rate, dt)
+    if (c.crane > 1e-3) {
+      const spot = craneSpot(pivot, s.yaw, boxes.current, c.craneAt)
+      // Only when it actually shows more of you than the pulled-in spot.
+      if (spot.distance > c.distance) {
+        const w = c.crane
+        for (let i = 0; i < 3; i++) camPos[i] += (c.craneAt[i] - camPos[i]) * w
+        camPitch += (Math.min(camPitch, spot.pitch) - camPitch) * w
+        c.distance = Math.hypot(camPos[0] - pivot[0], camPos[1] - pivot[1], camPos[2] - pivot[2])
+      }
+    }
+    camera.rotation.set(camPitch, s.yaw, 0, 'YXZ')
     camera.position.set(camPos[0], camPos[1], camPos[2])
     view.cameraDistance = c.distance
     view.rayStart = rayStartDistance(camPos, lookVector(s.yaw, camPitch, c.forward), pos)
