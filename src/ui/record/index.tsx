@@ -23,6 +23,8 @@ export function RecordOverlay() {
   const [fileNote, setFileNote] = useState<string | null>(null)
   const liveRef = useRef<HTMLDivElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  const titleRef = useRef<HTMLHeadingElement | null>(null)
+  const textRef = useRef<HTMLTextAreaElement | null>(null)
   const extractSeq = useRef(0)
 
   const recording = cap.status === 'recording'
@@ -75,6 +77,22 @@ export function RecordOverlay() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [confirmClose, requestClose])
+
+  // Move focus into the dialog on open: the transcript box with a mouse or keyboard (type straight
+  // away), the title on touch screens (focusing a text box would pop the keyboard over the record
+  // button). On close, focus goes back to what opened it (the HUD's record button), unless the next
+  // overlay (the review form) has already taken it.
+  useEffect(() => {
+    const active = document.activeElement
+    const opener = active instanceof HTMLElement && active !== document.body ? active : null
+    const fine = window.matchMedia?.('(pointer: fine)')?.matches ?? true
+    const target = (fine && textRef.current) || titleRef.current
+    target?.focus({ preventScroll: true })
+    return () => {
+      const now = document.activeElement
+      if (opener?.isConnected && (!now || now === document.body)) opener.focus({ preventScroll: true })
+    }
+  }, [])
 
   useEffect(() => {
     const el = liveRef.current
@@ -146,7 +164,7 @@ export function RecordOverlay() {
         {/* Header */}
         <div className="flex items-start gap-3 border-b border-panel-edge/70 px-4 pt-4 pb-3 sm:px-7 sm:pt-6">
           <div className="min-w-0 flex-1">
-            <h2 id="record-title" className="font-display text-2xl font-semibold leading-tight sm:text-3xl">
+            <h2 id="record-title" ref={titleRef} tabIndex={-1} className="font-display text-2xl font-semibold leading-tight outline-none sm:text-3xl">
               Log a new escape
             </h2>
             <p className="mt-1 text-sm text-ink-soft sm:text-base">
@@ -311,6 +329,7 @@ export function RecordOverlay() {
               </div>
             ) : (
               <textarea
+                ref={textRef}
                 data-testid="transcript-input"
                 aria-label="Transcript"
                 value={transcript}
@@ -319,7 +338,10 @@ export function RecordOverlay() {
                   setTranscript(e.target.value)
                   if (error) setError(null)
                 }}
-                onKeyDown={(e) => e.stopPropagation()}
+                // Keep typing away from the room's key bindings, but let Escape reach the close handler.
+                onKeyDown={(e) => {
+                  if (e.key !== 'Escape') e.stopPropagation()
+                }}
                 placeholder={
                   fallback
                     ? 'Type or paste your notes: room name, company, city, puzzles, setting, story, score out of 100, escape time, tools...'

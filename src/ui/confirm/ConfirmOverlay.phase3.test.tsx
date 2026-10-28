@@ -163,3 +163,66 @@ describe('ConfirmOverlay photos', () => {
     expect(usePhotoQueue.getState().items).toHaveLength(0)
   })
 })
+
+// QA round 4: an exact directory hit links itself; otherwise a missing company points at "Use it".
+describe('ConfirmOverlay exact directory match', () => {
+  const at = (room: Partial<ReturnType<typeof sampleDraft>['room']>) => {
+    const d = sampleDraft()
+    return { ...d, room: { ...d.room, ...room } }
+  }
+
+  it('links a same-name, same-city match without a click and saves against that game', async () => {
+    const addEntry = vi.fn(async (e: Entry) => e)
+    useStore.setState({ addEntry })
+    render(<ConfirmOverlay draft={at({ company: null, city: 'san francisco' })} />)
+    const chip = await screen.findByTestId('confirm-room-linked')
+    expect(chip.textContent).toContain('Matched in the room directory')
+    expect(chip.textContent).toContain('Puzzle Parlour Downtown · San Francisco')
+    expect(screen.getByTestId('confirm-room-auto')).toBeTruthy()
+    // The search box (and its copy of the name) is gone; the fields are filled in.
+    expect(screen.queryByTestId('confirm-room-search')).toBeNull()
+    expect((screen.getByTestId('field-room.company') as HTMLInputElement).value).toBe('Puzzle Parlour Downtown')
+    // Focus stays on the dialog title (not moved to a field).
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Check your review' }))
+
+    fillRest()
+    await act(async () => fireEvent.click(screen.getByTestId('confirm-save')))
+    expect(addEntry).toHaveBeenCalledTimes(1)
+    expect(addEntry.mock.calls[0][0].room.id).toBe('gam_clock')
+  })
+
+  it('does not link again after "Change"', async () => {
+    render(<ConfirmOverlay draft={at({ company: null, city: 'San Francisco' })} />)
+    fireEvent.click(await screen.findByTestId('confirm-room-unlink'))
+    expect(await screen.findByTestId('room-search-suggestion')).toBeTruthy()
+    expect(screen.queryByTestId('confirm-room-linked')).toBeNull()
+  })
+
+  it('does not link a match from another city; Save and "Show me" point the missing company at "Use it"', async () => {
+    render(<ConfirmOverlay draft={at({ company: null, city: null })} />)
+    const use = await screen.findByTestId('room-search-suggestion')
+    expect(screen.queryByTestId('confirm-room-linked')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('confirm-save'))
+    expect(screen.getByTestId('error-room.company').textContent).toMatch(/Use it/)
+    expect(document.activeElement).toBe(use)
+
+    // (Not the search box: its list closes on a timer after blur.)
+    screen.getByTestId('field-room.name').focus()
+    fireEvent.click(screen.getByTestId('confirm-next-missing'))
+    expect(document.activeElement).toBe(use)
+
+    fireEvent.click(use)
+    expect(screen.queryByTestId('error-room.company')).toBeNull()
+  })
+
+  it('says "Not sure" and sentence-case genres, like every other control', () => {
+    render(<ConfirmOverlay draft={sampleDraft()} />)
+    const genre = screen.getByTestId('field-room.genre') as HTMLSelectElement
+    expect(genre.className).not.toMatch(/capitalize/)
+    const labels = [...genre.options].map((o) => o.textContent)
+    expect(labels[0]).toBe('Not sure')
+    expect(labels).toContain('Sci-fi')
+    expect(labels).toContain('Mystery')
+  })
+})

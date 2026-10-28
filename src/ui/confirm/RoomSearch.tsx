@@ -3,7 +3,7 @@
  * (`src/ui/roompicker`) plus an opt-in "Near me" toggle that sorts results nearest first, and an
  * "Add “…”" row for rooms the directory doesn't have. Light: no three.js, used by the phone too.
  */
-import { forwardRef, useCallback, useEffect, useId, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { GameSummary } from '@/contracts/models'
 import { callApi, ROUTES } from '@/contracts/routes'
 import { RoomPicker, type DirectoryQuery, type RoomPick, type RoomPickerProps } from '@/ui/roompicker'
@@ -48,6 +48,11 @@ export interface RoomSearchProps {
   city?: string | null
   /** Look this room up once and offer "Is it …?" when the directory has it exactly. */
   suggestFor?: { name: string; city?: string | null } | null
+  /**
+   * Told about the "Is it …?" suggestion when it appears (the game) or goes (null), so the form can
+   * link an exact match by itself or point its Company error at the suggestion.
+   */
+  onSuggestion?(game: GameSummary | null): void
   /** Tests: swap the search and the geolocation. */
   search?: RoomPickerProps['search']
   geolocation?: Geolocation
@@ -55,7 +60,7 @@ export interface RoomSearchProps {
 }
 
 export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function RoomSearch(
-  { onPick, onCreate, initialQuery = '', inputTestId = 'room-search-input', label = 'Find the room', hint = 'Type the room or venue name. Pick it from the list, or add it if it’s new.', inputProps, city = null, suggestFor = null, search, geolocation, debounceMs },
+  { onPick, onCreate, initialQuery = '', inputTestId = 'room-search-input', label = 'Find the room', hint = 'Type the room or venue name. Pick it from the list, or add it if it’s new.', inputProps, city = null, suggestFor = null, onSuggestion, search, geolocation, debounceMs },
   ref,
 ) {
   const near = useNearMe(geolocation)
@@ -63,6 +68,11 @@ export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function
   const hintId = useId()
   const on = near.status === 'on'
   const [suggestion, setSuggestion] = useState<GameSummary | null>(null)
+  const onSuggestionRef = useRef(onSuggestion)
+  useEffect(() => {
+    onSuggestionRef.current = onSuggestion
+  })
+  useEffect(() => onSuggestionRef.current?.(suggestion), [suggestion])
   const sName = suggestFor?.name?.trim() ?? ''
   const sCity = suggestFor?.city ?? null
   // Near me off: bias by the draft's city. The picker re-searches when this function changes.

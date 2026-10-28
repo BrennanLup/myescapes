@@ -285,3 +285,40 @@ describe('RecordOverlay', () => {
     off()
   })
 })
+
+// QA round 4: the dialog takes keyboard focus when it opens and gives it back when it closes.
+describe('RecordOverlay focus', () => {
+  const setPointer = (fine: boolean) =>
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q === '(pointer: fine)' ? fine : false, media: q, addEventListener() {}, removeEventListener() {} }))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('focuses the transcript box with a mouse, and returns focus to the record button on close', () => {
+    setPointer(true)
+    const opener = document.createElement('button')
+    opener.dataset.testid = 'record-button'
+    document.body.appendChild(opener)
+    opener.focus()
+    const { unmount } = render(<RecordOverlay />)
+    expect(document.activeElement).toBe(screen.getByTestId('transcript-input'))
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true)
+    unmount()
+    expect(document.activeElement).toBe(opener)
+    opener.remove()
+  })
+
+  it('focuses the dialog title on a touch screen (no keyboard popping up)', () => {
+    setPointer(false)
+    render(<RecordOverlay />)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Log a new escape' }))
+  })
+
+  it('Esc typed in the transcript box still closes the overlay', () => {
+    setPointer(true)
+    const onClose = vi.fn()
+    const off = bus.on('overlay:close', onClose)
+    render(<RecordOverlay />)
+    fireEvent.keyDown(screen.getByTestId('transcript-input'), { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    off()
+  })
+})

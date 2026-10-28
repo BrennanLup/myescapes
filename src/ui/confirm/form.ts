@@ -369,3 +369,19 @@ export function linkMatches(form: FormState): boolean {
   if (!l) return false
   return norm(form.room.name) === norm(l.name) && norm(form.room.company) === norm(l.venueName) && norm(form.room.city) === norm(l.city)
 }
+
+/**
+ * Whether a directory game can be linked without asking: the form still has no directory link or
+ * venue, and its room name and city are exactly the game's (case and spacing aside). Used for the
+ * extractor's "Is it …?" match, so an exact hit doesn't leave Company empty and blocking Save.
+ */
+export function canAutoLink(form: FormState, game: Pick<GameSummary, 'name' | 'city'>): boolean {
+  if (form.link || form.venue) return false
+  const city = norm(form.room.city)
+  return !!city && norm(form.room.name) === norm(game.name) && city === norm(game.city)
+}
+
+/** Genre for display: "sci-fi" -> "Sci-fi" (sentence case, like every other label in the form). */
+export function genreLabel(g: string): string {
+  return g ? g[0].toUpperCase() + g.slice(1) : g
+}
