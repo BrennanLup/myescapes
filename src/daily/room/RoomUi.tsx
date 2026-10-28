@@ -11,7 +11,7 @@ import { IconEye, IconPerson } from '@/ui/wardrobe/icons'
 import { Link } from '../../router'
 import { formatDuration } from '../engine'
 import { Finished, KIND_LABEL, useTick, type DailyPlayApi } from '../ui/DailyGame'
-import { btnGhost, btnPrimary, GuessHistory, GuessInput, PuzzleClues } from '../ui/views'
+import { btnGhost, btnPrimary, focusRing, GuessHistory, GuessInput, PuzzleClues } from '../ui/views'
 import { exitsToPhoneApp } from './exit'
 import { useRoomPlay } from './playStore'
 import { foundNow, looksLeft } from './search'
@@ -128,7 +128,7 @@ export function RoomHud({ play }: { play: DailyPlayApi }) {
   if (panel) return null
   const elapsed = progress.startedAt ? (progress.finishedAt ?? now) - progress.startedAt : 0
   const left = today.puzzle.maxGuesses - progress.guesses.length
-  const chip = 'rounded-full bg-panel/95 px-3 py-1.5 text-sm font-semibold text-ink shadow-[0_6px_18px_rgba(40,20,20,0.3)] ring-1 ring-panel-edge'
+  const chip = 'rounded-full bg-panel/95 px-3 py-1.5 text-sm font-semibold text-ink shadow-[0_6px_18px_rgba(40,20,20,0.3)] ring-1 ring-panel-edge focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-teal'
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-30 flex items-start justify-between gap-2 px-3 font-body" style={{ paddingTop: 'max(10px, env(safe-area-inset-top))' }}>
       <button type="button" data-testid="daily-room-menu" aria-label="Menu" onClick={() => open({ kind: 'menu' })} className={`${chip} pointer-events-auto grid h-11 w-11 place-items-center p-0 text-lg`}>
@@ -322,7 +322,7 @@ function Sheet({ title, children, testId, onClose }: { title: string; children: 
             aria-label="Close"
             data-testid="daily-room-close"
             onClick={onClose}
-            className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-2xl text-ink-soft transition hover:bg-[rgba(224,123,57,.12)] hover:text-ink"
+            className={`-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-2xl text-ink-soft transition hover:bg-[rgba(224,123,57,.12)] hover:text-ink ${focusRing}`}
           >
             ×
           </button>
@@ -352,7 +352,7 @@ function PanelBody({ panel, play, close, onLeave }: { panel: Exclude<RoomPanel, 
             <p className="text-center text-sm text-ink">{roomPrompt(c)}</p>
             {c.kind !== 'search' && (
               <details className="rounded-2xl bg-paper px-3 py-2 ring-1 ring-panel-edge">
-                <summary className="cursor-pointer text-sm font-semibold text-ink-soft">Clues from the room</summary>
+                <summary className={`cursor-pointer rounded-md text-sm font-semibold text-ink-soft ${focusRing}`}>Clues from the room</summary>
                 <div className="mt-2">
                   <PuzzleClues c={c} />
                 </div>
@@ -481,7 +481,7 @@ function HintPanel({ play }: { play: DailyPlayApi }) {
           {left > 0 ? `Take a hint (−150) · ${left} left` : 'No hints left'}
         </button>
         {progress.guesses.length > 0 && progress.status === 'playing' && (
-          <button type="button" data-testid="daily-give-up" className="min-h-10 px-3 text-sm text-ink-soft underline" onClick={() => play.dispatch({ type: 'giveUp', at: Date.now() })}>
+          <button type="button" data-testid="daily-give-up" className={`min-h-10 rounded-full px-3 text-sm text-ink-soft underline ${focusRing}`} onClick={() => play.dispatch({ type: 'giveUp', at: Date.now() })}>
             Give up for today
           </button>
         )}

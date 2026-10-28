@@ -30,15 +30,23 @@ export function exitsToPhoneApp(): boolean {
 
 /**
  * How far inside the daily door you arrive. Far enough that the third-person camera (3.1 m behind
- * you) keeps its full distance instead of being pulled in against the south wall, where the door
- * frame would fill a third of the first "welcome home" frame.
+ * you) keeps its full distance instead of being pulled in against the south wall or the door frame,
+ * where the door would fill a third of the first "welcome home" frame.
  */
-export const ARRIVAL_STEP_IN = 3.3
+export const ARRIVAL_STEP_IN = 3.8
+
+/**
+ * How far west of the door's centre line you arrive. After a solved day the door leaf stands open
+ * on the east side of the doorway (`src/gate/colliders.ts`), right where the over-the-shoulder camera
+ * (0.6 m to your right) would sit: it pulled the camera in to about 2 m, so your character filled
+ * the frame. From here the camera keeps its full distance and the leaf stays out of a wide view.
+ */
+export const ARRIVAL_SIDE_STEP = 1.1
 
 /** Arrival pose in the main room: a few steps inside the south (daily) door, looking north at the board. */
 export function homeArrivalPose(): { position: Vec3; yaw: number; pitch: number } {
   const door = ANCHORS.gateDoor.position
-  return { position: [door[0], PLAYER.eyeHeight, door[2] - ARRIVAL_STEP_IN], yaw: 0, pitch: 0 }
+  return { position: [door[0] - ARRIVAL_SIDE_STEP, PLAYER.eyeHeight, door[2] - ARRIVAL_STEP_IN], yaw: 0, pitch: 0 }
 }
 
 /** Hand the player over to the main room (or the phone app) and navigate there. */

@@ -89,6 +89,10 @@ test.describe('Escape of the Day in 3D', () => {
     // You arrive a few steps inside your room's daily door (room for the third-person camera), facing the board.
     const z = await page.evaluate(() => window.__ESCAPE__!.runtime.player.position[2])
     expect(z).toBeGreaterThan(4)
+    // In third person the camera keeps its full distance: the open door leaf no longer pulls it into your back.
+    await page.evaluate(() => window.__ESCAPE_VIEW__!.cameraMode.getState().setMode('third'))
+    await page.waitForFunction(() => (window.__ESCAPE_VIEW__?.playerView.blend ?? 0) > 0.99, null, { timeout: SLOW })
+    await expect.poll(() => page.evaluate(() => window.__ESCAPE_VIEW__!.playerView.cameraDistance), { timeout: SLOW }).toBeGreaterThan(2.9)
     // Without the "How to play" card over the welcome.
     await expect(page.getByTestId('controls-hint')).toHaveCount(0)
     expect(errors).toEqual([])
