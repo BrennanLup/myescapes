@@ -27,6 +27,11 @@ export interface CharacterMotion {
   action?: CharacterAction
   /** Look pitch in radians (the head follows a little). */
   lookPitch?: number
+  /**
+   * Far away: skip the small details (eyes, nose, mouth, ears, key ring), about a quarter of the
+   * meshes, which are a pixel or two at that distance anyway. Set by RemotePlayers.
+   */
+  far?: boolean
 }
 
 export type CharacterProps = Omit<ThreeElements['group'], 'children'> & {
@@ -70,6 +75,15 @@ export const Character = memo(function Character({ outfit, motion, speed = 0, ac
     elR: useRef<THREE.Group>(null),
     head: useRef<THREE.Group>(null),
   }
+  /** Groups of small details hidden when `motion.far` (registered by the parts that have them). */
+  const details = useRef<THREE.Group[]>([])
+  const shownDetail = useRef(true)
+  const detailRef = (g: THREE.Group | null) => {
+    if (!g || details.current.includes(g)) return
+    // A part that mounts later (a new outfit) starts in the current detail state.
+    g.visible = shownDetail.current
+    details.current.push(g)
+  }
   const anim = useRef({ phase: 0, time: Math.random() * 10 })
 
   useFrame((_, delta) => {
@@ -97,6 +111,12 @@ export const Character = memo(function Character({ outfit, motion, speed = 0, ac
     set(j.elL, p.elbowL)
     set(j.elR, p.elbowR)
     set(j.head, -p.headPitch, p.headRoll)
+    const detail = !motion?.far
+    if (detail !== shownDetail.current) {
+      shownDetail.current = detail
+      details.current = details.current.filter((g) => g.parent)
+      for (const g of details.current) g.visible = detail
+    }
   })
 
   const c = colours(outfit)
@@ -117,9 +137,9 @@ export const Character = memo(function Character({ outfit, motion, speed = 0, ac
             <Arm side={1} shoulder={j.shR} elbow={j.elR} outfit={outfit} c={c} />
             <mesh geometry={G.cylinder(0.052, 0.058, 0.1, 10)} material={M(c.skin)} position={[0, NECK_Y + 0.02, 0]} />
             <group ref={j.head} position={[0, NECK_Y, 0]}>
-              <Head outfit={outfit} c={c} />
+              <Head outfit={outfit} c={c} detailRef={detailRef} />
             </group>
-            <TorsoAccessory outfit={outfit} c={c} />
+            <TorsoAccessory outfit={outfit} c={c} detailRef={detailRef} />
           </group>
         </group>
       </Shadows>
@@ -158,6 +178,9 @@ interface PartProps {
   outfit: Outfit
   c: Colours
 }
+
+/** Registers a group of small details that is hidden far away (see `CharacterMotion.far`). */
+type DetailRef = (g: THREE.Group | null) => void
 
 // ---------------------------------------------------------------- legs and shoes
 
@@ -344,7 +367,7 @@ function HandItem({ side, outfit }: { side: -1 | 1; outfit: Outfit }) {
 }
 
 /** Accessories worn on the body: scarf, backpack, key ring. */
-function TorsoAccessory({ outfit }: PartProps) {
+function TorsoAccessory({ outfit, detailRef }: PartProps & { detailRef?: DetailRef }) {
   switch (outfit.accessory) {
     case 'acc-scarf':
       return (
@@ -369,7 +392,7 @@ function TorsoAccessory({ outfit }: PartProps) {
     case 'acc-keyring': {
       const gold = M(KIT_COLORS.gold, { metalness: 0.6, roughness: 0.35 })
       return (
-        <group position={[0.17, 0.02, -0.04]}>
+        <group ref={detailRef} position={[0.17, 0.02, -0.04]}>
           <mesh geometry={G.torus(0.035, 0.007, Math.PI * 2, 5, 14)} material={gold} rotation={[0, Math.PI / 2, 0]} />
           {[-0.4, 0, 0.4].map((r, i) => (
             <group key={i} rotation={[r, 0, 0]} position={[0.005, -0.035, 0]}>
@@ -388,27 +411,30 @@ function TorsoAccessory({ outfit }: PartProps) {
 
 // ---------------------------------------------------------------- head, face, hair, hats
 
-function Head({ outfit, c }: PartProps) {
+function Head({ outfit, c, detailRef }: PartProps & { detailRef?: DetailRef }) {
   const skin = M(c.skin)
   const eye = M(KIT_COLORS.eye, { roughness: 0.4 })
   const shine = M(KIT_COLORS.eyeShine, { roughness: 0.3 })
   return (
     <group position={[0, HEAD_Y, 0]}>
       <mesh geometry={G.sphere(HEAD_R, 18, 14)} material={skin} scale={[1, 1.04, 0.98]} />
-      {/* Ears */}
-      <mesh geometry={G.sphere(0.03, 8, 6)} material={skin} position={[-HEAD_R + 0.005, -0.005, 0.01]} scale={[0.6, 1, 0.9]} />
-      <mesh geometry={G.sphere(0.03, 8, 6)} material={skin} position={[HEAD_R - 0.005, -0.005, 0.01]} scale={[0.6, 1, 0.9]} />
-      {/* Face: eyes, shine, cheeks, nose, smile. Eyes at PLAYER.eyeHeight. */}
-      {[-1, 1].map((s) => (
-        <group key={s} position={[s * 0.055, 0.03, -HEAD_R + 0.012]}>
-          <mesh geometry={G.sphere(0.026, 10, 8)} material={shine} scale={[1, 1.2, 0.45]} position={[0, 0, 0.004]} />
-          <mesh geometry={G.sphere(0.019, 10, 8)} material={eye} scale={[1, 1.2, 0.6]} position={[0, -0.002, -0.006]} />
-          <mesh geometry={G.sphere(0.006, 6, 4)} material={shine} position={[0.006, 0.008, -0.016]} />
-          <mesh geometry={G.sphere(0.022, 8, 6)} material={M(KIT_COLORS.blush)} position={[s * 0.018, -0.045, 0.004]} scale={[1.2, 0.6, 0.4]} />
-        </group>
-      ))}
-      <mesh geometry={G.sphere(0.018, 8, 6)} material={M(shade(c.skin, -0.04))} position={[0, -0.005, -HEAD_R - 0.004]} />
-      <mesh geometry={G.torus(0.03, 0.006, Math.PI * 0.8, 4, 10)} material={M(KIT_COLORS.mouth)} position={[0, -0.045, -HEAD_R + 0.012]} rotation={[0, 0, Math.PI + Math.PI * 0.1]} />
+      {/* Small details, hidden far away (CharacterMotion.far). */}
+      <group ref={detailRef}>
+        {/* Ears */}
+        <mesh geometry={G.sphere(0.03, 8, 6)} material={skin} position={[-HEAD_R + 0.005, -0.005, 0.01]} scale={[0.6, 1, 0.9]} />
+        <mesh geometry={G.sphere(0.03, 8, 6)} material={skin} position={[HEAD_R - 0.005, -0.005, 0.01]} scale={[0.6, 1, 0.9]} />
+        {/* Face: eyes, shine, cheeks, nose, smile. Eyes at PLAYER.eyeHeight. */}
+        {[-1, 1].map((s) => (
+          <group key={s} position={[s * 0.055, 0.03, -HEAD_R + 0.012]}>
+            <mesh geometry={G.sphere(0.026, 10, 8)} material={shine} scale={[1, 1.2, 0.45]} position={[0, 0, 0.004]} />
+            <mesh geometry={G.sphere(0.019, 10, 8)} material={eye} scale={[1, 1.2, 0.6]} position={[0, -0.002, -0.006]} />
+            <mesh geometry={G.sphere(0.006, 6, 4)} material={shine} position={[0.006, 0.008, -0.016]} />
+            <mesh geometry={G.sphere(0.022, 8, 6)} material={M(KIT_COLORS.blush)} position={[s * 0.018, -0.045, 0.004]} scale={[1.2, 0.6, 0.4]} />
+          </group>
+        ))}
+        <mesh geometry={G.sphere(0.018, 8, 6)} material={M(shade(c.skin, -0.04))} position={[0, -0.005, -HEAD_R - 0.004]} />
+        <mesh geometry={G.torus(0.03, 0.006, Math.PI * 0.8, 4, 10)} material={M(KIT_COLORS.mouth)} position={[0, -0.045, -HEAD_R + 0.012]} rotation={[0, 0, Math.PI + Math.PI * 0.1]} />
+      </group>
       <Hair outfit={outfit} c={c} />
       <Hat outfit={outfit} c={c} />
       <FaceAccessory outfit={outfit} c={c} />

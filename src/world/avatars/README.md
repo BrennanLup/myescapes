@@ -9,13 +9,15 @@ Your character in the 3D room, and the same character for anyone else (other pla
 | `kit.ts` | Shared, cached geometries (`G`) and materials (`M(hex)`) for every character on screen. |
 | `Character.tsx` | `<Character outfit motion? speed? action? shadows? {...groupProps} />`. |
 | `LocalAvatar.tsx` | You: follows `playerView` (src/player/view.ts), visible only in third person (and plays the emote you sent to the room). Mounted by `World.tsx`. |
-| `RemotePlayers.tsx` | Other people in the room (workstream C): one `Character` each in their own look, moved from the interpolated poses in `src/net` every frame, with an @handle tag (a dot, gold for the host) and their latest chat line in a bubble (drei `Html`, fades out from 9 m, hidden past 16 m). Emotes play while they stand still. Mounted by `World.tsx`. |
+| `RemotePlayers.tsx` | Other people in the room (workstream C): one `Character` each in their own look, moved from the interpolated poses in `src/net` every frame, with an @handle tag (a dot, gold for the host) and their latest chat line in a bubble (drei `Html`, fades out from 9 m, hidden past 16 m). Emotes play while they stand still. Real shadows only on High quality with a mouse (`remoteShadows`), otherwise one soft blob-shadow quad each; past 8 m (`DETAIL_DISTANCE`) their small face details are skipped. Mounted by `World.tsx`. |
 
 ## Character
 - Built from primitives (capsules, spheres, boxes, cylinders, tori), about 40 small meshes, no textures and no downloaded model. Flat-shaded clothes, smooth skin, in the room's warm palette.
 - Origin between the feet on the floor; faces local **-Z**, so `rotation-y={yaw}` uses the camera's yaw convention (`runtime.player.yaw`). Eyes at 1.6 m (`PLAYER.eyeHeight`).
 - Joints: hips, knees, shoulders (swing and raise), elbows, head (pitch and roll), plus whole-body bob, lean, sway and twist. The walk cycle advances with distance walked (one cycle per 1.5 m), so feet don't slide at any speed.
 - The group carries `userData.raycastIgnore`, so a character never blocks interaction.
+- `motion.far = true` hides the small details (ears, eyes, cheeks, nose, mouth, the key ring), about a dozen meshes that are a pixel or two far away. Parts register them through `detailRef`.
+- Not done (yet): merging each outfit's static parts into one geometry per joint. With the shadow and distance savings a full home stays well inside the phone budget; revisit if profiling says otherwise.
 - Geometries and materials are shared module-level caches (never disposed; bounded by the catalogue). Changing an outfit re-renders that one character; motion never re-renders.
 
 ### For other players (workstream C)
@@ -33,4 +35,4 @@ Validate outfits received over the network with `OutfitSchema` (src/contracts/av
 - No real money: there is no payment provider. Prices are in keys only.
 
 ## Tests
-`catalog.test.ts` (ids, free choices, starter looks, normalising, ownership, keys), `animation.test.ts` (walk cycle, emotes, limits). The camera maths are tested in `src/player/camera.test.ts`.
+`catalog.test.ts` (ids, free choices, starter looks, normalising, ownership, keys), `animation.test.ts` (walk cycle, emotes, limits), `remote.test.ts` (shadow rule, detail distance, the shared blob shadow). The camera maths are tested in `src/player/camera.test.ts`.
