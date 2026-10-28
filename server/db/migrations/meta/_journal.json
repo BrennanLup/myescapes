@@ -15,6 +15,13 @@
       "when": 1792989381481,
       "tag": "0001_init",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793164518963,
+      "tag": "0002_avatars",
+      "breakpoints": true
     }
   ]
 }

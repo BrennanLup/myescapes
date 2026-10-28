@@ -287,11 +287,13 @@ const HINTS = {
     ['WASD', 'to walk, mouse to look (click to lock)'],
     ['Click / E', 'to interact'],
     ['Esc', 'to release the mouse'],
+    ['V', 'to see your character (third person)'],
   ],
   touch: [
     ['Left thumb', 'to walk'],
     ['Drag', 'to look around'],
     ['Tap', 'things to interact'],
+    ['Eye button', 'to see your character'],
   ],
 } as const
 

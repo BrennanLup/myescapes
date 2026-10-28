@@ -46,6 +46,8 @@ Locally the database is PGlite (a WebAssembly Postgres in `DATA_DIR/pglite`), so
 | Look | Click the room to lock the mouse, then move it. `Esc` releases it | Drag anywhere |
 | Interact | Aim the centre dot at something and click or press `E` | Aim at it, then press the big **Tap** button (or tap the thing) |
 | Sort the board | Keys `1`-`6`, the sort chips at the top right, or the tabs on the board itself (the seventh tab, **Crew**, groups rooms by who you played with) | Sort button at the top right, or the tabs on the board |
+| Camera | `V` or the **First / Third person** button at the bottom right switches between your own eyes and a view from behind your character (remembered on this device) | The round eye button at the bottom right |
+| Your look | The **Wardrobe** button at the bottom right | The hanger button at the bottom right |
 | Close a panel | `Esc` or the × button | The × button |
 
 The round buttons at the top right open the wish list, the year wrap, the voice recorder, settings (sensitivity, invert Y, quality, head bob, and an Account link to `/settings` when signed in), sound and the controls help.
@@ -60,6 +62,7 @@ The round buttons at the top right open the wish list, the year wrap, the voice 
 - **Review form.** Every question on one scrolling page (phone keyboards never hide the field you're typing in), the room found in the directory as you type (nearest first with **Near me**, or add a new one), and photos added while you write: resized in the browser, uploaded with progress right after you save, with Retry. Photos can also be added later from the review in the 3D room or the room's page on the phone.
 - **Reviews.** Public by default, or friends only, or private. Comments can be marked as spoilers. Admins can hide reviews, photos, games and venues that were reported.
 - **Escape of the Day.** Six guesses, hints that cost points, a spoiler-free share grid, streaks counted against the server's record of your day, and a friends leaderboard. Play it on `/daily` or walk through it in 3D at `/daily/room` (src/daily/room/README.md).
+- **Your character and the wardrobe.** A low-poly character you can see in third person, dressed in the wardrobe (skin tone, hair, top, bottom, shoes, hat, accessory, colours). Some items unlock with keys, earned by logging rooms (10) and solving Escape of the Day (5), plus 20 to start. No real money: there is no payment provider. Saved to your account (`GET/PUT /api/me/avatar`); in the demo room, free looks are kept on the device.
 - **Wish list** and the **Year in Escape Rooms** wrap (now with your #1 teammate).
 - **Visiting friends (Phase 3, server side).** A websocket at `/api/realtime` lets friends share a room live (poses at 10 Hz, emotes, short chat that is never stored, "Mia is in your room" presence), and `GET /api/homes/:handle` returns a friend's room read-only with only what you may already see. Friends only; signed-out visitors get no socket. See [`server/realtime/README.md`](server/realtime/README.md).
 

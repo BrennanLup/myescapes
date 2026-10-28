@@ -7,6 +7,7 @@
 import { and, asc, eq, inArray, isNotNull, ne, or } from 'drizzle-orm'
 import type { AccountExport, DailyResult, Friend, Invite, Notification, Report } from '../../src/contracts/models'
 import type { Db } from '../db/client'
+import { avatarExport } from './avatar.lib'
 import {
   dailyResults,
   friendships,
@@ -184,6 +185,7 @@ export async function exportAccount(db: Db, userId: string, origin: string, now:
     dailyResults: dailyOut,
     notifications: notesOut,
     reports: reportsOut,
+    avatar: await avatarExport(db, userId),
   }
 }
 

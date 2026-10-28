@@ -18,6 +18,7 @@ import { LoadingScreen, Hud, SettingsOverlay } from './ui/shell'
 import { Reticle } from './interaction'
 import { MobileControls } from './player'
 import { AudioSystem } from './audio'
+import { CharacterHud, WardrobeOverlay } from './ui/wardrobe'
 
 const DPR: Record<string, [number, number]> = { low: [0.75, 1], medium: [1, 1.5], high: [1, 2] }
 
@@ -40,6 +41,8 @@ function Overlays() {
       return <DailyOverlay />
     case 'settings':
       return <SettingsOverlay />
+    case 'wardrobe':
+      return <WardrobeOverlay />
   }
 }
 
@@ -63,6 +66,7 @@ export function App() {
       <Hud />
       <Reticle />
       <MobileControls />
+      <CharacterHud />
       <Overlays />
       <LoadingScreen />
       <DailyWelcome />

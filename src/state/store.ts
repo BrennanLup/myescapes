@@ -21,6 +21,7 @@ export type Overlay =
   | { kind: 'wishlist' }
   | { kind: 'wrap' }
   | { kind: 'settings' }
+  | { kind: 'wardrobe' }
 
 export type QualityPreset = 'low' | 'medium' | 'high'
 

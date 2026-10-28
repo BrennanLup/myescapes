@@ -1,7 +1,8 @@
 /**
- * First-person controller (inside the Canvas). No visible avatar.
+ * Player controller (inside the Canvas): first person, or third person behind your character.
  * Keyboard movement, pointer-lock mouse look with click-and-drag fallback,
  * touch joystick/look via runtime, collisions against the collider registry.
+ * `V` toggles the camera mode (see view.ts); the camera maths live in camera.ts.
  */
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -9,6 +10,7 @@ import { colliders } from '@/contracts/colliders'
 import { runtime } from '@/contracts/runtime'
 import { PLAYER, type Vec3 } from '@/contracts/scene'
 import { selectControlsEnabled, useStore } from '@/state/store'
+import { clearDistance, damp, easeBlend, followDistance, lookVector, rayStartDistance, stepBodyYaw, THIRD_PERSON, thirdPersonOffset } from './camera'
 import { eventCode, inputFromKeys, isMoveKey, isTypingTarget } from './keyboard'
 import {
   applyLook,
@@ -21,6 +23,7 @@ import {
   type MoveInput,
   type MoveState,
 } from './movement'
+import { playerView, useCameraMode } from './view'
 
 /** Ignore single locked-mouse events larger than this (px); real flicks are spread over many events. */
 const MAX_LOCKED_DELTA = 250
@@ -46,6 +49,8 @@ export function PlayerController() {
   /** What we last wrote to runtime.player, to detect outside edits (tests/screenshots). */
   const written = useRef<{ position: Vec3; yaw: number; pitch: number } | null>(null)
   const boxes = useRef(colliders.all())
+  /** Third-person camera state: smoothed head pivot and the current (wall-limited) distance. */
+  const cam = useRef({ pivot: [0, 0, 0] as Vec3, distance: 0, clear: 1, init: false })
 
   // Collider cache (refresh on registry change).
   useEffect(() => {
@@ -61,6 +66,10 @@ export function PlayerController() {
     const down = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
       const code = eventCode(e)
+      if (code === 'KeyV') {
+        if (!e.repeat && controlsEnabled()) useCameraMode.getState().toggle()
+        return
+      }
       if (!isMoveKey(code) || !controlsEnabled()) return
       keys.add(code)
       if (code.startsWith('Arrow')) e.preventDefault()
@@ -193,6 +202,7 @@ export function PlayerController() {
     if (w && (p.position[0] !== w.position[0] || p.position[1] !== w.position[1] || p.position[2] !== w.position[2] || p.yaw !== w.yaw || p.pitch !== w.pitch)) {
       if (p.position[1] !== w.position[1]) baseY.current = p.position[1]
       s = { ...s, pos: [p.position[0], p.position[2]], vel: [0, 0], yaw: p.yaw, pitch: p.pitch }
+      playerView.bodyYaw = p.yaw
     }
 
     const tp = runtime.pendingTeleport
@@ -206,6 +216,8 @@ export function PlayerController() {
         yaw: tp.yaw ?? s.yaw,
         pitch: tp.pitch ?? s.pitch,
       }
+      // A teleport faces your character the way you now look.
+      playerView.bodyYaw = s.yaw
     }
 
     // Look.
@@ -230,7 +242,16 @@ export function PlayerController() {
     state.current = s
 
     const speed = speedOf(s)
-    const bob = headBob ? headBobOffset(s.bobPhase, speed) : 0
+    const view = playerView
+    const mode = useCameraMode.getState().mode
+    view.mode = mode
+    const dt = Math.min(Math.max(delta, 0), 0.25)
+    const blendStep = dt / THIRD_PERSON.blendSeconds
+    view.blend = mode === 'third' ? Math.min(1, view.blend + blendStep) : Math.max(0, view.blend - blendStep)
+    const third = easeBlend(view.blend)
+
+    // Head bob only makes sense through the character's own eyes.
+    const bob = headBob ? headBobOffset(s.bobPhase, speed) * (1 - third) : 0
     const pos: Vec3 = [s.pos[0], baseY.current + bob, s.pos[1]]
     p.position = pos
     p.yaw = s.yaw
@@ -239,8 +260,42 @@ export function PlayerController() {
     p.moving = speed > 0.3
     written.current = { position: [pos[0], pos[1], pos[2]], yaw: s.yaw, pitch: s.pitch }
 
-    camera.position.set(pos[0], pos[1], pos[2])
+    view.feet = [s.pos[0], baseY.current - PLAYER.eyeHeight, s.pos[1]]
+    view.bodyYaw = stepBodyYaw(view.bodyYaw, s.vel, s.yaw, third > 0 ? 'third' : 'first', dt)
+    view.lookPitch = s.pitch
+    view.speed = speed
+
     camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ')
+    const c = cam.current
+    const head: Vec3 = [pos[0], baseY.current - THIRD_PERSON.pivotDrop, pos[2]]
+    if (third <= 0) {
+      c.init = false
+      c.distance = 0
+      c.clear = 1
+      view.cameraDistance = 0
+      view.rayStart = 0
+      camera.position.set(pos[0], pos[1], pos[2])
+      return
+    }
+    // Smooth follow of the head; snap after teleports and on the first third-person frame.
+    const jump = Math.hypot(head[0] - c.pivot[0], head[1] - c.pivot[1], head[2] - c.pivot[2])
+    if (!c.init || jump > 2) {
+      c.pivot = [...head]
+      c.init = true
+    } else {
+      c.pivot = [0, 1, 2].map((i) => damp(c.pivot[i], head[i], THIRD_PERSON.followRate, dt)) as Vec3
+    }
+    const want = thirdPersonOffset(s.yaw, s.pitch, THIRD_PERSON.distance * third, THIRD_PERSON.side * third, THIRD_PERSON.up * third)
+    const wantLen = Math.hypot(want[0], want[1], want[2])
+    // Work in fractions of the wanted offset, so the mode blend and the wall pull-in compose.
+    const allowed = wantLen > 1e-6 ? Math.min(1, clearDistance(c.pivot, want, boxes.current) / wantLen) : 0
+    c.clear = followDistance(c.clear, allowed, dt)
+    const k = c.clear
+    c.distance = wantLen * k
+    const camPos: Vec3 = [c.pivot[0] + want[0] * k, c.pivot[1] + want[1] * k, c.pivot[2] + want[2] * k]
+    camera.position.set(camPos[0], camPos[1], camPos[2])
+    view.cameraDistance = c.distance
+    view.rayStart = rayStartDistance(camPos, lookVector(s.yaw, s.pitch), pos)
   })
 
   return null

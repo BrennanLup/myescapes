@@ -155,3 +155,33 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
 - (C server) Outfits are relayed as a small bounded record until workstream B's `Outfit` schema exists; the integrator can swap it in.
 - (C server) The privacy policy now says friends can visit your room and that presence/position/chat are shared live and not stored: the old "your room: you only" line would have become untrue.
 - (C server) Route contract entries use `ws: 303` (Phase 3, workstream C), since `RouteSpec.ws` is a number.
+- (B) Keys are never stored as a balance: the server counts them from your visits (owner or
+  accepted, 10 each) and solved Escape of the Day results (5 each), plus 20 welcome keys, minus
+  what you spent. Nothing to tamper with or keep in sync; deleting a visit later can't take back
+  what you bought (the balance floors at 0).
+- (B) Outfits live in a new `avatars` table (one row per user) and purchases in `avatar_purchases`
+  (migration `0002_avatars`), not `users.outfit`: Better Auth owns `users`, and purchases need their
+  own rows anyway. Integrator: if another branch also adds a `0002_*` migration, regenerate one of them.
+- (B) The avatar routes are specified in a new `src/contracts/avatar.ts` (same `RouteSpec` shape,
+  called with `callApi`) instead of editing `routes.ts`, so Phase 3 teams don't collide in one file.
+  Registered as one line in `server/routes/registry.ts` (ws 302).
+- (B) Purchases are serialised per user with a transaction-scoped advisory lock, so two buys at
+  once can't overspend. A purchase can also wear the new look in the same transaction.
+- (B) First person stays the default camera (today's behaviour and every existing e2e test); the
+  choice is per device in localStorage. The controls hint gained a "V" line.
+- (B) Third person is over the shoulder (3.1 m back, 0.3 m up, 0.6 m right) so your head never
+  covers the reticle; the interaction ray starts at the point on the view ray nearest your eyes,
+  so reach is measured from the character, not the camera (2-line change in
+  `src/interaction/InteractionSystem.tsx`).
+- (B) Your body turns towards where you walk in third person and stays put while you only look
+  around (mouse/touch orbits the camera around you), the usual third-person feel.
+- (B) People who never opened the wardrobe get a deterministic free starter look from their user
+  id, so a room full of friends doesn't look identical (also what remote players show).
+- (B) The character HUD (camera toggle and wardrobe) is its own bottom-right cluster mounted in
+  `App.tsx`, not new buttons in the top HUD row, which is already full on a 360 px phone.
+- (B) The wardrobe preview is a second small canvas (low-power, lower DPR on Low quality) rather
+  than re-using the room's camera; without WebGL it falls back to a text description.
+- (B) Signed-out demo visitors can change and keep free looks on their device, but cannot earn or
+  spend keys (the wardrobe asks them to sign in).
+- (B) The account export (`/api/me/export`) now includes your saved look and purchases (an
+  optional `avatar` field), to keep the privacy promise that the download holds all your data.

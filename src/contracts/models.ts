@@ -704,6 +704,13 @@ export const AccountExportSchema = z.object({
   dailyResults: z.array(DailyResultSchema),
   notifications: z.array(NotificationSchema),
   reports: z.array(ReportSchema),
+  /** Your character (Phase 3): the saved look (catalogue ids) and wardrobe items bought with keys. */
+  avatar: z
+    .object({
+      outfit: z.record(z.string(), z.string()).nullable(),
+      purchases: z.array(z.object({ itemId: z.string(), price: z.number().int(), createdAt: Timestamp })),
+    })
+    .optional(),
 })
 export type AccountExport = z.infer<typeof AccountExportSchema>
 
