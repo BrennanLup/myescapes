@@ -163,8 +163,10 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
     setSaveError(null)
     try {
       const entry = draftToEntry(form, useStore.getState().rooms)
-      const saved = await useStore.getState().addEntry(entry)
+      // A successful save closes this overlay (entry:saved) before addEntry returns, and the
+      // unmount must not drop the queued photos, so mark it saved first (undone on failure).
       savedRef.current = true
+      const saved = await useStore.getState().addEntry(entry)
       const queue = usePhotoQueue.getState()
       const photos = summarize(queue.items.filter((i) => i.target === photoTarget))
       if (signedIn && photos.total > 0) {
@@ -177,6 +179,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
         showToast('Pinned to the board!')
       }
     } catch (err) {
+      savedRef.current = false
       setSaveError(err instanceof Error ? err.message : String(err))
       setSaving(false)
     }

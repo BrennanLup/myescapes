@@ -6,6 +6,7 @@
 import { forwardRef, useEffect, useId, useState } from 'react'
 import type { GameSummary } from '@/contracts/models'
 import { RoomPicker, searchDirectory, type RoomPick, type RoomPickerProps } from '@/ui/roompicker'
+import { keyboardInset } from './keyboard'
 import { nearLabel, useNearMe } from './near'
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
@@ -84,24 +85,38 @@ export const RoomSearch = forwardRef<HTMLInputElement, RoomSearchProps>(function
           </button>
         )}
       </div>
-      <RoomPicker
-        ref={ref}
-        allowCreate
-        initialQuery={initialQuery}
-        near={near.near}
-        limit={8}
-        search={search}
-        debounceMs={debounceMs}
-        onPick={onPick}
-        onCreate={onCreate}
-        inputProps={{
-          placeholder: 'e.g. The Lost Observatory',
-          'aria-labelledby': labelId,
-          'aria-describedby': hintId,
-          ...({ 'data-testid': inputTestId } as Record<string, string>),
-          ...inputProps,
-        }}
-      />
+      {/* The shared picker opens its list upwards on narrow screens (good for a field low on the
+          page). This field sits near the top of the form, so its list always opens below, capped
+          so it fits above a phone keyboard. */}
+      <div className="[&_[role=listbox]]:top-full [&_[role=listbox]]:bottom-auto [&_[role=listbox]]:mt-1 [&_[role=listbox]]:mb-0 [&_[role=listbox]]:max-h-[min(18rem,42svh)]">
+        <RoomPicker
+          ref={ref}
+          allowCreate
+          initialQuery={initialQuery}
+          near={near.near}
+          limit={8}
+          search={search}
+          debounceMs={debounceMs}
+          onPick={onPick}
+          onCreate={onCreate}
+          inputProps={{
+            placeholder: 'e.g. The Lost Observatory',
+            'aria-labelledby': labelId,
+            'aria-describedby': hintId,
+            ...({ 'data-testid': inputTestId } as Record<string, string>),
+            ...inputProps,
+            style: { scrollMarginTop: 16, ...inputProps?.style },
+            onFocus: (e) => {
+              inputProps?.onFocus?.(e)
+              // With a phone keyboard up, bring the field to the top so the results fit under it.
+              const el = e.currentTarget
+              setTimeout(() => {
+                if (document.activeElement === el && keyboardInset() > 0) el.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+              }, 420)
+            },
+          }}
+        />
+      </div>
       {suggestion && (
         <button
           type="button"

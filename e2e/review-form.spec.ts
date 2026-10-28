@@ -53,10 +53,11 @@ test('review form: room search, photos while reviewing, on the phone and in the 
   await test.step('phone: draft a review by typing', async () => {
     await pp.goto('/m/log')
     await pp.getByTestId('record-type-instead').click()
-    await pp.getByTestId('transcript-input').fill('We played The Lost Observatory by Starlight Escapes in San Francisco. We escaped in 50 minutes. Overall 82, puzzles 85.')
+    // The e2e directory is the demo seed (seed/reviews.json venues and games).
+    await pp.getByTestId('transcript-input').fill('We played Subject Zero by The Puzzle Foundry in Toronto. We escaped in 50 minutes. Overall 82, puzzles 85.')
     await pp.getByTestId('transcript-submit').click()
-    await pp.locator('[data-testid^="match-game-"]', { hasText: 'Best match' }).first().click()
-    await expect(pp.getByTestId('confirm-game')).toHaveText('The Lost Observatory')
+    await pp.locator('[data-testid^="match-game-"]', { hasText: 'Best match' }).filter({ hasText: 'Subject Zero' }).click()
+    await expect(pp.getByTestId('confirm-game')).toHaveText('Subject Zero')
   })
 
   await test.step('phone: every question is on the one page', async () => {
@@ -70,9 +71,9 @@ test('review form: room search, photos while reviewing, on the phone and in the 
 
   await test.step('phone: change the room with the directory search', async () => {
     await pp.getByTestId('confirm-change-game').click()
-    await pp.getByTestId('confirm-room-search').fill('Subject Zero')
-    await pp.getByTestId('roompicker-option-game').filter({ hasText: 'Subject Zero' }).first().click()
-    await expect(pp.getByTestId('confirm-game')).toHaveText('Subject Zero')
+    await pp.getByTestId('confirm-room-search').fill('Golden Gate')
+    await pp.getByTestId('roompicker-option-game').filter({ hasText: 'Golden Gate Vault Job' }).first().click()
+    await expect(pp.getByTestId('confirm-game')).toHaveText('Golden Gate Vault Job')
   })
 
   await test.step('phone: add photos while writing, then save', async () => {
@@ -97,8 +98,11 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     await expect(attach.getByTestId('photo-tile')).toHaveCount(1, { timeout: SLOW })
     await expect(attach.getByRole('button', { name: 'Remove photo 1' })).toBeVisible()
     // The uploaded photo is served back (same-origin, participants only).
-    const src = await attach.locator('img').first().getAttribute('src')
-    expect((await pp.request.get(src!)).headers()['content-type']).toBe('image/jpeg')
+    const detail = await (await pp.request.get(`/api/visits/${encodeURIComponent(visitId)}`)).json()
+    expect(detail.photos).toHaveLength(1)
+    const img = await pp.request.get(detail.photos[0].url)
+    expect(img.status()).toBe(200)
+    expect(img.headers()['content-type']).toBe('image/jpeg')
   })
 
   const laptop = await newDevice(browser, baseURL!, 'laptop')
@@ -129,7 +133,7 @@ test('review form: room search, photos while reviewing, on the phone and in the 
         overlay: {
           kind: 'confirm',
           draft: {
-            room: { name: 'The Lost Observatory', company: 'Starlight', city: 'San Francisco', genre: null, address: null, website: null },
+            room: { name: 'The Last Lighthouse Keeper', company: 'Fog City', city: 'San Francisco', genre: null, address: null, website: null },
             review: {
               date: '2026-10-20', crew: [], ratings: { overall: r, puzzles: r, setting: r, storyline: r, difficulty: r }, puzzles: [],
               escaped: true, escapeTimeMinutes: 55, visibleTimer: true, multiRoom: false, flashlights: false, liveActors: false, toolsUsed: [], voiceTranscript: '',
@@ -142,15 +146,15 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     })
     await expect(lp.getByTestId('confirm-overlay')).toBeVisible()
     await lp.getByTestId('room-search-suggestion').click()
-    await expect(lp.getByTestId('confirm-room-linked')).toContainText('The Lost Observatory')
-    await expect(lp.getByTestId('field-room.company')).toHaveValue('Starlight Escapes')
+    await expect(lp.getByTestId('confirm-room-linked')).toContainText('The Last Lighthouse Keeper')
+    await expect(lp.getByTestId('field-room.company')).toHaveValue('Fog City Escapes')
     await lp.getByTestId('photo-input').setInputFiles([await pngFile(lp, 'four.png', '#e8b93a')])
     await expect(lp.getByTestId('confirm-photos').getByTestId('photo-status')).toHaveText(/1 photo will upload when you save/, { timeout: 30_000 })
     await lp.getByTestId('confirm-save').click()
     await waitOverlay(lp, null)
     const visits = await lp.evaluate(() => {
       const s = window.__ESCAPE__!.store.getState()
-      const room = s.rooms.find((x) => x.name === 'The Lost Observatory')
+      const room = s.rooms.find((x) => x.name === 'The Last Lighthouse Keeper')
       return s.reviews.filter((x) => x.roomId === room?.id).map((x) => x.id)
     })
     expect(visits).toHaveLength(1)

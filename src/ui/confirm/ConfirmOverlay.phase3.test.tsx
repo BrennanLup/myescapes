@@ -133,9 +133,14 @@ describe('ConfirmOverlay photos', () => {
       createUrl: () => 'blob:x',
       revokeUrl: () => {},
     })
-    const addEntry = vi.fn(async (e: Entry): Promise<Entry> => ({ ...e, review: { ...e.review, id: 'vis_saved' } }))
+    // Like the real store: a save closes the overlay (unmounts the form) before it resolves.
+    let unmount = () => {}
+    const addEntry = vi.fn(async (e: Entry): Promise<Entry> => {
+      unmount()
+      return { ...e, review: { ...e.review, id: 'vis_saved' } }
+    })
     useStore.setState({ addEntry, reviews: [...useStore.getState().reviews] })
-    render(<ConfirmOverlay draft={sampleDraft()} />)
+    ;({ unmount } = render(<ConfirmOverlay draft={sampleDraft()} />))
     await user.upload(screen.getByTestId('photo-input'), [new File(['a'], 'a.jpg', { type: 'image/jpeg' }), new File(['b'], 'b.jpg', { type: 'image/jpeg' })])
     await waitFor(() => expect(screen.getByTestId('photo-status').textContent).toMatch(/2 photos will upload when you save/))
     expect(uploaded).toHaveLength(0)
