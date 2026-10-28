@@ -15,6 +15,7 @@ import { GateDoor } from '@/gate'
 import { WrapTrophy } from '@/ui/wrap'
 import { PlayerController } from '@/player'
 import { LocalAvatar } from './avatars'
+import { RemotePlayers } from './avatars/RemotePlayers'
 import { InteractionSystem } from '@/interaction'
 import { PerfMonitor } from '@/ui/shell'
 
@@ -34,6 +35,7 @@ export function World() {
       <WrapTrophy />
       <PlayerController />
       <LocalAvatar />
+      <RemotePlayers />
       <InteractionSystem />
       <PerfMonitor />
     </>

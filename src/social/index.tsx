@@ -14,6 +14,8 @@ import { Link } from '../router'
 import { errorText, inviteMessage, isUnauthorized, loadBadge, loadFriends, loadInbox, normaliseSearch, smsHref, type Section } from './client'
 import { QrCode } from './qr'
 import { Avatar, Button, Card, ErrorLine, Loading, formatDate, useAction, useLoad, userLabel } from './ui'
+import { PresenceDot, VisitRoomLink, presenceText, useFriendPresence } from './visit/presence'
+import type { FriendPresence } from '../contracts/realtime'
 
 export { badgeCount, visitsToConfirm } from './client'
 
@@ -282,6 +284,8 @@ function RequestsCard({ requests, onChanged }: { requests: Section<FriendRequest
 }
 
 function FriendsList({ friends, onChanged }: { friends: Section<Friend[]>; onChanged(): void }) {
+  // Phase 3 C: who is online, and a way into their room.
+  const presence = useFriendPresence()
   return (
     <Card title="Friends" testId="friends-list">
       <SectionError s={friends} />
@@ -289,7 +293,7 @@ function FriendsList({ friends, onChanged }: { friends: Section<Friend[]>; onCha
       {friends.ok && (
         <ul className="divide-y divide-panel-edge/60">
           {friends.data.map((f) => (
-            <FriendRow key={f.user.id} friend={f} onChanged={onChanged} />
+            <FriendRow key={f.user.id} friend={f} onChanged={onChanged} presence={presence[f.user.id]} />
           ))}
         </ul>
       )}
@@ -297,7 +301,7 @@ function FriendsList({ friends, onChanged }: { friends: Section<Friend[]>; onCha
   )
 }
 
-function FriendRow({ friend, onChanged }: { friend: Friend; onChanged(): void }) {
+function FriendRow({ friend, onChanged, presence }: { friend: Friend; onChanged(): void; presence?: FriendPresence }) {
   const act = useAction()
   const [auto, setAuto] = useState(friend.autoAccept)
   const [confirm, setConfirm] = useState<null | 'unfriend' | 'block'>(null)
@@ -325,13 +329,18 @@ function FriendRow({ friend, onChanged }: { friend: Friend; onChanged(): void })
   return (
     <li className="space-y-2 py-3" data-testid="friend-row" data-user-id={friend.user.id}>
       <div className="flex items-center gap-3">
-        <Avatar name={name} image={friend.user.image} />
+        <span className="relative inline-flex shrink-0">
+          <Avatar name={name} image={friend.user.image} />
+          <PresenceDot presence={presence} />
+        </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-bold">{userLabel(friend.user)}</span>
           <span className="block text-xs text-ink-soft">
+            {presence ? <span className={presence.online ? 'font-bold text-good' : ''}>{presenceText(presence)} · </span> : null}
             {friend.visitsTogether} {friend.visitsTogether === 1 ? 'room' : 'rooms'} together
           </span>
         </span>
+        {friend.user.handle ? <VisitRoomLink handle={friend.user.handle} name={name} /> : null}
       </div>
       <label className="flex items-center justify-between gap-3 text-sm">
         <span>Always add {name}'s visits to my room</span>

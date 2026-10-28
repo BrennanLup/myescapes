@@ -5,7 +5,7 @@
 import { create } from 'zustand'
 import { apiClient, apiErrorStatus } from '@/contracts/api'
 import { bus } from '@/contracts/events'
-import type { LogRow } from '@/contracts/models'
+import type { LogRow, PublicUser } from '@/contracts/models'
 import { callApi, ROUTES } from '@/contracts/routes'
 import type { CrewMember, Dataset, Entry, ReviewDraft, Room, Review, SortKey, WishlistItem } from '@/contracts/types'
 import { buildCrewIndex, type BoardSortKey, type CrewIndex } from './crew'
@@ -22,6 +22,26 @@ export type Overlay =
   | { kind: 'wrap' }
   | { kind: 'settings' }
   | { kind: 'wardrobe' }
+
+/**
+ * A friend's room shown read-only at `/home/:handle` (Phase 3, workstream C; set by
+ * src/social/visit). `owner` is filled in once their room has loaded.
+ */
+export interface Visiting {
+  handle: string
+  owner: PublicUser | null
+}
+
+/** Overlays that would change the room: closed to visitors (logging a room, the wish list). */
+export const VISITOR_BLOCKED_OVERLAYS: ReadonlySet<Overlay['kind']> = new Set(['record', 'confirm', 'wishlist'])
+
+/** Where the room's data comes from: your own room, or a friend's while visiting. */
+let dataLoader: () => Promise<Dataset> = () => apiClient.getData()
+
+/** Load the room from somewhere else (a friend's home). `null` restores your own room. */
+export function setDataLoader(load: (() => Promise<Dataset>) | null) {
+  dataLoader = load ?? (() => apiClient.getData())
+}
 
 export type QualityPreset = 'low' | 'medium' | 'high'
 
@@ -73,6 +93,8 @@ export interface AppState {
   crewIndex: CrewIndex
   /** Rooms that arrived since the last visit (or from another device) and should fly onto the board. */
   pendingArrivals: string[]
+  /** Set while this page shows a friend's room: read-only (no logging, no wish list edits). */
+  visiting: Visiting | null
 
   // world / ui
   /** Last Phase 1 sort key (the HUD chips). The board shows `boardSort`. */
@@ -142,6 +164,7 @@ export const useStore = create<AppState>()((set, get) => ({
   logRows: null,
   crewIndex: {},
   pendingArrivals: [],
+  visiting: null,
 
   sort: 'city',
   boardSort: 'city',
@@ -156,7 +179,7 @@ export const useStore = create<AppState>()((set, get) => ({
   async loadData() {
     set({ dataStatus: 'loading', dataError: null })
     try {
-      get().setDataset(await apiClient.getData())
+      get().setDataset(await dataLoader())
     } catch (err) {
       set({ dataStatus: 'error', dataError: err instanceof Error ? err.message : String(err) })
       return
@@ -167,7 +190,7 @@ export const useStore = create<AppState>()((set, get) => ({
     if (get().dataStatus !== 'ready') return
     let d: Dataset
     try {
-      d = await apiClient.getData()
+      d = await dataLoader()
     } catch (err) {
       console.warn('[store] refresh failed', err)
       return
@@ -182,7 +205,8 @@ export const useStore = create<AppState>()((set, get) => ({
     if (d.source === 'postgres') await get().loadCrew()
   },
   async loadCrew(opts = {}) {
-    if (get().dataSource !== 'postgres') return
+    // Crew stickers and arrivals come from your own logs: not for a friend's room.
+    if (get().dataSource !== 'postgres' || get().visiting) return
     let rows: LogRow[]
     try {
       rows = (await callApi(ROUTES.logs, { query: {} })).rows
@@ -218,6 +242,7 @@ export const useStore = create<AppState>()((set, get) => ({
     return next
   },
   async addEntry(entry) {
+    if (get().visiting) throw new Error("This is a friend's room: log rooms in your own.")
     const saved = await apiClient.saveEntry(entry).catch((err: unknown) => {
       // Signed-out demo in production is read-only on the server: keep the entry on this page.
       if (get().dataSource !== 'postgres' && apiErrorStatus(err) === 401) return entry
@@ -238,6 +263,7 @@ export const useStore = create<AppState>()((set, get) => ({
     return saved
   },
   async setWishlist(items) {
+    if (get().visiting) throw new Error("This is a friend's room: change your wish list in your own.")
     const prev = get().wishlist
     set({ wishlist: items })
     try {
@@ -266,6 +292,7 @@ export const useStore = create<AppState>()((set, get) => ({
     bus.emit('sfx', { name: 'paper' })
   },
   openOverlay(o) {
+    if (get().visiting && VISITOR_BLOCKED_OVERLAYS.has(o.kind)) return
     set({ overlay: o, hoveredId: null })
   },
   closeOverlay() {

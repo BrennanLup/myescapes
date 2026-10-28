@@ -73,6 +73,8 @@ export function Hud() {
 function HudBar() {
   const wide = useMediaQuery('(min-width: 768px)')
   const rooms = useStore((s) => s.rooms.length)
+  // In a friend's room (Phase 3 C) nothing can be logged or wished for: src/social/visit shows a banner instead.
+  const visiting = useStore((s) => s.visiting !== null)
   const title = (
     <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-panel/90 px-3.5 py-1.5 shadow-[0_6px_18px_rgba(40,20,20,.28)] ring-1 ring-panel-edge backdrop-blur">
       <IconLock width={18} height={18} className="text-accent" />
@@ -85,15 +87,19 @@ function HudBar() {
   const buttons = (
     <>
       {!wide ? <SortMenu /> : null}
-      <RoundButton label="Wish list" onClick={() => bus.emit('wishlist:open')} testId="wishlist-button">
-        <IconStar />
-      </RoundButton>
+      {!visiting ? (
+        <RoundButton label="Wish list" onClick={() => bus.emit('wishlist:open')} testId="wishlist-button">
+          <IconStar />
+        </RoundButton>
+      ) : null}
       <RoundButton label="Year in Escape Rooms" onClick={() => bus.emit('wrap:open')} testId="wrap-button">
         <IconTrophy />
       </RoundButton>
-      <RoundButton label="Log a new room" onClick={() => bus.emit('record:open')} testId="record-button" accent>
-        <IconMic />
-      </RoundButton>
+      {!visiting ? (
+        <RoundButton label="Log a new room" onClick={() => bus.emit('record:open')} testId="record-button" accent>
+          <IconMic />
+        </RoundButton>
+      ) : null}
       <RoundButton label="Settings" onClick={() => bus.emit('settings:open')} testId="settings-button">
         <IconGear />
       </RoundButton>

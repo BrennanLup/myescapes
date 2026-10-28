@@ -8,11 +8,23 @@ import { installBridge } from './state/bridge'
 import { installTestHooks } from './contracts/testing'
 import { installRoomSync } from './state/sync'
 import { bus } from './contracts/events'
+import { installRealtime } from './net/session'
+import { bootedVisit, installVisit, markBooted, visitHandleFromPath } from './social/visit/state'
+import { installVisitNotices } from './social/visit/notices'
 
 installBridge()
 installTestHooks()
-// Loads the room (the signed-in user's data, or the seed demo) and keeps it fresh.
+// `/home/:handle` (Phase 3 C): a friend's room, read-only. Otherwise your own room (or the demo).
+const visit = typeof window === 'undefined' ? null : visitHandleFromPath(window.location.pathname)
+if (visit) {
+  installVisit(visit)
+  installVisitNotices()
+}
+markBooted(visit)
+// Loads the room (the signed-in user's data, a friend's, or the seed demo) and keeps it fresh.
 installRoomSync()
+// Friends in the same room, chat, emotes and presence (signed-in and onboarded only).
+void installRealtime()
 
 // First user gesture unlocks audio etc.
 const gesture = () => {
@@ -29,5 +41,11 @@ window.addEventListener('keydown', gesture)
  * (which they may postpone with "Later"; the API keeps their reviews off public pages until then).
  */
 export function DesktopApp() {
+  // The room boots once per page for one home; moving to another one needs a fresh page.
+  const want = typeof window === 'undefined' ? null : visitHandleFromPath(window.location.pathname)
+  if (bootedVisit()?.handle !== want) {
+    window.location.reload()
+    return null
+  }
   return <App />
 }

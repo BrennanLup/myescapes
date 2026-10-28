@@ -171,7 +171,8 @@ export function ReviewOverlay({ roomId }: { roomId: string }) {
   const reviews = useStore((s) => s.reviews)
   const pins = useStore((s) => s.boardPins)
   // Signed-in rooms are Postgres-backed: a review id is a visit id, so photos can be added.
-  const signedIn = useStore((s) => s.dataSource === 'postgres')
+  // Not in a friend's room (Phase 3 C): their visits are read-only.
+  const signedIn = useStore((s) => s.dataSource === 'postgres' && !s.visiting)
   const room = useMemo(() => rooms.find((r) => r.id === roomId), [rooms, roomId])
   const review = useMemo(() => latestReviewFor(roomId, reviews), [roomId, reviews])
   const order = useMemo(() => boardOrder(pins, rooms), [pins, rooms])
