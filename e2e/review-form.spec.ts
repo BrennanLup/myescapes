@@ -224,6 +224,15 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     await expect(lp.getByTestId('field-room.genre')).toHaveValue('')
     await expect(lp.getByTestId('error-room.genre')).toHaveCount(0)
     await expect(lp.getByTestId('field-review.ratings.overall.score-slider-hint')).toHaveCount(0)
+    await expect(lp.getByTestId('field-room.genre').locator('option').first()).toHaveText('Not sure')
+    // Same name and city as a directory game: it is linked without a click, so Company is filled in.
+    await expect(lp.getByTestId('confirm-room-linked')).toContainText('Matched in the room directory', { timeout: SLOW })
+    await expect(lp.getByTestId('confirm-room-linked')).toContainText('Fog City Escapes · San Francisco')
+    await expect(lp.getByTestId('field-room.company')).toHaveValue('Fog City Escapes')
+    await expect(lp.getByRole('heading', { name: 'Check your review' })).toBeFocused()
+    // "Change" brings the search back (and does not link again by itself).
+    await lp.getByTestId('confirm-room-unlink').click()
+    await expect(lp.getByTestId('confirm-room-linked')).toHaveCount(0)
     // Keyboard search: nothing is highlighted until ArrowDown, which lands on the first result.
     const search = lp.getByTestId('confirm-room-search')
     await search.fill('Lighth')
