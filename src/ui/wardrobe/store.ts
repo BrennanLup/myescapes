@@ -159,3 +159,9 @@ export function installWardrobeSync(notify: (earned: number) => void): () => voi
     if (timer) clearTimeout(timer)
   }
 }
+
+/** Tests: back to the signed-out starting state. */
+export function resetWardrobeForTests() {
+  loadPromise = null
+  useWardrobe.setState({ status: 'idle', signedIn: false, outfit: starterOutfit('guest'), owned: [], keys: null, busy: false })
+}

@@ -16,11 +16,11 @@ export type CameraMode = 'first' | 'third'
 
 export const THIRD_PERSON = {
   /** Distance behind the head (metres). */
-  distance: 2.6,
-  /** Over-the-shoulder offset to the right. */
-  side: 0.45,
+  distance: 3.1,
+  /** Over-the-shoulder offset to the right (keeps your head off the reticle). */
+  side: 0.6,
   /** Extra height above the head pivot. */
-  up: 0.25,
+  up: 0.3,
   /** The head pivot sits this far below the eye. */
   pivotDrop: 0.05,
   /** Never closer than this to the pivot (below it the character is hidden). */

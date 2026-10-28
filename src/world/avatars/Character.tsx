@@ -401,8 +401,9 @@ function Head({ outfit, c }: PartProps) {
       {/* Face: eyes, shine, cheeks, nose, smile. Eyes at PLAYER.eyeHeight. */}
       {[-1, 1].map((s) => (
         <group key={s} position={[s * 0.055, 0.03, -HEAD_R + 0.012]}>
-          <mesh geometry={G.sphere(0.021, 10, 8)} material={eye} scale={[1, 1.2, 0.6]} />
-          <mesh geometry={G.sphere(0.007, 6, 4)} material={shine} position={[0.006, 0.009, -0.01]} />
+          <mesh geometry={G.sphere(0.026, 10, 8)} material={shine} scale={[1, 1.2, 0.45]} position={[0, 0, 0.004]} />
+          <mesh geometry={G.sphere(0.019, 10, 8)} material={eye} scale={[1, 1.2, 0.6]} position={[0, -0.002, -0.006]} />
+          <mesh geometry={G.sphere(0.006, 6, 4)} material={shine} position={[0.006, 0.008, -0.016]} />
           <mesh geometry={G.sphere(0.022, 8, 6)} material={M(KIT_COLORS.blush)} position={[s * 0.018, -0.045, 0.004]} scale={[1.2, 0.6, 0.4]} />
         </group>
       ))}

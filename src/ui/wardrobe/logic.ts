@@ -54,11 +54,12 @@ export type PrimaryAction =
 
 /** What the wardrobe's main button does for this draft. */
 export function primaryAction(draft: Outfit, saved: Outfit, owned: readonly ItemId[], balance: number | null, signedIn: boolean): PrimaryAction {
-  const missing = unownedItems(draft, owned)
+  const have = balance ?? 0
+  // Offer the cheapest item you can afford first, then the cheapest overall.
+  const missing = unownedItems(draft, owned).sort((a, b) => Number(b.price <= have) - Number(a.price <= have) || a.price - b.price)
   if (missing.length) {
     const item = missing[0]
     if (!signedIn) return { kind: 'signin', item }
-    const have = balance ?? 0
     return { kind: 'buy', item, affordable: have >= item.price, short: Math.max(0, item.price - have), completes: missing.length === 1 }
   }
   return sameOutfit(draft, saved) ? { kind: 'unchanged' } : { kind: 'save' }
