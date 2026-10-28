@@ -1,6 +1,6 @@
 /**
  * Mobile app shell (workstream 13): routing inside /m, sign-in and onboarding gates, the home
- * screen (big "Log an escape room" button, visits to confirm, recordings waiting to upload,
+ * screen (big "Log an escape room" button, friends online with Visit, visits to confirm, recordings waiting to upload,
  * Escape of the Day card, the rooms table), "View on desktop" and add-to-home-screen.
  *
  * Must never import three.js or anything under src/world (src/mobile/shell/bundle.test.ts checks).
@@ -17,6 +17,7 @@ import { DailyCard } from '../../daily/ui'
 import { MobileDailyWelcome } from '../../daily/ui/MobileWelcome'
 import { matchPath, navigate, type RouteProps } from '../../router'
 import { Inbox, NotificationsBadge, visitsToConfirm } from '../../social'
+import { FriendsOnline } from '../../social/visit/FriendsOnline'
 import { ReviewDetail, RoomsTable } from '../list'
 import { LogFlow } from '../log'
 import { readyLabel, waitingLabel } from '../log/queue'
@@ -186,6 +187,7 @@ function Home({ fetch: fetchImpl, meId }: { fetch?: typeof fetch; meId: string }
       <button type="button" data-testid="log-room" className="w-full rounded-3xl bg-accent px-6 py-8 font-display text-2xl text-accent-ink shadow-[var(--shadow-cozy)] active:scale-[0.99]" onClick={() => navigate('/m/log')}>
         Log an escape room
       </button>
+      <FriendsOnline onJoinMine={viewOnDesktop} />
       <DailyCard />
       <section className="space-y-2">
         <h2 className="font-display text-xl">My rooms</h2>
