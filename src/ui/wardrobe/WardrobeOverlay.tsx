@@ -4,14 +4,15 @@
  * there is no real money anywhere.
  *
  * Layout: a bottom sheet on phones (preview on top, tabs, then the choices), a two-column dialog
- * from 768 px. Esc, the close button or a backdrop click closes it without saving.
+ * from 768 px. Esc, Cancel, the close button or a backdrop click close it; with an unsaved look
+ * they first ask "Keep trying on / Discard", so a look is never thrown away by accident.
  */
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref } from 'react'
 import { bus } from '@/contracts/events'
 import { useShell } from '@/ui/shell/shellStore'
-import { KEY_REWARDS, itemById, randomOutfit, type CatalogItem, type ItemId, type Outfit, type Swatch } from '@/world/avatars/catalog'
+import { KEY_REWARDS, itemById, randomOutfit, sameOutfit, type CatalogItem, type ItemId, type Outfit, type Swatch } from '@/world/avatars/catalog'
 import { IconCheck, IconClose, IconKey, IconLockSmall, IconShuffle, IconUndo } from './icons'
-import { colorApplies, primaryAction, priceLabel, SLOT_FIELD, stepIndex, tabItems, TABS, type TabId, type TabSpec } from './logic'
+import { colorApplies, primaryAction, priceLabel, scrollEdges, SLOT_FIELD, stepIndex, tabItems, TABS, type TabId, type TabSpec } from './logic'
 import { Preview } from './Preview'
 import { useWardrobe } from './store'
 
@@ -27,8 +28,21 @@ export function WardrobeOverlay() {
   const [draft, setDraft] = useState<Outfit>(saved)
   const [tab, setTab] = useState<TabId>('body')
   const [message, setMessage] = useState<{ tone: 'error' | 'ok'; text: string } | null>(null)
+  const [discarding, setDiscarding] = useState(false)
   const dialog = useRef<HTMLDivElement>(null)
-  const ids = { title: useId(), panel: useId() }
+  const prompt = useRef<HTMLDivElement>(null)
+  const ids = { title: useId(), panel: useId(), discard: useId() }
+  const dirty = !sameOutfit(draft, saved)
+  // Read by the (once-registered) key handler.
+  const live = useRef({ dirty, discarding })
+  live.current = { dirty, discarding }
+  /** Close, asking first when the look you are trying on isn't saved. */
+  const requestClose = () => {
+    if (live.current.dirty) setDiscarding(true)
+    else close()
+  }
+  const requestCloseRef = useRef(requestClose)
+  requestCloseRef.current = requestClose
 
   // Load (or refresh) on open; adopt the server's look if it arrives while untouched.
   const touched = useRef(false)
@@ -43,8 +57,10 @@ export function WardrobeOverlay() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        close()
-      } else if (e.key === 'Tab') trapFocus(e, dialog.current)
+        // Esc on the prompt means "keep trying on".
+        if (live.current.discarding) setDiscarding(false)
+        else requestCloseRef.current()
+      } else if (e.key === 'Tab') trapFocus(e, live.current.discarding ? prompt.current : dialog.current)
     }
     window.addEventListener('keydown', onKey)
     // Start keyboard users on the first tab.
@@ -87,7 +103,7 @@ export function WardrobeOverlay() {
     <div
       className="fixed inset-0 z-40 flex items-end justify-center bg-backdrop p-0 font-body text-ink md:items-center md:p-6"
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) close()
+        if (e.target === e.currentTarget && !discarding) requestClose()
       }}
     >
       <div
@@ -96,7 +112,7 @@ export function WardrobeOverlay() {
         role="dialog"
         aria-modal="true"
         aria-labelledby={ids.title}
-        className="flex h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-cozy bg-panel shadow-cozy ring-1 ring-panel-edge md:h-[min(720px,90dvh)] md:rounded-cozy"
+        className="relative flex h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-cozy bg-panel shadow-cozy ring-1 ring-panel-edge md:h-[min(720px,90dvh)] md:rounded-cozy"
       >
         <header className="flex items-center gap-3 border-b border-panel-edge/70 px-4 py-3 md:px-6 md:py-4">
           <h2 id={ids.title} className="font-display text-2xl font-semibold">
@@ -107,7 +123,7 @@ export function WardrobeOverlay() {
             type="button"
             aria-label="Close the wardrobe"
             data-testid="wardrobe-close"
-            onClick={close}
+            onClick={requestClose}
             className="ml-auto flex h-11 w-11 items-center justify-center rounded-full text-ink-soft transition hover:bg-[rgba(224,123,57,.12)] hover:text-ink"
           >
             <IconClose />
@@ -151,12 +167,44 @@ export function WardrobeOverlay() {
             {message?.text ?? footerHint(action)}
           </p>
           <div className="flex gap-2">
-            <button type="button" onClick={close} className="min-h-11 flex-1 rounded-full px-5 font-bold text-ink-soft ring-1 ring-panel-edge transition hover:bg-paper md:flex-none">
+            <button type="button" data-testid="wardrobe-cancel" onClick={requestClose} className="min-h-11 flex-1 rounded-full px-5 font-bold text-ink-soft ring-1 ring-panel-edge transition hover:bg-paper md:flex-none">
               Cancel
             </button>
             <PrimaryButton action={action} busy={busy} onClick={() => void onPrimary()} />
           </div>
         </footer>
+
+        {discarding ? (
+          <DiscardPrompt
+            ref={prompt}
+            titleId={ids.discard}
+            onKeep={() => {
+              setDiscarding(false)
+              dialog.current?.querySelector<HTMLElement>('[data-testid="wardrobe-primary"]')?.focus({ preventScroll: true })
+            }}
+          />
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function DiscardPrompt({ ref, titleId, onKeep }: { ref: Ref<HTMLDivElement>; titleId: string; onKeep(): void }) {
+  return (
+    <div className="absolute inset-0 z-10 grid place-items-center bg-backdrop p-4" role="alertdialog" aria-modal="true" aria-labelledby={titleId} data-testid="wardrobe-discard">
+      <div ref={ref} className="w-full max-w-sm rounded-cozy border-2 border-panel-edge bg-panel p-5 text-center shadow-cozy">
+        <h3 id={titleId} className="font-display text-2xl font-semibold">
+          Discard this look?
+        </h3>
+        <p className="mt-1 text-sm text-ink-soft">You haven't saved what you're trying on.</p>
+        <div className="mt-4 flex gap-2">
+          <button type="button" data-testid="wardrobe-discard-no" autoFocus onClick={onKeep} className="min-h-12 flex-1 rounded-xl border-2 border-panel-edge font-bold hover:bg-ink/5">
+            Keep trying on
+          </button>
+          <button type="button" data-testid="wardrobe-discard-yes" onClick={close} className="min-h-12 flex-1 rounded-xl bg-bad font-bold text-white hover:brightness-110">
+            Discard
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -261,8 +309,12 @@ function SmallButton({ label, testId, onClick, disabled, children }: { label: st
   )
 }
 
+const FADE = '28px'
+
 function Tabs({ current, onPick, panelId }: { current: TabId; onPick(t: TabId): void; panelId: string }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])
+  const strip = useRef<HTMLDivElement>(null)
+  const [edges, setEdges] = useState({ start: false, end: false })
   const onKeyDown = (e: ReactKeyboardEvent, i: number) => {
     const next = stepIndex(i, e.key, TABS.length)
     if (next === null) return
@@ -270,30 +322,77 @@ function Tabs({ current, onPick, panelId }: { current: TabId; onPick(t: TabId): 
     onPick(TABS[next].id)
     refs.current[next]?.focus()
   }
+  // Fade the edge(s) that hide more tabs, so phones show there is more to scroll to.
+  useEffect(() => {
+    const el = strip.current
+    if (!el) return
+    const update = () =>
+      setEdges((prev) => {
+        const next = scrollEdges(el)
+        return prev.start === next.start && prev.end === next.end ? prev : next
+      })
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    ro?.observe(el)
+    return () => {
+      el.removeEventListener('scroll', update)
+      ro?.disconnect()
+    }
+  }, [])
+  // Keep the active tab in view (keyboard arrows, or a tab picked at the edge).
+  useEffect(() => {
+    const i = TABS.findIndex((t) => t.id === current)
+    const el = refs.current[i]
+    const box = strip.current
+    if (!el || !box) return
+    const pad = 28
+    const left = el.offsetLeft - box.offsetLeft
+    if (left - pad < box.scrollLeft) box.scrollTo?.({ left: Math.max(0, left - pad), behavior: 'smooth' })
+    else if (left + el.offsetWidth + pad > box.scrollLeft + box.clientWidth) box.scrollTo?.({ left: left + el.offsetWidth + pad - box.clientWidth, behavior: 'smooth' })
+  }, [current])
+  const mask = `linear-gradient(to right, ${edges.start ? 'transparent' : '#000'}, #000 ${FADE}, #000 calc(100% - ${FADE}), ${edges.end ? 'transparent' : '#000'})`
   return (
-    <div role="tablist" aria-label="Wardrobe sections" className="flex shrink-0 gap-1 overflow-x-auto border-b border-panel-edge/70 px-3 py-2 md:px-5">
-      {TABS.map((t, i) => {
-        const on = t.id === current
-        return (
-          <button
-            key={t.id}
-            ref={(el) => {
-              refs.current[i] = el
-            }}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            aria-controls={panelId}
-            tabIndex={on ? 0 : -1}
-            data-testid={`wardrobe-tab-${t.id}`}
-            onClick={() => onPick(t.id)}
-            onKeyDown={(e) => onKeyDown(e, i)}
-            className={`min-h-10 shrink-0 rounded-full px-3.5 text-sm font-bold transition ${on ? 'bg-teal text-white' : 'text-ink-soft hover:bg-[rgba(224,123,57,.12)] hover:text-ink'}`}
-          >
-            {t.label}
-          </button>
-        )
-      })}
+    <div className="relative shrink-0 border-b border-panel-edge/70">
+      <div
+        ref={strip}
+        role="tablist"
+        aria-label="Wardrobe sections"
+        data-testid="wardrobe-tabs"
+        data-more-start={edges.start ? 'true' : 'false'}
+        data-more-end={edges.end ? 'true' : 'false'}
+        className="flex gap-1 overflow-x-auto px-3 py-2 [scrollbar-width:none] md:px-5 [&::-webkit-scrollbar]:hidden"
+        style={edges.start || edges.end ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
+      >
+        {TABS.map((t, i) => {
+          const on = t.id === current
+          return (
+            <button
+              key={t.id}
+              ref={(el) => {
+                refs.current[i] = el
+              }}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              aria-controls={panelId}
+              tabIndex={on ? 0 : -1}
+              data-testid={`wardrobe-tab-${t.id}`}
+              onClick={() => onPick(t.id)}
+              onKeyDown={(e) => onKeyDown(e, i)}
+              // No colour transition: a half-faded pill could show teal text on teal.
+              className={`min-h-10 shrink-0 rounded-full px-3.5 text-sm font-bold ${on ? 'bg-teal text-white' : 'text-ink-soft hover:bg-[rgba(224,123,57,.12)] hover:text-ink'}`}
+            >
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+      {edges.end ? (
+        <span aria-hidden="true" className="pointer-events-none absolute top-1/2 right-1 -translate-y-1/2 text-lg leading-none font-bold text-ink-soft">
+          ›
+        </span>
+      ) : null}
     </div>
   )
 }

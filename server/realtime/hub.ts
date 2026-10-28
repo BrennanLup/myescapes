@@ -55,6 +55,12 @@ export interface HubAccess {
   homeOwner(handle: string): Promise<HomeOwner | null>
   visitAccess(viewerId: string, ownerId: string): Promise<VisitAccess>
   friendIds(userId: string): Promise<Set<string>>
+  /**
+   * The look `userId` saved (ownership already checked by `PUT /api/me/avatar`). When set, the hub
+   * never relays a look a client sent: it shows this one at join and reloads it on `outfit`, so a
+   * modified client can't show items it does not own. Unset (unit tests): client looks are relayed.
+   */
+  outfitFor?(userId: string): Promise<RealtimeOutfit | null>
 }
 
 export type HubLimits = { -readonly [K in keyof typeof REALTIME_LIMITS]: number }
@@ -125,6 +131,8 @@ export class Connection {
   ready: Promise<void> = Promise.resolve()
   /** Bumped on every join/leave so a slow join that lost the race is ignored. */
   joinSeq = 0
+  /** Bumped on every outfit reload so an older, slower one never wins. */
+  outfitSeq = 0
   droppedStates = 0
   floodWindowStart: number
   floodCount = 0
@@ -360,8 +368,12 @@ export class RealtimeHub {
       case 'outfit': {
         const wait = conn.outfitWindow.take(now)
         if (wait) return this.error(conn, 'rate_limited', 'Changing clothes too fast.', 'outfit', wait)
-        conn.outfit = msg.outfit
-        if (conn.home) this.broadcast(conn.home, { type: 'outfit', sid: conn.sid, outfit: msg.outfit }, conn)
+        // With saved looks available, an 'outfit' message only means "I saved a new look".
+        const seq = ++conn.outfitSeq
+        const outfit = await this.trustedOutfit(conn, msg.outfit)
+        if (conn.closed || seq !== conn.outfitSeq || !outfit) return
+        conn.outfit = outfit
+        if (conn.home) this.broadcast(conn.home, { type: 'outfit', sid: conn.sid, outfit }, conn)
         return
       }
       case 'emote': {
@@ -399,15 +411,35 @@ export class RealtimeHub {
   // Homes
   // -------------------------------------------------------------------------
 
-  private async joinHome(conn: Connection, handle: string, state: PlayerState | undefined, outfit: RealtimeOutfit | undefined, now: number): Promise<void> {
+  /**
+   * The look to show for `conn`: its saved one when the access layer can load it (whatever the
+   * client sent is ignored), otherwise the one it sent. Null keeps the current look.
+   */
+  private async trustedOutfit(conn: Connection, sent: RealtimeOutfit | undefined): Promise<RealtimeOutfit | null> {
+    if (!this.access.outfitFor) return sent ?? null
+    try {
+      return await this.access.outfitFor(conn.user.id)
+    } catch (err) {
+      this.log(`[realtime] loading a saved look failed: ${(err as Error).message}`)
+      return null
+    }
+  }
+
+  private async joinHome(conn: Connection, handle: string, state: PlayerState | undefined, sentOutfit: RealtimeOutfit | undefined, now: number): Promise<void> {
     const wait = conn.join.take(now)
     if (wait) return this.error(conn, 'rate_limited', 'Too many joins. Wait a moment.', 'join', wait)
     const seq = ++conn.joinSeq
     const owner = await this.access.homeOwner(handle)
     if (conn.closed || seq !== conn.joinSeq) return
     if (!owner) return this.error(conn, 'not_found', 'There is no room with that @handle.', 'join')
-    const access = owner.id === conn.user.id ? 'owner' : await this.access.visitAccess(conn.user.id, owner.id)
+    const outfitSeq = ++conn.outfitSeq
+    const [access, loaded] = await Promise.all([
+      owner.id === conn.user.id ? ('owner' as const) : this.access.visitAccess(conn.user.id, owner.id),
+      this.trustedOutfit(conn, sentOutfit),
+    ])
     if (conn.closed || seq !== conn.joinSeq) return
+    // A later outfit reload (or join) already decided the look.
+    const outfit = outfitSeq === conn.outfitSeq ? loaded : null
     if (access === 'not_found') return this.error(conn, 'not_found', 'There is no room with that @handle.', 'join')
     if (access === 'not_friends') return this.error(conn, 'not_friends', `Only @${owner.handle}'s friends can visit their room.`, 'join')
 

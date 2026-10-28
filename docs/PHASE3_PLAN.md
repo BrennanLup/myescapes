@@ -211,3 +211,8 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
   (`watchTarget`), instead of a fixed cap: the photos are on the server and every list refetches.
 - (A, QA r1) A phone keyboard that shrinks the layout viewport counts as open when a text field has
   focus and the page is >120 px shorter than the tallest seen at that width (touch screens only).
+- (QA1 character) The realtime hub never relays a look a client sends: it loads your saved look (`outfitForUser`, through `HubAccess.outfitFor`) at join and treats an `outfit` message as "reload mine", because ownership is only checked when saving and a modified client could otherwise show priced items to everyone.
+- (QA1 character) Third person narrows the look pitch to 55 degrees down / 50 up, and the camera's orbit stops before it would drop 0.3 m below the head or reach the ceiling margin (it tilts from there): no worm's-eye view, no camera pulled into the head. Your character hides below 0.9 m camera distance.
+- (QA1 character) Phones use a centred third-person rig (no side offset, 0.4 m further back, a little higher) so the character stands mid-screen, clear of the joystick; folding emotes into the people sheet was left to the people UI's owners.
+- (QA1 character) Closing the wardrobe with an unsaved look asks "Discard this look?" (Keep trying on / Discard), the same pattern as the review form, rather than silently keeping a draft.
+- (QA1 character) Other players cast real shadows only on High quality with a mouse; elsewhere they get a one-quad blob shadow. Past 8 m their face details are skipped. Merging each outfit into one mesh was not done: the animated joints make it a large change for a smaller gain than these two.

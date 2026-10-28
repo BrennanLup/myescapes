@@ -95,13 +95,26 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
     expect(box.width).toBeLessThanOrEqual(390)
     expect(box.y + box.height).toBeLessThanOrEqual(844 + 1)
   }
+  // Closing with an unsaved look asks first; "Keep trying on" keeps it, "Discard" closes.
   await page.getByTestId('wardrobe-close').click()
+  await expect(page.getByTestId('wardrobe-discard')).toBeVisible()
+  await page.getByTestId('wardrobe-discard-no').click()
+  await expect(page.getByTestId('item-hat-crown')).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Escape')
+  await page.getByTestId('wardrobe-discard-yes').click()
   await waitOverlay(page, null)
 
   const saved = await page.evaluate(async () => (await fetch('/api/me/avatar')).json())
   expect(saved.outfit).toMatchObject({ hair: 'hair-bob', hairColor: 'teal', accessory: 'acc-headphones' })
   expect(saved.owned).toEqual(['acc-headphones'])
   expect(saved.keys.balance).toBe(10)
+
+  if (phone) {
+    // The key badge on the round wardrobe button stays clear of the camera button above it.
+    const badge = (await page.getByTestId('wardrobe-key-badge').boundingBox())!
+    const cam = (await page.getByTestId('camera-toggle').boundingBox())!
+    expect(badge.y).toBeGreaterThanOrEqual(cam.y + cam.height + 4)
+  }
 
   // Back to first person.
   if (phone) await page.getByTestId('camera-toggle').tap()

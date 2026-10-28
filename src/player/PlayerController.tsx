@@ -10,11 +10,26 @@ import { colliders } from '@/contracts/colliders'
 import { runtime } from '@/contracts/runtime'
 import { PLAYER, type Vec3 } from '@/contracts/scene'
 import { selectControlsEnabled, useStore } from '@/state/store'
-import { clearDistance, damp, easeBlend, followDistance, lookVector, rayStartDistance, stepBodyYaw, THIRD_PERSON, thirdPersonOffset } from './camera'
+import {
+  clearDistance,
+  damp,
+  DESKTOP_RIG,
+  easeBlend,
+  followDistance,
+  lookVector,
+  orbitPitch,
+  pitchLimits,
+  rayStartDistance,
+  stepBodyYaw,
+  THIRD_PERSON,
+  thirdPersonOffset,
+  TOUCH_RIG,
+} from './camera'
 import { eventCode, inputFromKeys, isMoveKey, isTypingTarget } from './keyboard'
 import {
   applyLook,
   headBobOffset,
+  MAX_PITCH,
   MOUSE_LOOK_RAD_PER_PX,
   NO_INPUT,
   speedOf,
@@ -55,7 +70,17 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
   const written = useRef<{ position: Vec3; yaw: number; pitch: number } | null>(null)
   const boxes = useRef(colliders.all())
   /** Third-person camera state: smoothed head pivot and the current (wall-limited) distance. */
-  const cam = useRef({ pivot: [0, 0, 0] as Vec3, distance: 0, clear: 1, init: false })
+  const cam = useRef({
+    pivot: [0, 0, 0] as Vec3,
+    distance: 0,
+    clear: 1,
+    init: false,
+    head: [0, 0, 0] as Vec3,
+    want: [0, 0, 0] as Vec3,
+    camPos: [0, 0, 0] as Vec3,
+    forward: [0, 0, 0] as Vec3,
+    limits: [0, 0] as [number, number],
+  })
 
   // Collider cache (refresh on registry change).
   useEffect(() => {
@@ -225,13 +250,27 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
       playerView.bodyYaw = s.yaw
     }
 
-    // Look.
+    const view = playerView
+    // The remembered choice stays as is for rooms that do draw you.
+    const mode = firstPersonOnly ? 'first' : useCameraMode.getState().mode
+    view.mode = mode
+    const dt = Math.min(Math.max(delta, 0), 0.25)
+    const blendStep = dt / THIRD_PERSON.blendSeconds
+    view.blend = mode === 'third' ? Math.min(1, view.blend + blendStep) : Math.max(0, view.blend - blendStep)
+    const third = easeBlend(view.blend)
+
+    // Look. Third person allows a narrower pitch (tightening smoothly while the camera moves out).
     const { sensitivity, invertY, headBob } = st.settings
     const ld = runtime.lookDelta
     if (enabled && (look.current.x || look.current.y || ld.x || ld.y)) {
       let r = applyLook(s.yaw, s.pitch, look.current.x, look.current.y, MOUSE_LOOK_RAD_PER_PX, sensitivity, invertY)
       r = applyLook(r.yaw, r.pitch, ld.x, ld.y, TOUCH_LOOK_RAD_PER_PX, sensitivity, invertY)
       s = { ...s, yaw: r.yaw, pitch: r.pitch }
+    }
+    const c0 = cam.current
+    if (third > 0) {
+      const [lo, hi] = pitchLimits(third, MAX_PITCH, c0.limits)
+      if (s.pitch < lo || s.pitch > hi) s = { ...s, pitch: Math.min(hi, Math.max(lo, s.pitch)) }
     }
     look.current.x = look.current.y = 0
     ld.x = ld.y = 0
@@ -247,14 +286,6 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
     state.current = s
 
     const speed = speedOf(s)
-    const view = playerView
-    // The remembered choice stays as is for rooms that do draw you.
-    const mode = firstPersonOnly ? 'first' : useCameraMode.getState().mode
-    view.mode = mode
-    const dt = Math.min(Math.max(delta, 0), 0.25)
-    const blendStep = dt / THIRD_PERSON.blendSeconds
-    view.blend = mode === 'third' ? Math.min(1, view.blend + blendStep) : Math.max(0, view.blend - blendStep)
-    const third = easeBlend(view.blend)
 
     // Head bob only makes sense through the character's own eyes.
     const bob = headBob ? headBobOffset(s.bobPhase, speed) * (1 - third) : 0
@@ -266,14 +297,16 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
     p.moving = speed > 0.3
     written.current = { position: [pos[0], pos[1], pos[2]], yaw: s.yaw, pitch: s.pitch }
 
-    view.feet = [s.pos[0], baseY.current - PLAYER.eyeHeight, s.pos[1]]
+    const feet = view.feet
+    feet[0] = s.pos[0]
+    feet[1] = baseY.current - PLAYER.eyeHeight
+    feet[2] = s.pos[1]
     view.bodyYaw = stepBodyYaw(view.bodyYaw, s.vel, s.yaw, third > 0 ? 'third' : 'first', dt)
     view.lookPitch = s.pitch
     view.speed = speed
 
     camera.rotation.set(s.pitch, s.yaw, 0, 'YXZ')
     const c = cam.current
-    const head: Vec3 = [pos[0], baseY.current - THIRD_PERSON.pivotDrop, pos[2]]
     if (third <= 0) {
       c.init = false
       c.distance = 0
@@ -284,24 +317,38 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
       return
     }
     // Smooth follow of the head; snap after teleports and on the first third-person frame.
-    const jump = Math.hypot(head[0] - c.pivot[0], head[1] - c.pivot[1], head[2] - c.pivot[2])
+    // (Scratch vectors are reused every frame: no garbage while you walk around.)
+    const head = c.head
+    head[0] = pos[0]
+    head[1] = baseY.current - THIRD_PERSON.pivotDrop
+    head[2] = pos[2]
+    const pivot = c.pivot
+    const jump = Math.hypot(head[0] - pivot[0], head[1] - pivot[1], head[2] - pivot[2])
     if (!c.init || jump > 2) {
-      c.pivot = [...head]
+      pivot[0] = head[0]
+      pivot[1] = head[1]
+      pivot[2] = head[2]
       c.init = true
     } else {
-      c.pivot = [0, 1, 2].map((i) => damp(c.pivot[i], head[i], THIRD_PERSON.followRate, dt)) as Vec3
+      for (let i = 0; i < 3; i++) pivot[i] = damp(pivot[i], head[i], THIRD_PERSON.followRate, dt)
     }
-    const want = thirdPersonOffset(s.yaw, s.pitch, THIRD_PERSON.distance * third, THIRD_PERSON.side * third, THIRD_PERSON.up * third)
+    const rig = st.isTouch ? TOUCH_RIG : DESKTOP_RIG
+    // The camera orbits with a pitch that keeps it off the floor and the ceiling; it looks along the real one.
+    const orbit = orbitPitch(s.pitch, pivot[1], rig)
+    const want = thirdPersonOffset(s.yaw, orbit, rig.distance * third, rig.side * third, rig.up * third, c.want)
     const wantLen = Math.hypot(want[0], want[1], want[2])
     // Work in fractions of the wanted offset, so the mode blend and the wall pull-in compose.
-    const allowed = wantLen > 1e-6 ? Math.min(1, clearDistance(c.pivot, want, boxes.current) / wantLen) : 0
+    const allowed = wantLen > 1e-6 ? Math.min(1, clearDistance(pivot, want, boxes.current) / wantLen) : 0
     c.clear = followDistance(c.clear, allowed, dt)
     const k = c.clear
     c.distance = wantLen * k
-    const camPos: Vec3 = [c.pivot[0] + want[0] * k, c.pivot[1] + want[1] * k, c.pivot[2] + want[2] * k]
+    const camPos = c.camPos
+    camPos[0] = pivot[0] + want[0] * k
+    camPos[1] = pivot[1] + want[1] * k
+    camPos[2] = pivot[2] + want[2] * k
     camera.position.set(camPos[0], camPos[1], camPos[2])
     view.cameraDistance = c.distance
-    view.rayStart = rayStartDistance(camPos, lookVector(s.yaw, s.pitch), pos)
+    view.rayStart = rayStartDistance(camPos, lookVector(s.yaw, s.pitch, c.forward), pos)
   })
 
   return null

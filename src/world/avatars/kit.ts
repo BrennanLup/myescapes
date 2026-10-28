@@ -34,6 +34,9 @@ export const G = {
   cylinder: (top: number, bottom: number, height: number, seg = 12, open = false) =>
     cached(`cyl:${r3(top)}:${r3(bottom)}:${r3(height)}:${seg}:${open}`, () => new THREE.CylinderGeometry(top, bottom, height, seg, 1, open)),
   cone: (radius: number, height: number, seg = 6) => cached(`cone:${r3(radius)}:${r3(height)}:${seg}`, () => new THREE.ConeGeometry(radius, height, seg)),
+  /** A flat square lying on the floor (XZ plane, facing up). */
+  floorQuad: (size: number) =>
+    cached(`fq:${r3(size)}`, () => new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2)),
   torus: (radius: number, tube: number, arc = Math.PI * 2, radial = 6, tubular = 18) =>
     cached(`tor:${r3(radius)}:${r3(tube)}:${r3(arc)}:${radial}:${tubular}`, () => new THREE.TorusGeometry(radius, tube, radial, tubular, arc)),
 }
@@ -98,4 +101,34 @@ export function shade(hex: string, amount: number): string {
 /** Test helper: how many shared geometries and materials exist. */
 export function kitStats() {
   return { geometries: geoms.size, materials: mats.size }
+}
+
+let blob: THREE.MeshBasicMaterial | null = null
+
+/**
+ * A soft round "blob" shadow under a character that doesn't cast a real one (other players on
+ * phones and medium quality): one cheap transparent quad instead of ~40 meshes in the shadow pass.
+ */
+export function blobShadowMaterial(): THREE.MeshBasicMaterial {
+  if (blob) return blob
+  let map: THREE.Texture | null = null
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 64
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
+      g.addColorStop(0, 'rgba(0,0,0,1)')
+      g.addColorStop(0.55, 'rgba(0,0,0,.55)')
+      g.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, 64, 64)
+      map = new THREE.CanvasTexture(canvas)
+    }
+  } catch {
+    /* no canvas (tests): a flat translucent disc */
+  }
+  blob = new THREE.MeshBasicMaterial({ color: '#2a1a14', map, transparent: true, opacity: map ? 0.32 : 0.18, depthWrite: false })
+  blob.name = 'avatar:blob-shadow'
+  return blob
 }

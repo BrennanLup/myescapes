@@ -43,8 +43,12 @@ Rules worth knowing:
 - Guests are re-checked every 60 s: unfriended or blocked guests are removed (`removed`), and
   presence stops crossing that pair.
 - Chat is never stored or logged. Server logs only say things like "closed for flooding".
-- `RealtimeOutfitSchema` is a small bounded record because workstream B's `Outfit` type did not exist
-  yet; once it does, the integrator can swap in B's schema. The hub only relays outfits.
+- Looks are never taken from the client. At join, and whenever an `outfit` message arrives
+  (meaning "I saved a new look"), the hub loads your saved look (`HubAccess.outfitFor`, which is
+  `outfitForUser` from `server/routes/avatar.lib.ts`) and shows that. Ownership is checked when you
+  save (`PUT /api/me/avatar`), so a modified client can't show items it never bought. If loading
+  fails, the current look stays. The `outfit` field in `join`/`outfit` is only used by hubs built
+  without `outfitFor` (unit tests).
 
 ## Scaling
 

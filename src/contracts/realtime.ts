@@ -93,9 +93,10 @@ export const PlayerStateSchema = z.object({
 export type PlayerState = z.infer<typeof PlayerStateSchema>
 
 /**
- * The look a player wears, as workstream B's `Outfit` (src/world/avatars/catalog.ts). The hub only
- * relays it, so it is kept loose here (a small flat record of ids, colours and flags) and bounded
- * in size. Ownership of locked items is checked by `PUT /api/me/avatar`, not here.
+ * The look a player wears, as workstream B's `Outfit` (src/world/avatars/catalog.ts), kept loose
+ * here (a small flat record of ids, colours and flags) and bounded in size. The server ignores the
+ * look a client sends: it shows the look saved through `PUT /api/me/avatar` (where ownership of
+ * locked items is checked), and an `outfit` message just asks it to reload that saved look.
  */
 export const RealtimeOutfitSchema = z
   .record(z.string().min(1).max(32), z.union([z.string().max(64), z.number().finite(), z.boolean(), z.null()]))

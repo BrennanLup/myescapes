@@ -6,6 +6,10 @@
  *
  * Nothing here re-renders per frame: poses are read from `poses` in `useFrame`. A player only
  * re-renders when their look, bubble or emote changes.
+ *
+ * Cost with a full home (12 people, ~40 meshes each): real shadows only on High quality with a
+ * mouse (otherwise a one-quad blob shadow), and past `DETAIL_DISTANCE` the small face details are
+ * skipped (`CharacterMotion.far`).
  */
 import { memo, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -16,6 +20,7 @@ import { INTERP_DELAY_MS } from '@/net/interpolation'
 import { realtimeClient } from '@/net/session'
 import { EMOTE_MS, poses, useRealtime, type ChatLine, type Player } from '@/net/store'
 import { Character, type CharacterMotion } from './Character'
+import { blobShadowMaterial, G } from './kit'
 
 /** Name tags fade out between these distances (metres) and hide beyond. */
 const TAG_FADE_START = 9
@@ -23,6 +28,13 @@ const TAG_HIDE = 16
 /** Above the head (eyes are at 1.6 m; hats reach about 1.95 m). */
 const TAG_HEIGHT = 2.08
 const NO_POINTER = { pointerEvents: 'none' } as const
+/** Beyond this distance (metres) other players drop their small details. */
+export const DETAIL_DISTANCE = 8
+
+/** Whether other players cast real shadows (the shadow pass would redraw every one of their meshes). */
+export function remoteShadows(quality: string, touch: boolean): boolean {
+  return quality === 'high' && !touch
+}
 
 export function RemotePlayers() {
   const players = useRealtime((s) => s.players)
@@ -46,7 +58,7 @@ const RemotePlayer = memo(function RemotePlayer({ player }: { player: Player }) 
   const motion = useMemo<CharacterMotion>(() => ({ speed: 0, action: 'idle', lookPitch: 0 }), [])
   const emote = useRealtime((s) => s.emotes[player.sid])
   const bubble = useRealtime((s) => s.bubbles[player.sid])
-  const shadows = useStore((s) => s.settings.quality !== 'low')
+  const shadows = useStore((s) => remoteShadows(s.settings.quality, s.isTouch))
   const emoteRef = useRef(emote)
   emoteRef.current = emote
 
@@ -70,9 +82,10 @@ const RemotePlayer = memo(function RemotePlayer({ player }: { player: Player }) 
     motion.action = emoting ? e.emote : 'idle'
     motion.lookPitch = pose.pitch
 
+    const d = camera.position.distanceTo(g.position)
+    motion.far = d > DETAIL_DISTANCE
     const el = tag.current
     if (el) {
-      const d = camera.position.distanceTo(g.position)
       const o = d >= TAG_HIDE ? 0 : d <= TAG_FADE_START ? 1 : 1 - (d - TAG_FADE_START) / (TAG_HIDE - TAG_FADE_START)
       el.style.opacity = o.toFixed(2)
     }
@@ -82,6 +95,7 @@ const RemotePlayer = memo(function RemotePlayer({ player }: { player: Player }) 
   return (
     <group ref={root} visible={false} userData={{ raycastIgnore: true }} name={`remote-player-${handle ?? player.sid}`}>
       <Character outfit={player.outfit} motion={motion} shadows={shadows} />
+      {shadows ? null : <mesh geometry={G.floorQuad(0.9)} material={blobShadowMaterial()} position={[0, 0.012, 0]} renderOrder={1} />}
       <Html position={[0, TAG_HEIGHT, 0]} center zIndexRange={[24, 10]} pointerEvents="none" style={NO_POINTER}>
         <div ref={tag} className="flex flex-col items-center gap-1.5 font-body transition-opacity duration-200" style={{ opacity: 0 }}>
           {bubble ? <Bubble line={bubble} /> : null}

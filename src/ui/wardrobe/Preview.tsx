@@ -11,14 +11,29 @@ import { Character, type CharacterMotion } from '@/world/avatars/Character'
 import type { Outfit } from '@/world/avatars/catalog'
 import { IconHanger } from './icons'
 
-function hasWebGL(): boolean {
-  if (typeof window === 'undefined' || typeof WebGLRenderingContext === 'undefined') return false
+let webglCache: boolean | null = null
+
+/**
+ * Whether WebGL works here. Checked once per page (not on every open), and the probe context is
+ * released at once: browsers cap live contexts and drop the oldest one, which is the room's.
+ */
+export function hasWebGL(): boolean {
+  if (webglCache !== null) return webglCache
+  if (typeof window === 'undefined' || typeof WebGLRenderingContext === 'undefined') return (webglCache = false)
   try {
     const c = document.createElement('canvas')
-    return !!(c.getContext('webgl2') || c.getContext('webgl'))
+    const gl = (c.getContext('webgl2') || c.getContext('webgl')) as WebGLRenderingContext | null
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    webglCache = !!gl
   } catch {
-    return false
+    webglCache = false
   }
+  return webglCache
+}
+
+/** Tests only: forget the cached WebGL check. */
+export function resetWebGLCheck(): void {
+  webglCache = null
 }
 
 const TURN_STEP = Math.PI / 8
