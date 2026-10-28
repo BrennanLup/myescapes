@@ -174,9 +174,7 @@ export function validateForm(form: FormState): FormErrors {
   if (review.escaped === null) e['review.escaped'] = 'Did you escape?'
   const t = review.escapeTimeMinutes
   if (t !== null && (!Number.isFinite(t) || t < 0 || t > 600)) e['review.escapeTimeMinutes'] = 'Minutes must be between 0 and 600'
-  for (const f of BOOL_FEATURES) {
-    if (review[f] === null) e[`review.${f}`] = `Choose yes or no`
-  }
+  // The four features are optional ("Not sure" is null), as on the phone.
   review.puzzles.forEach((p, i) => {
     const hasText = p.description.trim().length > 0
     if (hasText && !p.type) e[`review.puzzles.${i}.type`] = 'Pick a puzzle type'
@@ -276,10 +274,10 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
         .map((p) => ({ id: makeId('pz'), reviewId, description: p.description.trim(), type: p.type as PuzzleType, memorable: p.memorable })),
       escaped: r.escaped as boolean,
       escapeTimeMinutes: r.escapeTimeMinutes,
-      visibleTimer: r.visibleTimer as boolean,
-      multiRoom: r.multiRoom as boolean,
-      flashlights: r.flashlights as boolean,
-      liveActors: r.liveActors as boolean,
+      visibleTimer: r.visibleTimer,
+      multiRoom: r.multiRoom,
+      flashlights: r.flashlights,
+      liveActors: r.liveActors,
       toolsUsed: uniq(r.toolsUsed),
       voiceTranscript: r.voiceTranscript,
       photos: [],

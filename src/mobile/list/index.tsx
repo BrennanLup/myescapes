@@ -16,7 +16,7 @@ import { callApi, ROUTES } from '../../contracts/routes'
 import { RATING_KEYS, PUZZLE_TYPE_LABELS } from '../../contracts/types'
 import { useSession } from '../../auth'
 import { Link } from '../../router'
-import { PhotoAttach, visitTarget } from '../../ui/photos'
+import { PhotoAttach, PhotoThumbs, visitTarget } from '../../ui/photos'
 import { isUnauthorized, loadInbox, visitsToConfirm } from '../../social/client'
 import { Avatar, Button, Card, ErrorLine, Loading, formatDate, useAction, useLoad, userLabel } from '../../social/ui'
 import {
@@ -361,16 +361,12 @@ function VisitView({ visit, meId, onChanged, onGone }: { visit: VisitDetail; meI
       {visit.myStatus === 'owner' || visit.myStatus === 'accepted' ? (
         // Participants can add photos here (and remove their own); uploads keep going if you leave.
         <Card title="Photos" testId="review-photos">
-          <PhotoAttach target={visitTarget(visit.id)} visitId={visit.id} existing={visit.photos} meId={meId} onExistingDeleted={onChanged} compact testId="review-photo-attach" />
+          <PhotoAttach target={visitTarget(visit.id)} visitId={visit.id} existing={visit.photos} meId={meId} onExistingDeleted={onChanged} compact editToggle testId="review-photo-attach" />
         </Card>
       ) : (
         visit.photos.length > 0 && (
           <Card title="Photos" testId="review-photos">
-            <div className="grid grid-cols-3 gap-2">
-              {visit.photos.map((p) => (
-                <img key={p.id} src={p.url} alt={p.caption || 'Photo'} loading="lazy" className="aspect-square w-full rounded-lg object-cover" />
-              ))}
-            </div>
+            <PhotoThumbs photos={visit.photos.map((p, i) => ({ src: p.url, alt: p.caption || `Photo ${i + 1}`, caption: p.caption }))} />
           </Card>
         )
       )}

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { bus } from '@/contracts/events'
 import type { Me, PhotoV2, VisitDetail } from '@/contracts/models'
 import { FIXTURE_DATASET } from '@/contracts/fixtures'
 import { resetSessionForTests, setSessionUser } from '@/auth/session'
@@ -66,8 +67,11 @@ describe('review overlay photos', () => {
     })
     render(<ReviewOverlay roomId={room.id} />)
     await screen.findByTestId('review-photo-attach')
-    // Both existing photos are listed; only mine can be removed.
+    // Both existing photos are listed. Removing is behind "Edit photos", and only mine can be removed.
     expect(screen.getAllByTestId('photo-tile')).toHaveLength(2)
+    expect(screen.queryAllByRole('button', { name: /Remove photo/ })).toHaveLength(0)
+    await user.click(screen.getByTestId('photo-edit-toggle'))
+    expect(screen.getByTestId('photo-edit-toggle').getAttribute('aria-pressed')).toBe('true')
     expect(screen.getAllByRole('button', { name: /Remove photo/ })).toHaveLength(1)
     await user.upload(await screen.findByTestId('photo-input'), [new File(['a'], 'a.jpg', { type: 'image/jpeg' })])
     await waitFor(() => expect(useStore.getState().reviews.find((r) => r.id === review.id)?.photos.some((p) => p.url === '/api/photos/pho_new')).toBe(true))
@@ -81,9 +85,30 @@ describe('review overlay photo removal', () => {
     render(<ReviewOverlay roomId={room.id} />)
     await screen.findByTestId('review-photo-attach')
     configurePhotoQueue({ undoMs: 20 })
+    await user.click(screen.getByRole('button', { name: 'Edit photos' }))
     await user.click(screen.getByRole('button', { name: 'Remove photo 1' }))
     await waitFor(() => expect(screen.getAllByTestId('photo-tile')).toHaveLength(1))
     await waitFor(() => expect(screen.queryByTestId('photo-undo')).toBeNull())
     expect(useStore.getState().reviews.find((r) => r.id === review.id)?.photos).toEqual([])
+  })
+})
+
+describe('review overlay full-size photos', () => {
+  it('opens a photo full size; Esc and the arrows then belong to the photo, not the overlay', async () => {
+    const user = userEvent.setup()
+    const closed = vi.fn()
+    const off = bus.on('overlay:close', closed)
+    render(<ReviewOverlay roomId={room.id} />)
+    await screen.findByTestId('review-photo-attach')
+    await user.click(screen.getByRole('button', { name: 'Open photo 1' }))
+    expect(screen.getByRole('dialog', { name: 'Photo 1 of 2' })).toBeTruthy()
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('dialog', { name: 'Photo 2 of 2' })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByTestId('photo-lightbox')).toBeNull()
+    expect(closed).not.toHaveBeenCalled()
+    await user.keyboard('{Escape}')
+    expect(closed).toHaveBeenCalledTimes(1)
+    off()
   })
 })

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { Photo, Room } from '@/contracts/types'
+import { Lightbox } from '@/ui/photos/Lightbox'
 import { ChevronLeft, ChevronRight, GenreGlyph } from './icons'
 import { genreColor, genreLabel } from './helpers'
 
@@ -42,10 +43,13 @@ function GenrePlaceholder({ room }: { room: Room }) {
   )
 }
 
-/** Photo polaroid with swipe + arrow buttons. Key it by room id so it resets per room. */
+/** Photo polaroid with swipe + arrow buttons; tap the photo to see it full size. Key it by room id so it resets per room. */
 export function Gallery({ room, photos }: { room: Room; photos: Photo[] }) {
   const [index, setIndex] = useState(0)
   const start = useRef<{ x: number; y: number } | null>(null)
+  // A swipe ends with a click too: don't open the photo for that one.
+  const swiped = useRef(false)
+  const [full, setFull] = useState(false)
   const n = photos.length
 
   const go = (d: number) => setIndex((i) => (n ? (i + d + n) % n : 0))
@@ -69,17 +73,29 @@ export function Gallery({ room, photos }: { room: Room; photos: Photo[] }) {
             if (!s) return
             const dx = e.clientX - s.x
             const dy = e.clientY - s.y
+            swiped.current = Math.abs(dx) > 8 || Math.abs(dy) > 8
             if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(dx < 0 ? 1 : -1)
           }}
           onPointerCancel={() => (start.current = null)}
         >
-          <img
-            key={current.url}
-            src={current.url}
-            alt={current.caption || `${room.name} photo ${index + 1}`}
-            draggable={false}
-            className="h-full w-full object-cover select-none motion-safe:animate-[review-fade_.3s_ease-out]"
-          />
+          <button
+            type="button"
+            aria-label={`See ${current.caption || `${room.name} photo ${index + 1}`} full size`}
+            data-testid="gallery-open"
+            onClick={() => {
+              if (swiped.current) swiped.current = false
+              else setFull(true)
+            }}
+            className="block h-full w-full cursor-zoom-in focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-accent"
+          >
+            <img
+              key={current.url}
+              src={current.url}
+              alt={current.caption || `${room.name} photo ${index + 1}`}
+              draggable={false}
+              className="h-full w-full object-cover select-none motion-safe:animate-[review-fade_.3s_ease-out]"
+            />
+          </button>
           {n > 1 && (
             <>
               <button
@@ -106,6 +122,14 @@ export function Gallery({ room, photos }: { room: Room; photos: Photo[] }) {
             </>
           )}
         </div>
+      )}
+      {full && n > 0 && (
+        <Lightbox
+          photos={photos.map((p, i) => ({ src: p.url, alt: p.caption || `${room.name} photo ${i + 1}`, caption: p.caption }))}
+          index={Math.min(index, n - 1)}
+          onIndex={setIndex}
+          onClose={() => setFull(false)}
+        />
       )}
       <figcaption className="flex min-h-9 items-center justify-between gap-2 px-1 pt-2 font-hand text-xl leading-tight text-ink">
         <span className="truncate">{current?.caption || room.name}</span>

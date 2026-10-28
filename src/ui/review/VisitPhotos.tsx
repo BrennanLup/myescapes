@@ -1,7 +1,8 @@
 /**
  * "Photos" card in the 3D room's review overlay (Phase 3, workstream A): add photos to a visit
  * that is already on the board, see uploads in progress (also ones started from the confirm form,
- * with Retry), and remove your own. Only for signed-in rooms, where a review id is the visit id.
+ * with Retry), and remove your own (behind "Edit photos"). Tap a photo to see it full size. Only for
+ * signed-in rooms, where a review id is the visit id.
  */
 import { useEffect, useState } from 'react'
 import type { PhotoV2 } from '@/contracts/models'
@@ -49,6 +50,7 @@ export function VisitPhotos({ visitId, fetch: fetchImpl }: { visitId: string; fe
           meId={meId}
           fetch={fetchImpl}
           testId="review-photo-attach"
+          editToggle
           disabledReason={canAdd ? null : 'Accept the tag on this visit to add photos.'}
           onExistingDeleted={(id) => {
             const gone = photos.find((p) => p.id === id)

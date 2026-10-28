@@ -41,8 +41,18 @@ describe('validateForm', () => {
     const { form } = draftToForm(sampleDraft(), '2026-10-25')
     const e = validateForm(form)
     expect(Object.keys(e).sort()).toEqual(
-      ['room.city', 'review.ratings.storyline.score', 'review.puzzles.1.type', 'review.multiRoom', 'review.liveActors'].sort(),
+      ['room.city', 'review.ratings.storyline.score', 'review.puzzles.1.type'].sort(),
     )
+  })
+  it('does not require the four features ("Not sure" is null, as on the phone)', () => {
+    const f = completeForm()
+    f.review.visibleTimer = null
+    f.review.multiRoom = null
+    f.review.flashlights = null
+    f.review.liveActors = null
+    expect(validateForm(f)).toEqual({})
+    const entry = draftToEntry(f)
+    expect([entry.review.visibleTimer, entry.review.multiRoom, entry.review.flashlights, entry.review.liveActors]).toEqual([null, null, null, null])
   })
   it('passes a complete form', () => {
     expect(validateForm(completeForm())).toEqual({})
