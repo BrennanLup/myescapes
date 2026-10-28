@@ -7,7 +7,8 @@
  * Phones and tablets: round buttons on the right above the camera and wardrobe buttons (beside
  *   them in landscape); people and chat open as sheets (chat at the top, clear of the keyboard).
  *
- * Signed-out demo visitors have no socket, so they see none of this.
+ * While the connection is down a small chip above the buttons says so (and, after an idle close,
+ * offers to come back). Signed-out demo visitors have no socket, so they see none of this.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { EMOTES, REALTIME_LIMITS, type Emote, type FriendPresence } from '@/contracts/realtime'
@@ -15,7 +16,7 @@ import type { PublicUser } from '@/contracts/models'
 import { useStore } from '@/state/store'
 import { isTypingTarget } from '@/ui/shell/logic'
 import { useShell } from '@/ui/shell/shellStore'
-import { kickPlayer, sendChat, sendEmote } from '@/net/session'
+import { chatSlowDown, kickPlayer, realtimeClient, sendChat, sendEmote } from '@/net/session'
 import { firstName, friendsInOrder, playersInOrder, useRealtime, whereLabel, type ChatLine, type Player } from '@/net/store'
 import { homeUrl, pageNav, setSpoilersShown, spoilersShown, visitUrl } from './state'
 import { IconBack, IconChat, IconCheer, IconClose, IconDance, IconEyeOff, IconHome, IconPeople, IconSend, IconWave } from './icons'
@@ -73,6 +74,12 @@ export function PeopleHud() {
   useEffect(() => {
     if (!visible) setPanel(null)
   }, [visible])
+
+  // Hints that would sit on top of an open panel (the "Click to look around" pill) stay away.
+  useEffect(() => {
+    useShell.setState({ hudPanelOpen: panel !== null })
+    return () => useShell.setState({ hudPanelOpen: false })
+  }, [panel])
 
   const toggle = useCallback((p: Exclude<Panel, null>) => {
     setPanel((cur) => (cur === p ? null : p))
@@ -133,6 +140,8 @@ function VisitBanner({ touch }: { touch: boolean }) {
   const wide = useMediaQuery('(min-width: 768px)', true)
   if (!visiting) return null
   const name = visiting.owner?.displayName ?? `@${visiting.handle}`
+  // Phones: "Avery's room" and "My room" so the whole line fits at 360 px.
+  const shortName = visiting.owner ? firstName(visiting.owner) : `@${visiting.handle}`
   const outside = status === 'open' && !home && joinError
   const toggleSpoilers = async () => {
     setBusy(true)
@@ -154,7 +163,9 @@ function VisitBanner({ touch }: { touch: boolean }) {
       >
         <IconHome width={18} height={18} className="shrink-0 text-teal" />
         <span className="min-w-0 truncate text-sm">
-          <span className="font-bold">{name}'s room</span>
+          <span data-testid="visit-banner-title" className="font-bold">
+            {wide ? name : shortName}'s room
+          </span>
           <span className="hidden text-ink-soft sm:inline"> · {outside ? joinError.message : 'look around, nothing here changes'}</span>
         </span>
         <button
@@ -173,11 +184,12 @@ function VisitBanner({ touch }: { touch: boolean }) {
         <button
           type="button"
           data-testid="visit-back-home"
+          aria-label="Back to my room"
           onClick={() => pageNav.go(homeUrl())}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3.5 font-display text-sm font-semibold text-accent-ink shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal active:scale-95"
         >
           <IconBack width={16} height={16} />
-          Back to my room
+          {wide ? 'Back to my room' : 'My room'}
         </button>
       </div>
     </div>
@@ -195,6 +207,7 @@ function DesktopDock({ panel, toggle, close, chatFocus }: { panel: Panel; toggle
   return (
     <div className="pointer-events-none fixed z-30 flex flex-col items-start gap-2 font-body text-ink" style={{ left: SAFE.left, bottom: SAFE.bottom }}>
       {panel === 'people' ? <PeoplePanel onClose={close} className="w-[340px]" /> : null}
+      <ConnectionChip touch={false} />
       <ChatArea open={panel === 'chat'} onClose={close} focusKey={chatFocus} />
       <div data-testid="people-dock" className="flex items-center gap-2">
         <button
@@ -202,7 +215,7 @@ function DesktopDock({ panel, toggle, close, chatFocus }: { panel: Panel; toggle
           data-testid="people-button"
           aria-expanded={panel === 'people'}
           aria-label={`People: ${count ? `${count} here with you` : 'nobody else here'} (F)`}
-          title="People and friends (F)"
+          title="People (F)"
           onClick={(e) => {
             toggle('people')
             e.currentTarget.blur()
@@ -215,7 +228,7 @@ function DesktopDock({ panel, toggle, close, chatFocus }: { panel: Panel; toggle
             <IconPeople width={20} height={20} />
           </span>
           <AvatarStack players={players} />
-          <span className="text-sm font-bold">{count ? `${count + 1} here` : 'Friends'}</span>
+          <span className="text-sm font-bold">{count ? `${count + 1} here` : 'People'}</span>
           <span className="hidden xl:inline">
             <Kbd on={panel === 'people'}>F</Kbd>
           </span>
@@ -365,9 +378,18 @@ function ChatInput({ onClose, focusKey = 0 }: { onClose(): void; focusKey?: numb
   const [note, setNote] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const id = useId()
+  const touch = useStore((s) => s.isTouch)
+  const returned = useRealtime((s) => s.chatReturned)
   useEffect(() => {
     input.current?.focus({ preventScroll: true })
   }, [focusKey])
+  // A line the server turned down (too fast) comes back here, ready to send again.
+  useEffect(() => {
+    if (!returned) return
+    setText((cur) => (cur.trim() ? cur : returned.text))
+    setNote(returned.message)
+    useRealtime.setState({ chatReturned: null })
+  }, [returned])
   const left = REALTIME_LIMITS.CHAT_MAX_LENGTH - Array.from(text).length
   const submit = () => {
     if (!text.trim()) {
@@ -378,7 +400,7 @@ function ChatInput({ onClose, focusKey = 0 }: { onClose(): void; focusKey?: numb
     if (r.ok) {
       setText('')
       setNote(null)
-    } else if (r.reason === 'rate_limited') setNote(`Slow down a little: try again in ${Math.ceil((r.retryAfterMs ?? 1000) / 1000)} s.`)
+    } else if (r.reason === 'rate_limited') setNote(chatSlowDown(r.retryAfterMs))
     else if (r.reason === 'offline') setNote('Not connected right now. Your message was not sent.')
   }
   return (
@@ -417,7 +439,7 @@ function ChatInput({ onClose, focusKey = 0 }: { onClose(): void; focusKey?: numb
         </button>
       </div>
       <p aria-live="polite" className={`m-0 px-2 text-xs ${note ? 'text-bad' : 'text-ink-soft'}`}>
-        {note ?? (left < 40 ? `${left} characters left` : 'Enter sends · Esc closes · never saved')}
+        {note ?? (left < 40 ? `${left} characters left` : touch ? 'Never saved' : 'Enter sends · Esc closes · never saved')}
       </p>
     </form>
   )
@@ -438,6 +460,7 @@ function PeoplePanel({ onClose, className = '' }: { onClose(): void; className?:
   const visiting = useStore((s) => s.visiting)
   const here = useMemo(() => playersInOrder(players), [players])
   const friends = useMemo(() => friendsInOrder(friendsMap), [friendsMap])
+  const hereIds = useMemo(() => new Set(here.map((p) => p.user.id)), [here])
   const dialog = useRef<HTMLDivElement>(null)
   const titleId = useId()
 
@@ -516,7 +539,7 @@ function PeoplePanel({ onClose, className = '' }: { onClose(): void; className?:
           ) : null}
           <ul data-testid="visit-friends" className="m-0 list-none space-y-1 p-0">
             {friends.map((f) => (
-              <FriendRow key={f.user.id} friend={f} current={visiting?.handle === f.user.handle} />
+              <FriendRow key={f.user.id} friend={f} current={visiting?.handle === f.user.handle} withYou={hereIds.has(f.user.id) || (!visiting && f.where === 'your_home')} />
             ))}
           </ul>
         </section>
@@ -527,7 +550,15 @@ function PeoplePanel({ onClose, className = '' }: { onClose(): void; className?:
 
 function StatusLine({ status }: { status: string }) {
   const text =
-    status === 'connecting' ? 'Connecting…' : status === 'reconnecting' ? 'Reconnecting… people may freeze for a moment.' : status === 'replaced' ? 'This room is open in another tab. Reload to bring it here.' : null
+    status === 'connecting'
+      ? 'Connecting…'
+      : status === 'reconnecting'
+        ? 'Reconnecting… people will be back in a moment.'
+        : status === 'replaced'
+          ? 'This room is open in another tab. Reload to bring it here.'
+          : status === 'paused'
+            ? 'You were away for a while, so you stepped out. Press any key or tap to come back.'
+            : null
   if (!text) return null
   return (
     <p role="status" data-testid="realtime-status" className="m-0 mb-2 rounded-xl bg-warn/20 px-3 py-1.5 text-xs font-semibold text-[#7a520c]">
@@ -580,11 +611,11 @@ function PersonRow({ user, note, you, action }: { user: PublicUser; note: string
   )
 }
 
-function FriendRow({ friend, current }: { friend: FriendPresence; current: boolean }) {
+function FriendRow({ friend, current, withYou }: { friend: FriendPresence; current: boolean; withYou: boolean }) {
   const { user, online, where, homeCount } = friend
   const handle = user.handle
-  const note = online ? whereLabel(where, firstName(user)) : 'Offline'
-  const extra = homeCount > 0 && where !== 'your_home' ? ` · ${homeCount} in their room` : ''
+  const note = withYou && !current ? 'In this room' : online ? whereLabel(where, firstName(user)) : 'Offline'
+  const extra = homeCount > 0 && where !== 'your_home' && !withYou ? ` · ${homeCount} in their room` : ''
   return (
     <li data-testid="visit-friend" data-handle={handle ?? ''} data-online={online ? 'true' : 'false'} className="flex min-h-12 items-center gap-2.5 rounded-xl px-1">
       <MiniAvatar user={user} online={online} />
@@ -596,7 +627,11 @@ function FriendRow({ friend, current }: { friend: FriendPresence; current: boole
           {extra}
         </span>
       </span>
-      {handle && !current ? (
+      {withYou && !current ? (
+        <span data-testid="friend-here" className="shrink-0 px-2 text-xs font-bold text-teal">
+          Here with you
+        </span>
+      ) : handle && !current ? (
         <button
           type="button"
           data-testid="visit-friend-button"
@@ -610,6 +645,35 @@ function FriendRow({ friend, current }: { friend: FriendPresence; current: boole
         <span className="shrink-0 px-2 text-xs font-bold text-teal">You're here</span>
       ) : null}
     </li>
+  )
+}
+
+/** A small note above the buttons while the connection is down (people are hidden meanwhile). */
+function ConnectionChip({ touch }: { touch: boolean }) {
+  const status = useRealtime((s) => s.status)
+  if (status !== 'reconnecting' && status !== 'paused' && status !== 'replaced') return null
+  const base = 'pointer-events-auto flex min-h-9 items-center gap-2 rounded-full bg-panel/95 px-3 text-xs font-bold text-ink shadow-[0_6px_18px_rgba(40,20,20,.28)] ring-1 ring-panel-edge backdrop-blur'
+  if (status === 'reconnecting') {
+    return (
+      <p role="status" data-testid="connection-chip" data-status={status} className={`m-0 ${base}`}>
+        <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-warn" />
+        Reconnecting…
+      </p>
+    )
+  }
+  const away = status === 'paused'
+  return (
+    <button
+      type="button"
+      data-testid="connection-chip"
+      data-status={status}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={() => (away ? realtimeClient()?.reconnectNow() : window.location.reload())}
+      className={`${base} transition hover:bg-white active:scale-95`}
+    >
+      <span aria-hidden className="h-2 w-2 rounded-full bg-[#bfae9f]" />
+      {away ? (touch ? 'Away · tap to come back' : 'Away · press any key to come back') : 'Open in another tab · use it here'}
+    </button>
   )
 }
 
@@ -631,6 +695,7 @@ function TouchControls({ panel, toggle, close }: { panel: Panel; toggle(p: Exclu
   return (
     <>
       <div data-testid="people-dock" className="pointer-events-none fixed z-30 flex flex-col items-end gap-2.5" style={pos}>
+        <ConnectionChip touch />
         <button type="button" data-testid="people-button" aria-expanded={panel === 'people'} aria-label={`People: ${count ? `${count} here with you` : 'nobody else here'}`} onPointerDown={(e) => e.stopPropagation()} onClick={() => toggle('people')} className={btn(panel === 'people')}>
           <IconPeople width={24} height={24} />
           {count ? (
@@ -647,7 +712,11 @@ function TouchControls({ panel, toggle, close }: { panel: Panel; toggle(p: Exclu
       </div>
 
       {panel === 'emotes' ? (
-        <div className="pointer-events-none fixed z-40" style={landscape ? { right: `calc(${SAFE.right} + 128px)`, bottom: `calc(${SAFE.bottom} + 18px)` } : { right: `calc(${SAFE.right} + 60px)`, bottom: `calc(${SAFE.bottom} + 18px + 136px)` }}>
+        <div
+          className="pointer-events-none fixed z-40"
+          // Portrait: beside the emote button and lifted clear of the joystick ring (bottom left, 150 px tall).
+          style={landscape ? { right: `calc(${SAFE.right} + 128px)`, bottom: `calc(${SAFE.bottom} + 18px)` } : { right: `calc(${SAFE.right} + 60px)`, bottom: `calc(${SAFE.bottom} + 18px + 136px + 16px)` }}
+        >
           <div role="group" aria-label="Emotes" className="pointer-events-auto flex gap-2 rounded-[var(--radius-cozy)] bg-panel/95 p-2 shadow-cozy ring-1 ring-panel-edge" onPointerDown={(e) => e.stopPropagation()}>
             {EMOTES.map((e) => (
               <EmoteButton key={e} emote={e} size="lg" onDone={close} />

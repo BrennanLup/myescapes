@@ -25,14 +25,14 @@ The HTTP side lives in `server/routes/homes.ts` (+ `homes.lib.ts`): `GET /api/ho
    already there), or `error` with `not_found` (no such handle, or a block), `not_friends`,
    `home_full`, `rate_limited`.
 4. In a home: `state` (at most 10 per second; the server broadcasts changed poses every 100 ms as
-   one `states` message stamped with server time), `emote`, `chat` (cleaned, 200 characters, 5 per
+   one `states` message stamped with server time), `emote`, `chat` (cleaned, 200 characters, 8 per
    10 s; echoed to the sender too), `outfit`, `leave`, and for the owner `kick`.
 5. Others' events: `player_joined`, `player_left` (with a reason), `states`, `emote`, `chat`,
    `outfit`. Friends' movements arrive as `presence` (`own_home`, `your_home`, `elsewhere`, `lobby`,
    `offline`). When someone enters your home while you are elsewhere you get `visitor`.
 6. `ping` -> `pong` (with `serverTime`, for clock offset). Invalid messages get `error invalid`
    and the socket stays open; more than 40 messages a second closes it (4008); a message over 4 KB
-   closes it (1009); nothing for 10 minutes closes it (4000); a peer that misses a transport ping
+   closes it (1009); no activity for 10 minutes (moving, chat, emotes, joins; pings don't count) closes it (4000); a peer that misses a transport ping
    is terminated after 20-40 s.
 
 Rules worth knowing:
@@ -42,6 +42,14 @@ Rules worth knowing:
 - The owner always gets into their own home, even when it is full (12).
 - Guests are re-checked every 60 s: unfriended or blocked guests are removed (`removed`), and
   presence stops crossing that pair.
+- A block between two guests of the same home hides them from each other completely: no joined
+  entry, arrival, pose, chat, emote, look or departure either way, and `presence.visitors` of
+  `GET /api/homes/:handle` leaves them out. A block or unblock made while both are inside applies at
+  the next revalidation (`player_left` / `player_joined` to just those two).
+- A guest the owner asked to leave can't rejoin that home for 10 minutes (`forbidden`, any tab);
+  the home forgets it when it empties.
+- Revalidation keeps going past a failed lookup, keeps friend lists only for connected users, and
+  sends `friends_changed` to anyone whose friend list changed (the client refetches presence).
 - Chat is never stored or logged. Server logs only say things like "closed for flooding".
 - `RealtimeOutfitSchema` is a small bounded record because workstream B's `Outfit` type did not exist
   yet; once it does, the integrator can swap in B's schema. The hub only relays outfits.

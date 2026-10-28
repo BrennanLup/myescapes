@@ -197,3 +197,14 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
 - (C client) Others see your starter look until your wardrobe has loaded; looks from the network are repaired with `normalizeOutfit`, never trusted as-is.
 - (C client) In a friend's room spoilers stay hidden unless you press the banner's Spoilers toggle (it reloads their room with `?spoilers=1`).
 - (C client) `/home/*` pages are `noindex`, out of `robots.txt`, and their head never echoes the @handle.
+- (C fix r1) A block between two guests of a shared friend's home hides them from each other (filtered broadcasts, joined lists and `presence.visitors`) rather than refusing the second join: refusing would tell the blocked person the other is there, and the host keeps both guests.
+- (C fix r1) An owner's "Ask to leave" keeps that guest out of the home for 10 minutes (any tab), forgotten when the home empties: long enough to stop a reload straight back in, short enough not to need an "unkick" button.
+- (C fix r1) Idle means no activity (pings don't count); an idle-closed tab pauses ("Away" chip) and reconnects on the next key, tap or tab switch instead of reconnecting at once, so AFK visitors free their place.
+- (C fix r1) Chat allows 8 lines per 10 s (was 5): friends send "hi" "hey" "look!" in a row; a refused line comes back to the chat box with chat-specific wording.
+- (C fix r1) Remote players are cleared the moment the socket is not open (a small "Reconnecting..." chip shows), and `joined` refills them: better an empty room for a second than frozen statues.
+- (C fix r1) Join errors `unavailable` (and `rate_limited`) are retried with backoff (2-20 s); only answers that won't change stop the client.
+- (C fix r1) A new `friends_changed` server message makes the client refetch presence when a friendship changes, instead of waiting for the 60 s poll.
+- (C fix r1) Sounds reuse existing cues through the `sfx` bus (sound toggle respected): arrival `string`, chat from someone else `click`, your emote `pin`. Wardrobe and photo sounds are left to their owners.
+- (C fix r1) Remote characters get a faint emissive of their own colours (0.2 on Low, 0.1 otherwise) on shared, cached material copies, so dark looks read under the warm lamps; your own character is unchanged.
+- (C fix r1) Visitors spawn 1.3 m left of the usual spot, and a remote player whose spot your camera is inside is hidden: the "brown screen" was the host standing on the shared spawn.
+- (C fix r1) Small shared edits: `src/ui/shell/Hud.tsx` (title "Robin's escapes" in a friend's room; phone hint and toasts below the visit banner), `src/ui/shell/shellStore.ts` (`hudPanelOpen`), `src/interaction/Reticle.tsx` (the look pill hides after the first pointer lock and while a HUD panel is open).

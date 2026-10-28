@@ -4,7 +4,9 @@ import { useCameraMode, playerView } from '@/player/view'
 import { resetShellForTests, useShell } from '@/ui/shell/shellStore'
 import { starterOutfit, DEFAULT_OUTFIT } from '@/world/avatars/catalog'
 import { ServerClock } from './clock'
-import { activeLocalEmote, applyMessage, localState, poseChanged } from './session'
+import { bus, type AppEvent } from '@/contracts/events'
+import { RealtimeClient, type SocketLike } from './client'
+import { activeLocalEmote, applyMessage, chatSlowDown, clearRoom, installRealtime, localState, poseChanged, sendChat } from './session'
 import { BUBBLE_MS, firstName, friendsInOrder, outfitFor, playersInOrder, poses, resetRealtime, useRealtime } from './store'
 
 const host = { id: 'u-host', handle: 'robin', displayName: 'Robin Host', image: null }
@@ -123,6 +125,105 @@ describe('applyMessage', () => {
     expect(useRealtime.getState().home).toBeNull()
     expect(toast()).toBe('Robin asked you to leave their room.')
     expect(useRealtime.getState().joinError?.message).toBe('Robin asked you to leave their room.')
+  })
+})
+
+describe('connection loss, refusals and sounds', () => {
+  const fill = () => {
+    apply({ type: 'hello', sid: 's-host', you: host, serverTime: 1, limits: {} })
+    apply({ type: 'joined', home: { handle: 'robin', owner: host }, sid: 's-host', isOwner: true, serverTime: 5000, players: [{ sid: 's-guest', user: guest, isOwner: false, state: pose(1), outfit: null, joinedAt: 1 }] })
+    apply({ type: 'emote', sid: 's-guest', emote: 'wave', at: 1 })
+  }
+
+  it('clearRoom forgets everyone (no statues while reconnecting)', () => {
+    fill()
+    expect(poses.size).toBe(1)
+    clearRoom()
+    const st = useRealtime.getState()
+    expect(st.home).toBeNull()
+    expect(st.players).toEqual({})
+    expect(st.emotes).toEqual({})
+    expect(poses.size).toBe(0)
+  })
+
+  it('stays quiet about joins the client is retrying', () => {
+    apply({ type: 'error', code: 'unavailable', message: 'Something went wrong on our side.', about: 'join' })
+    expect(useRealtime.getState().joinError).toBeNull()
+    expect(toast()).toBeNull()
+  })
+
+  it('plays soft sounds for arrivals, chat from others and visitors, not for my own chat', () => {
+    const events: AppEvent[] = []
+    const off = bus.onAny((e) => events.push(e))
+    try {
+      apply({ type: 'hello', sid: 's-host', you: host, serverTime: 1, limits: {} })
+      apply({ type: 'joined', home: { handle: 'robin', owner: host }, sid: 's-host', isOwner: true, serverTime: 5000, players: [] })
+      apply({ type: 'player_joined', player: { sid: 's-guest', user: guest, isOwner: false, state: null, outfit: null, joinedAt: 2 } })
+      apply({ type: 'chat', id: 'c1', sid: 's-guest', user: guest, text: 'hi', at: 3 })
+      apply({ type: 'chat', id: 'c2', sid: 's-host', user: host, text: 'hey', at: 4 })
+      const names = events.filter((e) => e.type === 'sfx').map((e) => (e.payload as { name: string }).name)
+      expect(names).toEqual(['string', 'click'])
+    } finally {
+      off()
+    }
+  })
+
+  it('words the chat limit for chat', () => {
+    expect(chatSlowDown(10_400)).toBe("You're sending messages quickly. Wait 11 s, then send it again.")
+  })
+})
+
+describe('installRealtime', () => {
+  class Sock implements SocketLike {
+    static last: Sock
+    readyState = 0
+    sent: Record<string, unknown>[] = []
+    onopen: ((ev: unknown) => void) | null = null
+    onclose: ((ev: { code: number }) => void) | null = null
+    onmessage: ((ev: { data: unknown }) => void) | null = null
+    onerror: ((ev: unknown) => void) | null = null
+    constructor() {
+      Sock.last = this
+    }
+    send(d: string) {
+      this.sent.push(JSON.parse(d))
+    }
+    close() {
+      this.readyState = 3
+    }
+    say(m: ServerMessage) {
+      this.onmessage?.({ data: JSON.stringify(m) })
+    }
+  }
+
+  it('clears the room when the socket drops, and gives refused chat back to the chat box', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ friends: [], here: [], realtime: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new RealtimeClient({ url: 'ws://t', createSocket: () => new Sock(), random: () => 0.5 })
+    const off = await installRealtime({ client, handle: 'robin' })
+    try {
+      const s = Sock.last
+      s.readyState = 1
+      s.onopen?.({})
+      s.say({ type: 'hello', sid: 's-host', you: host, serverTime: Date.now(), limits: {} })
+      s.say({ type: 'joined', home: { handle: 'robin', owner: host }, sid: 's-host', isOwner: true, serverTime: Date.now(), players: [{ sid: 's-guest', user: guest, isOwner: false, state: pose(1), outfit: null, joinedAt: 1 }] })
+      expect(Object.keys(useRealtime.getState().players)).toEqual(['s-guest'])
+
+      expect(sendChat('one').ok).toBe(true)
+      expect(sendChat('two').ok).toBe(true)
+      s.say({ type: 'chat', id: 'c1', sid: 's-host', user: host, text: 'one', at: 1 })
+      s.say({ type: 'error', code: 'rate_limited', message: 'slow', about: 'chat', retryAfterMs: 3000 })
+      expect(useRealtime.getState().chatReturned).toMatchObject({ text: 'two', message: chatSlowDown(3000) })
+
+      s.readyState = 3
+      s.onclose?.({ code: 1006 })
+      const st = useRealtime.getState()
+      expect(st.status).toBe('reconnecting')
+      expect(st.players).toEqual({})
+      expect(st.home).toBeNull()
+      expect(poses.size).toBe(0)
+    } finally {
+      off()
+    }
   })
 })
 

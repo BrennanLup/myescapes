@@ -9,6 +9,8 @@
 import { ApiCallError } from '@/contracts/errors'
 import type { HomeView } from '@/contracts/realtime'
 import { callApi, ROUTES } from '@/contracts/routes'
+import { runtime } from '@/contracts/runtime'
+import { ANCHORS } from '@/contracts/scene'
 import { setDataLoader, useStore } from '@/state/store'
 
 export { homeUrl, pageNav, visitHandleFromPath, visitUrl } from './urls'
@@ -49,6 +51,9 @@ export function preloadHome(handle: string): Promise<HomeView> {
   return preloaded.promise
 }
 
+/** Where a visitor starts: 1.3 m left of and a little behind the usual spawn, clear of furniture. */
+export const VISITOR_SPAWN: [number, number, number] = [ANCHORS.spawn.position[0] - 1.3, ANCHORS.spawn.position[1], ANCHORS.spawn.position[2] + 0.5]
+
 /** The handle the 3D room was booted with on this page (null: your own room). Set once. */
 let booted: { handle: string | null } | null = null
 
@@ -67,6 +72,9 @@ export function markBooted(handle: string | null): void {
  */
 export function installVisit(handle: string): void {
   useStore.setState({ visiting: { handle, owner: null } })
+  // Not on the owner's usual spot (they are often standing there): a step to the side, facing the board.
+  runtime.player.position = [...VISITOR_SPAWN]
+  runtime.player.yaw = ANCHORS.spawn.rotationY
   setDataLoader(async () => {
     let view: HomeView
     if (preloaded?.handle === handle && !spoilers) {

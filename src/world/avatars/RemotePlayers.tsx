@@ -10,7 +10,7 @@
 import { memo, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Html } from '@react-three/drei'
-import type * as THREE from 'three'
+import * as THREE from 'three'
 import { useStore } from '@/state/store'
 import { INTERP_DELAY_MS } from '@/net/interpolation'
 import { realtimeClient } from '@/net/session'
@@ -23,6 +23,46 @@ const TAG_HIDE = 16
 /** Above the head (eyes are at 1.6 m; hats reach about 1.95 m). */
 const TAG_HEIGHT = 2.08
 const NO_POINTER = { pointerEvents: 'none' } as const
+/** Closer than this (metres, on the floor) and your camera is inside them: hide them instead. */
+const NEAR_HIDE_M = 0.45
+/** How much of each colour others glow with, so dark looks still read under the warm lamps. */
+const LIFT = { low: 0.2, normal: 0.1 } as const
+/** Lifted copies of the shared character materials, per lift amount. */
+const lifted = new Map<number, WeakMap<THREE.Material, THREE.Material>>()
+
+/**
+ * A copy of `m` with a faint emissive of its own colour (a soft rim of light), shared by every
+ * remote player. Materials that already glow are left alone.
+ */
+function liftedMaterial(current: THREE.Material, amount: number): THREE.Material {
+  if (current.userData.lifted === amount) return current
+  // Already lifted by another amount (quality changed): start again from the shared material.
+  const m = (current.userData.source as THREE.Material | undefined) ?? current
+  if (!(m instanceof THREE.MeshStandardMaterial) || (m.emissiveIntensity > 0 && m.emissive.getHex() !== 0)) return m
+  let cache = lifted.get(amount)
+  if (!cache) lifted.set(amount, (cache = new WeakMap()))
+  let out = cache.get(m)
+  if (!out) {
+    const copy = m.clone()
+    copy.emissive = m.color.clone().multiplyScalar(amount).addScalar(amount * 0.15)
+    copy.emissiveIntensity = 1
+    copy.userData = { ...m.userData, lifted: amount, source: m }
+    copy.name = `${m.name}:lifted`
+    cache.set(m, copy)
+    out = copy
+  }
+  return out
+}
+
+/** Swap the meshes under `root` to their lifted materials (cheap when already done). */
+export function liftCharacter(root: THREE.Object3D, amount: number): void {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || Array.isArray(mesh.material)) return
+    const next = liftedMaterial(mesh.material, amount)
+    if (next !== mesh.material) mesh.material = next
+  })
+}
 
 export function RemotePlayers() {
   const players = useRealtime((s) => s.players)
@@ -47,6 +87,8 @@ const RemotePlayer = memo(function RemotePlayer({ player }: { player: Player }) 
   const emote = useRealtime((s) => s.emotes[player.sid])
   const bubble = useRealtime((s) => s.bubbles[player.sid])
   const shadows = useStore((s) => s.settings.quality !== 'low')
+  const lift = shadows ? LIFT.normal : LIFT.low
+  const frames = useRef(0)
   const emoteRef = useRef(emote)
   emoteRef.current = emote
 
@@ -61,8 +103,14 @@ const RemotePlayer = memo(function RemotePlayer({ player }: { player: Player }) 
       if (tag.current) tag.current.style.opacity = '0'
       return
     }
-    g.visible = true
+    // Two people on one spot (or you walked into them): hide them rather than fill the screen.
+    const dx = camera.position.x - pose.p[0]
+    const dz = camera.position.z - pose.p[2]
+    const inside = dx * dx + dz * dz < NEAR_HIDE_M * NEAR_HIDE_M && camera.position.y < pose.p[1] + 2.1
+    g.visible = !inside
     g.position.set(pose.p[0], pose.p[1], pose.p[2])
+    // React re-renders put the shared materials back (a new look); re-apply now and then.
+    if (frames.current++ % 20 === 0) liftCharacter(g, lift)
     g.rotation.y = pose.yaw
     const e = emoteRef.current
     const emoting = e && Date.now() - e.at < EMOTE_MS && pose.speed < 0.6
@@ -73,7 +121,7 @@ const RemotePlayer = memo(function RemotePlayer({ player }: { player: Player }) 
     const el = tag.current
     if (el) {
       const d = camera.position.distanceTo(g.position)
-      const o = d >= TAG_HIDE ? 0 : d <= TAG_FADE_START ? 1 : 1 - (d - TAG_FADE_START) / (TAG_HIDE - TAG_FADE_START)
+      const o = inside || d >= TAG_HIDE ? 0 : d <= TAG_FADE_START ? 1 : 1 - (d - TAG_FADE_START) / (TAG_HIDE - TAG_FADE_START)
       el.style.opacity = o.toFixed(2)
     }
   })

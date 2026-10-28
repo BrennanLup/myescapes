@@ -2,10 +2,14 @@
  * DOM overlay: centre reticle dot, the interact prompt chip (desktop "[E] label",
  * touch big round "Tap" button) and a "Click to look around" hint.
  */
+import { useEffect, useState } from 'react'
 import { useStore } from '@/state/store'
 import { interactHovered, useInteraction } from './controller'
 import { touchPrompt } from './logic'
 import { useShell } from '@/ui/shell/shellStore'
+
+/** Pointer lock happened at least once on this page. */
+let everLocked = false
 
 export function Reticle() {
   const overlay = useStore((s) => s.overlay)
@@ -17,6 +21,15 @@ export function Reticle() {
   const locked = storeLocked || docLocked
   // The controls hint card already explains click-to-look and sits in the same spot.
   const hintOpen = useShell((s) => s.hintOpen)
+  const panelOpen = useShell((s) => s.hudPanelOpen)
+  // Once you have clicked into the room you know how: the pill would only cover people's feet.
+  const [learned, setLearned] = useState(everLocked)
+  useEffect(() => {
+    if (locked && !everLocked) {
+      everLocked = true
+      setLearned(true)
+    }
+  }, [locked])
 
   if (overlay || !worldReady) return null
   const active = !!hovered
@@ -76,7 +89,7 @@ export function Reticle() {
       )}
 
       {/* look hint (desktop, not locked) */}
-      {!isTouch && !locked && !hintOpen && (
+      {!isTouch && !locked && !hintOpen && !learned && !panelOpen && (
         <div
           data-testid="look-hint"
           className="absolute bottom-[14%] left-1/2 -translate-x-1/2 animate-pulse whitespace-nowrap rounded-full bg-[rgba(42,31,45,0.62)] px-4 py-2 font-display text-[15px] text-[var(--color-panel)] shadow-[0_4px_14px_rgba(0,0,0,0.3)] backdrop-blur-sm"
