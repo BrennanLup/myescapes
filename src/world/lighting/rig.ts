@@ -208,7 +208,7 @@ export function lightRig(quality: QualityPreset): LightRig {
     envIntensity: quality === 'low' ? 0 : 0.32,
     envResolution: quality === 'high' ? 256 : 128,
     shafts: quality !== 'low',
-    shaftOpacity: quality === 'high' ? 0.6 : 0.5,
+    shaftOpacity: quality === 'high' ? 0.7 : 0.6,
     lampHaze: quality !== 'low',
     dustCount: quality === 'high' ? 260 : quality === 'medium' ? 110 : 0,
   }
