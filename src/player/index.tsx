@@ -1,6 +1,7 @@
 /**
  * Workstream 8: Player Controller.
- * `PlayerController` mounts inside the Canvas; `MobileControls` is a DOM overlay.
+ * `PlayerController` and `RenderPause` mount inside the Canvas; `MobileControls` is a DOM overlay.
  */
 export { PlayerController } from './PlayerController'
 export { MobileControls } from './MobileControls'
+export { RenderPause } from './RenderPause'

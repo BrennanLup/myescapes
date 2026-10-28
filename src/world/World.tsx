@@ -13,7 +13,7 @@ import { RedString } from './string'
 import { WishlistBoard } from './wishlist'
 import { GateDoor } from '@/gate'
 import { WrapTrophy } from '@/ui/wrap'
-import { PlayerController } from '@/player'
+import { PlayerController, RenderPause } from '@/player'
 import { LocalAvatar } from './avatars'
 import { RemotePlayers } from './avatars/RemotePlayers'
 import { InteractionSystem } from '@/interaction'
@@ -38,6 +38,7 @@ export function World() {
       <RemotePlayers />
       <InteractionSystem />
       <PerfMonitor />
+      <RenderPause />
     </>
   )
 }
