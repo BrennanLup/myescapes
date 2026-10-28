@@ -41,3 +41,16 @@ body {
   background: var(--color-night);
   -webkit-font-smoothing: antialiased;
 }
+
+/*
+ * Touch screens: no backdrop blur (QA r4). Blurring the live 3D room behind the HUD pills, name
+ * tags and sheets costs a lot on phone GPUs, and those panels are 90% opaque or more, so it
+ * barely shows. Unlayered, so it wins over the Tailwind utilities.
+ */
+@media (pointer: coarse) {
+  .backdrop-blur,
+  .backdrop-blur-sm {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
