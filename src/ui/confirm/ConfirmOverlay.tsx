@@ -33,6 +33,7 @@ import { showToast } from './toast'
 
 const anchorId = (path: string) => `cf-${path}`
 const inputId = (path: string) => `cf-input-${path}`
+const errorId = (path: string) => `cf-error-${path}`
 const clone = (f: FormState): FormState => JSON.parse(JSON.stringify(f)) as FormState
 
 const INPUT_BASE =
@@ -65,6 +66,9 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set())
   const [attempted, setAttempted] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  // The "Check this" chips are one Tab stop (a toolbar); this is the button that holds it.
+  const [flagStop, setFlagStop] = useState(0)
   const dataSource = useStore((s) => s.dataSource)
   const signedIn = dataSource === 'postgres'
   // Photos picked before the visit exists wait under this key, then upload right after save.
@@ -73,6 +77,12 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   const savedRef = useRef(false)
   const keyboard = useKeyboardInset()
   useRevealFocusedField(scrollRef)
+
+  // Start keyboard and screen-reader users inside the dialog, on its title (not on a field, which
+  // would open the room list or a phone keyboard straight away).
+  useEffect(() => {
+    titleRef.current?.focus({ preventScroll: true })
+  }, [])
 
   useEffect(() => {
     ensureRoomPhotoSync()
@@ -92,6 +102,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   const crewNames = useMemo(() => uniqSorted(crewMembers.map((c) => c.name)), [crewMembers])
 
   const isFlagged = (path: string) => flags.includes(path)
+  const flagStopAt = Math.min(flagStop, Math.max(flags.length * 2 - 1, 0))
   const clearFlag = (path: string) => setFlags((fl) => (fl.includes(path) ? fl.filter((x) => x !== path) : fl))
   const edit = (path: string, mut: (f: FormState) => void) => {
     setForm((f) => {
@@ -207,6 +218,8 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   const f = form
   const r = form.review
   const fieldProps = (path: string) => ({ path, flagged: isFlagged(path), error: errorShown(path), onLeave: touch })
+  // On the control itself: marks it invalid and points it at the error text, so it is announced.
+  const aria = (path: string) => (errorShown(path) ? { 'aria-invalid': true as const, 'aria-describedby': errorId(path) } : {})
 
   return (
     <div
@@ -220,7 +233,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
         {/* Header */}
         <header className="flex flex-wrap items-center gap-3 border-b-2 border-panel-edge/70 px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-            <h2 id="confirm-title" className="font-display text-2xl font-semibold sm:text-3xl">
+            <h2 id="confirm-title" ref={titleRef} tabIndex={-1} className="font-display text-2xl font-semibold outline-none sm:text-3xl">
               Check your review
             </h2>
             <span
@@ -269,24 +282,61 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                 {flags.length} {flags.length === 1 ? 'field needs' : 'fields need'} a look
               </p>
               <p className="mb-2 text-sm text-ink-soft">The extractor wasn't sure about these. Edit them, or tick them off if they're right.</p>
-              <ul className="flex flex-wrap gap-2">
-                {flags.map((p) => (
-                  <li key={p} className="flex items-stretch overflow-hidden rounded-full border-2 border-warn bg-panel">
-                    <button type="button" onClick={() => jumpTo(p)} className="min-h-10 px-3 text-sm font-bold underline-offset-2 hover:underline">
+              <div
+                role="toolbar"
+                aria-label="Fields to check"
+                aria-orientation="horizontal"
+                data-testid="confirm-flag-chips"
+                className="flex flex-wrap gap-2"
+                onKeyDown={(e) => {
+                  // One Tab stop for all chips: arrow keys (and Home/End) move between their buttons.
+                  const keys: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }
+                  const n = flags.length * 2
+                  let to: number
+                  if (e.key in keys) to = (flagStopAt + keys[e.key] + n) % n
+                  else if (e.key === 'Home') to = 0
+                  else if (e.key === 'End') to = n - 1
+                  else return
+                  e.preventDefault()
+                  setFlagStop(to)
+                  e.currentTarget.querySelectorAll<HTMLButtonElement>('button')[to]?.focus()
+                }}
+              >
+                {flags.map((p, i) => (
+                  <span key={p} className="flex items-stretch overflow-hidden rounded-full border-2 border-warn bg-panel">
+                    <button
+                      type="button"
+                      tabIndex={flagStopAt === i * 2 ? 0 : -1}
+                      onFocus={() => setFlagStop(i * 2)}
+                      onClick={() => jumpTo(p)}
+                      className="min-h-10 px-3 text-sm font-bold underline-offset-2 hover:underline"
+                    >
                       {labelFor(p)}
                     </button>
                     <button
                       type="button"
                       aria-label={`${labelFor(p)} looks fine`}
                       title="Looks fine"
-                      onClick={() => clearFlag(p)}
+                      tabIndex={flagStopAt === i * 2 + 1 ? 0 : -1}
+                      onFocus={() => setFlagStop(i * 2 + 1)}
+                      onClick={(e) => {
+                        // Keep the keyboard in the chips: the next chip (or the one before) takes focus.
+                        const list = e.currentTarget.closest('[role="toolbar"]')
+                        const next = i < flags.length - 1 ? i : i - 1
+                        clearFlag(p)
+                        setFlagStop(Math.max(next, 0) * 2)
+                        setTimeout(() => {
+                          const el = next >= 0 ? list?.querySelectorAll<HTMLButtonElement>('button')[next * 2] : null
+                          ;(el ?? titleRef.current)?.focus({ preventScroll: true })
+                        }, 0)
+                      }}
                       className="min-h-10 border-l-2 border-warn/60 px-3 text-sm text-good hover:bg-good/10"
                     >
                       ✓
                     </button>
-                  </li>
+                  </span>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
 
@@ -344,19 +394,19 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                 )}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Room name" {...fieldProps('room.name')} className="sm:col-span-2">
-                    <input id={inputId('room.name')} data-testid="field-room.name" className={INPUT} value={f.room.name} placeholder="Name of the room"
+                    <input id={inputId('room.name')} {...aria('room.name')} data-testid="field-room.name" className={INPUT} value={f.room.name} placeholder="Name of the room"
                       onChange={(e) => edit('room.name', (n) => void (n.room.name = e.target.value))} />
                   </Field>
                   <Field label="Company" {...fieldProps('room.company')}>
-                    <input id={inputId('room.company')} data-testid="field-room.company" className={INPUT} list="cf-companies" value={f.room.company} placeholder="Who runs it?"
+                    <input id={inputId('room.company')} {...aria('room.company')} data-testid="field-room.company" className={INPUT} list="cf-companies" value={f.room.company} placeholder="Who runs it?"
                       onChange={(e) => edit('room.company', (n) => void (n.room.company = e.target.value))} />
                   </Field>
                   <Field label="City" {...fieldProps('room.city')}>
-                    <input id={inputId('room.city')} data-testid="field-room.city" className={INPUT} list="cf-cities" value={f.room.city} placeholder="Which city?"
+                    <input id={inputId('room.city')} {...aria('room.city')} data-testid="field-room.city" className={INPUT} list="cf-cities" value={f.room.city} placeholder="Which city?"
                       onChange={(e) => edit('room.city', (n) => void (n.room.city = e.target.value))} />
                   </Field>
                   <Field label="Genre (optional)" {...fieldProps('room.genre')}>
-                    <select id={inputId('room.genre')} data-testid="field-room.genre" className={INPUT + ' capitalize'} value={f.room.genre}
+                    <select id={inputId('room.genre')} {...aria('room.genre')} data-testid="field-room.genre" className={INPUT + ' capitalize'} value={f.room.genre}
                       onChange={(e) => edit('room.genre', (n) => void (n.room.genre = e.target.value as FormState['room']['genre']))}>
                       <option value="">Not sure</option>
                       {GENRES.map((g) => (
@@ -365,11 +415,11 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                     </select>
                   </Field>
                   <Field label="Website" {...fieldProps('room.website')}>
-                    <input id={inputId('room.website')} data-testid="field-room.website" className={INPUT} type="url" inputMode="url" value={f.room.website} placeholder="https://…"
+                    <input id={inputId('room.website')} {...aria('room.website')} data-testid="field-room.website" className={INPUT} type="url" inputMode="url" value={f.room.website} placeholder="https://…"
                       onChange={(e) => edit('room.website', (n) => void (n.room.website = e.target.value))} />
                   </Field>
                   <Field label="Address" {...fieldProps('room.address')} className="sm:col-span-2">
-                    <input id={inputId('room.address')} data-testid="field-room.address" className={INPUT} value={f.room.address} placeholder="Street, number"
+                    <input id={inputId('room.address')} {...aria('room.address')} data-testid="field-room.address" className={INPUT} value={f.room.address} placeholder="Street, number"
                       onChange={(e) => edit('room.address', (n) => void (n.room.address = e.target.value))} />
                   </Field>
                 </div>
@@ -379,12 +429,13 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
 
               <Section title="Visit" icon="📅">
                 <Field label="Date played" {...fieldProps('review.date')}>
-                  <input id={inputId('review.date')} data-testid="field-review.date" type="date" className={INPUT} value={r.date}
+                  <input id={inputId('review.date')} {...aria('review.date')} data-testid="field-review.date" type="date" className={INPUT} value={r.date}
                     onChange={(e) => edit('review.date', (n) => void (n.review.date = e.target.value))} />
                 </Field>
                 <Field label="Crew" {...fieldProps('review.crew')}>
                   <ChipInput
                     path="review.crew"
+                    invalid={!!errorShown('review.crew')}
                     values={r.crew}
                     suggestions={crewNames}
                     placeholder="Add a name"
@@ -396,17 +447,17 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
               <Section title="Outcome & features" icon="🏁">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Did you escape?" {...fieldProps('review.escaped')}>
-                    <YesNo path="review.escaped" value={r.escaped} yes="Escaped!" no="Nope"
+                    <YesNo path="review.escaped" invalid={!!errorShown('review.escaped')} value={r.escaped} yes="Escaped!" no="Nope"
                       onChange={(v) => edit('review.escaped', (n) => void (n.review.escaped = v))} />
                   </Field>
                   <Field label={r.escaped === false ? 'Minutes used' : 'Escape time (minutes)'} {...fieldProps('review.escapeTimeMinutes')}>
-                    <input id={inputId('review.escapeTimeMinutes')} data-testid="field-review.escapeTimeMinutes" type="number" inputMode="numeric" min={0} max={600}
+                    <input id={inputId('review.escapeTimeMinutes')} {...aria('review.escapeTimeMinutes')} data-testid="field-review.escapeTimeMinutes" type="number" inputMode="numeric" min={0} max={600}
                       className={INPUT} value={r.escapeTimeMinutes ?? ''} placeholder="e.g. 52"
                       onChange={(e) => edit('review.escapeTimeMinutes', (n) => void (n.review.escapeTimeMinutes = e.target.value === '' ? null : Number(e.target.value)))} />
                   </Field>
                   {BOOL_FEATURES.map((k) => (
                     <Field key={k} label={FEATURE_LABELS[k]} {...fieldProps(`review.${k}`)}>
-                      <YesNo path={`review.${k}`} value={r[k]} unsure onChange={(v) => edit(`review.${k}`, (n) => void (n.review[k] = v))} />
+                      <YesNo path={`review.${k}`} invalid={!!errorShown(`review.${k}`)} value={r[k]} unsure onChange={(v) => edit(`review.${k}`, (n) => void (n.review[k] = v))} />
                     </Field>
                   ))}
                 </div>
@@ -416,6 +467,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                 <Field label="Tools & gadgets" {...fieldProps('review.toolsUsed')}>
                   <ChipInput
                     path="review.toolsUsed"
+                    invalid={!!errorShown('review.toolsUsed')}
                     values={r.toolsUsed}
                     suggestions={[...COMMON_TOOLS]}
                     placeholder="Add a tool"
@@ -440,9 +492,12 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                             testId={`field-${sp}-slider`}
                             value={score}
                             onChange={(v) => edit(sp, (n) => void (n.review.ratings[k].score = v))}
+                            invalid={!!errorShown(sp)}
+                            describedBy={errorShown(sp) ? errorId(sp) : undefined}
                           />
                           <input
                             id={inputId(sp)}
+                            {...aria(sp)}
                             data-testid={`field-${sp}`}
                             type="number"
                             inputMode="numeric"
@@ -456,7 +511,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                         </div>
                       </Field>
                       <Field label={`${RATING_LABELS[k]} comment`} hideLabel path={cp} flagged={isFlagged(cp)} error={errorShown(cp)} onLeave={touch}>
-                        <input id={inputId(cp)} data-testid={`field-${cp}`} className={INPUT + ' text-sm'} value={r.ratings[k].comment} placeholder={`Notes on ${RATING_LABELS[k].toLowerCase()}…`}
+                        <input id={inputId(cp)} {...aria(cp)} data-testid={`field-${cp}`} className={INPUT + ' text-sm'} value={r.ratings[k].comment} placeholder={`Notes on ${RATING_LABELS[k].toLowerCase()}…`}
                           onChange={(e) => edit(cp, (n) => void (n.review.ratings[k].comment = e.target.value))} />
                       </Field>
                     </div>
@@ -494,12 +549,12 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                         </div>
                         <div className="grid gap-4">
                           <Field label="Description" hideLabel {...fieldProps(dp)}>
-                            <textarea id={inputId(dp)} data-testid={`field-${dp}`} rows={2} className={INPUT + ' resize-y'} value={p.description} placeholder="What was the puzzle?"
+                            <textarea id={inputId(dp)} {...aria(dp)} data-testid={`field-${dp}`} rows={2} className={INPUT + ' resize-y'} value={p.description} placeholder="What was the puzzle?"
                               onChange={(e) => edit(dp, (n) => void (n.review.puzzles[i].description = e.target.value))} />
                           </Field>
                           <div className="flex flex-wrap items-start gap-4">
                             <Field label="Type" hideLabel {...fieldProps(tp)} className="min-w-40 flex-1">
-                              <select id={inputId(tp)} data-testid={`field-${tp}`} className={INPUT} value={p.type}
+                              <select id={inputId(tp)} {...aria(tp)} data-testid={`field-${tp}`} className={INPUT} value={p.type}
                                 style={p.type ? { borderColor: PUZZLE_TYPE_COLORS[p.type] } : undefined}
                                 onChange={(e) => edit(tp, (n) => void (n.review.puzzles[i].type = e.target.value as FormState['review']['puzzles'][number]['type']))}>
                                 <option value="">Type…</option>
@@ -694,7 +749,7 @@ function Field(props: {
       )}
       {children}
       {error && (
-        <p data-testid={`error-${path}`} id={`cf-error-${path}`} className="text-sm font-semibold text-bad">
+        <p data-testid={`error-${path}`} id={errorId(path)} className="text-sm font-semibold text-bad">
           {error}
         </p>
       )}
@@ -702,8 +757,8 @@ function Field(props: {
   )
 }
 
-function YesNo(props: { path: string; value: boolean | null; onChange: (v: boolean | null) => void; yes?: string; no?: string; unsure?: boolean }) {
-  const { path, value, onChange, yes = 'Yes', no = 'No', unsure = false } = props
+function YesNo(props: { path: string; value: boolean | null; onChange: (v: boolean | null) => void; yes?: string; no?: string; unsure?: boolean; invalid?: boolean }) {
+  const { path, value, onChange, yes = 'Yes', no = 'No', unsure = false, invalid = false } = props
   const opts: { v: boolean | null; text: string; id: string; onCls: string }[] = [
     { v: true, text: yes, id: 'yes', onCls: 'border-good bg-good text-white' },
     { v: false, text: no, id: 'no', onCls: 'border-bad bg-bad text-white' },
@@ -718,7 +773,12 @@ function YesNo(props: { path: string; value: boolean | null; onChange: (v: boole
     next?.focus()
   }
   return (
-    <div role="radiogroup" aria-labelledby={`cf-label-${path}`} data-testid={`field-${path}`} data-value={value === null ? 'unset' : String(value)} className="flex gap-2">
+    <div
+      role="radiogroup"
+      aria-labelledby={`cf-label-${path}`}
+      aria-invalid={invalid || undefined}
+      aria-describedby={invalid ? errorId(path) : undefined}
+      data-testid={`field-${path}`} data-value={value === null ? 'unset' : String(value)} className="flex gap-2">
       {opts.map((o, i) => {
         const on = value === o.v
         return (
@@ -754,8 +814,8 @@ function YesNo(props: { path: string; value: boolean | null; onChange: (v: boole
   )
 }
 
-function ChipInput(props: { path: string; values: string[]; suggestions: string[]; placeholder: string; onChange: (v: string[]) => void }) {
-  const { path, values, suggestions, placeholder, onChange } = props
+function ChipInput(props: { path: string; values: string[]; suggestions: string[]; placeholder: string; onChange: (v: string[]) => void; invalid?: boolean }) {
+  const { path, values, suggestions, placeholder, onChange, invalid = false } = props
   const [text, setText] = useState('')
   const has = (v: string) => values.some((x) => x.toLowerCase() === v.toLowerCase())
   const add = (raw: string) => {
@@ -783,6 +843,8 @@ function ChipInput(props: { path: string; values: string[]; suggestions: string[
       <div className="flex gap-2">
         <input
           id={inputId(path)}
+          aria-invalid={invalid || undefined}
+          aria-describedby={invalid ? errorId(path) : undefined}
           data-testid={`field-${path}`}
           className={INPUT}
           list={listId}
