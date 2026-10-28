@@ -9,7 +9,7 @@ PostgreSQL through Drizzle ORM. `DATABASE_URL` selects node-postgres (Railway); 
 | `client.ts` | `createDb()`, `createPostgres(url)`, `createPglite(dir)`; `Db`, `Tx`, `DbHandle` types |
 | `migrate.ts` | `runMigrations(handle, { timeoutMs })` and the `npm run db:migrate` CLI |
 | `usage.ts` | Spending caps: `reserveUsage`, `releaseUsage`, `usageSummary`, `spendingCapError`, `capsFromEnv` |
-| `dataset.ts` | Phase 1 mapping for the 3D room: `datasetForUser`, `saveEntryForUser`, wish list get/put |
+| `dataset.ts` | Phase 1 mapping for the 3D room: `datasetForUser`, `saveEntryForUser` (uses a picked game id as `room.id` or a picked venue as `room.venueId`; otherwise matches the venue by name or brand plus city name or slug, directory venues first, before adding one), wish list get/put |
 | `util.ts` | `slugify`, `citySlug`, `uniqueSlug`, `toPublicUser`, `isUniqueViolation`, `haversineKm`, `googleMapsUrl` |
 | `seed.ts` | `npm run db:seed`: the 12 invented Phase 1 rooms as a local demo directory (refuses in production) |
 | `testing.ts` | `createTestDb()`, `resetDb()`, `ALL_TABLES` |
