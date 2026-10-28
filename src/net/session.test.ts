@@ -6,7 +6,7 @@ import { starterOutfit, DEFAULT_OUTFIT } from '@/world/avatars/catalog'
 import { ServerClock } from './clock'
 import { bus, type AppEvent } from '@/contracts/events'
 import { RealtimeClient, type SocketLike } from './client'
-import { activeLocalEmote, applyMessage, chatSlowDown, clearRoom, installRealtime, localState, poseChanged, sendChat } from './session'
+import { activeLocalEmote, applyMessage, chatSlowDown, clearRoom, holdRoom, installRealtime, localState, poseChanged, roomOnScreen, sendChat } from './session'
 import { useStore } from '@/state/store'
 import { resetVisitForTests, useVisitEnded } from '@/social/visit/state'
 import { BUBBLE_MS, firstName, friendsInOrder, outfitFor, playersInOrder, poses, resetRealtime, useRealtime } from './store'
@@ -238,6 +238,7 @@ describe('installRealtime', () => {
   it('clears the room when the socket drops, and gives refused chat back to the chat box', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ friends: [], here: [], realtime: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
     const client = new RealtimeClient({ url: 'ws://t', createSocket: () => new Sock(), random: () => 0.5 })
+    const release = holdRoom()
     const off = await installRealtime({ client, handle: 'robin' })
     try {
       const s = Sock.last
@@ -262,6 +263,54 @@ describe('installRealtime', () => {
       expect(poses.size).toBe(0)
     } finally {
       off()
+      release()
+    }
+  })
+
+  it('is in the home only while the main room is on screen (an in-app move to the puzzle room leaves it)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ friends: [], here: [], realtime: true }), { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = new RealtimeClient({ url: 'ws://t', createSocket: () => new Sock(), random: () => 0.5 })
+    // The module loads before App mounts: no join until the room is on screen.
+    const off = await installRealtime({ client, handle: 'robin' })
+    let release: () => void = () => {}
+    try {
+      const s = Sock.last
+      s.readyState = 1
+      s.onopen?.({})
+      s.say({ type: 'hello', sid: 's-host', you: host, serverTime: Date.now(), limits: {} })
+      expect(s.sent.filter((m) => m.type === 'join')).toEqual([])
+
+      release = holdRoom()
+      expect(roomOnScreen()).toBe(true)
+      expect(s.sent.filter((m) => m.type === 'join')).toEqual([{ type: 'join', home: 'robin' }])
+      s.say({ type: 'joined', home: { handle: 'robin', owner: host }, sid: 's-host', isOwner: true, serverTime: Date.now(), players: [{ sid: 's-guest', user: guest, isOwner: false, state: pose(1), outfit: null, joinedAt: 1 }] })
+
+      // A quick unmount and remount (development double effects) stays in.
+      release()
+      release = holdRoom()
+      await new Promise((r) => setTimeout(r, 300))
+      expect(s.sent.filter((m) => m.type === 'leave')).toEqual([])
+      expect(s.sent.filter((m) => m.type === 'join')).toHaveLength(1)
+
+      // Off to /daily/room: the puzzle room sets worldReady and moves the shared player view.
+      release()
+      useStore.setState({ worldReady: true })
+      await new Promise((r) => setTimeout(r, 300))
+      expect(s.sent.filter((m) => m.type === 'leave')).toEqual([{ type: 'leave' }])
+      expect(useRealtime.getState().players).toEqual({})
+      playerView.feet = [4, 0, -3]
+      playerView.speed = 2
+      await new Promise((r) => setTimeout(r, 250))
+      expect(s.sent.filter((m) => m.type === 'state')).toEqual([])
+
+      // Back in the room: join again.
+      release = holdRoom()
+      expect(s.sent.filter((m) => m.type === 'join')).toHaveLength(2)
+    } finally {
+      off()
+      release()
+      useStore.setState({ worldReady: false })
+      playerView.speed = 0
     }
   })
 })
