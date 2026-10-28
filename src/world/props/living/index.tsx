@@ -1,7 +1,8 @@
 /**
  * Furniture Set A (living): rug, couch, bean bags, coffee table, side table,
  * floor lamp, two ceiling pendants, the east-wall bookshelf with trinkets, and
- * plants around the room. All geometry is merged per material (30 draw calls).
+ * plants around the room. All geometry is merged per (material, shadow) bucket, plus three
+ * instanced meshes for book covers, page blocks and record sleeves.
  */
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
@@ -11,7 +12,7 @@ import { getMaterial } from '@/world/materials'
 import type { LivingMat } from './builder'
 import { LIVING_COLLIDERS } from './layout'
 import { buildLivingSet } from './set'
-import type { BookInstance } from './shelf'
+import { bookCoverGeometry, bookPagesGeometry, type BookInstance } from './shelf'
 
 const localMats = new Map<string, THREE.Material>()
 
@@ -33,36 +34,46 @@ function resolveMaterial(id: LivingMat): THREE.Material {
 }
 
 function bookMaterial(): THREE.Material {
-  // Instance colours multiply the material colour, so start from white.
-  return tinted('paper', 'books', '#ffffff')
+  // Instance colours multiply the material colour, so start from white. Vertex colours darken the spine bands.
+  const m = tinted('paper', 'books', '#ffffff') as THREE.MeshStandardMaterial
+  m.vertexColors = true
+  return m
 }
 
-function useBooksMesh(books: BookInstance[]) {
+/** One InstancedMesh per kind: book covers, their page blocks (cream paper) and record sleeves. */
+function useInstanced(name: string, items: BookInstance[], geometry: () => THREE.BufferGeometry, material: () => THREE.Material, colour: boolean, castShadow: boolean) {
   const mesh = useMemo(() => {
-    const geo = new THREE.BoxGeometry(1, 1, 1)
-    const m = new THREE.InstancedMesh(geo, bookMaterial(), books.length)
+    const m = new THREE.InstancedMesh(geometry(), material(), items.length)
     const c = new THREE.Color()
-    books.forEach((bk, i) => {
+    items.forEach((bk, i) => {
       m.setMatrixAt(i, bk.matrix)
-      m.setColorAt(i, c.set(bk.color))
+      if (colour) m.setColorAt(i, c.set(bk.color))
     })
     m.instanceMatrix.needsUpdate = true
     if (m.instanceColor) m.instanceColor.needsUpdate = true
-    m.castShadow = true
+    m.castShadow = castShadow
     m.receiveShadow = true
-    m.name = 'living:books'
+    m.name = name
     m.computeBoundingSphere()
     return m
-  }, [books])
+  }, [name, items, geometry, material, colour, castShadow])
   useEffect(() => () => mesh.geometry.dispose(), [mesh])
   return mesh
 }
+
+const pagesMaterial = () => tinted('paper', 'pages', '#efe4cc')
+const sleeveMaterial = () => tinted('paper', 'sleeves', '#ffffff')
+const sleeveGeometry = () => new THREE.BoxGeometry(1, 1, 1)
 
 export function LivingProps() {
   const set = useMemo(() => buildLivingSet(), [])
   useColliders(LIVING_COLLIDERS)
   useEffect(() => () => set.parts.forEach((p) => p.geometry.dispose()), [set])
-  const books = useBooksMesh(set.books)
+  const bookList = useMemo(() => set.books.filter((bk) => bk.kind !== 'record'), [set])
+  const recordList = useMemo(() => set.books.filter((bk) => bk.kind === 'record'), [set])
+  const covers = useInstanced('living:books', bookList, bookCoverGeometry, bookMaterial, true, true)
+  const pages = useInstanced('living:book-pages', bookList, bookPagesGeometry, pagesMaterial, false, false)
+  const sleeves = useInstanced('living:records', recordList, sleeveGeometry, sleeveMaterial, true, true)
   return (
     <group name="living">
       {set.parts.map((p) => (
@@ -75,7 +86,9 @@ export function LivingProps() {
           receiveShadow
         />
       ))}
-      <primitive object={books} />
+      <primitive object={covers} />
+      <primitive object={pages} />
+      <primitive object={sleeves} />
     </group>
   )
 }

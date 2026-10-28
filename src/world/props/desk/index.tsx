@@ -13,7 +13,7 @@ import { interactable } from '@/contracts/interaction'
 import { LIGHT } from '@/contracts/style'
 import { useStore } from '@/state/store'
 import { D, LAMP_BULB_LOCAL, deskColliders } from './layout'
-import { ledParts, mergeByMaterial, staticParts, type PartMat } from './parts'
+import { buildDeskParts, buildLedGeometry, type PartMat } from './parts'
 import { TERMINAL_CANVAS, drawSideScreen, drawTerminal, terminalFrame } from './terminal'
 
 export const DESK_TERMINAL_ID = 'desk:terminal'
@@ -66,14 +66,14 @@ export function DeskProps() {
   useColliders(boxes)
 
   const { get, own } = useDeskMaterials()
-  const staticGeo = useMemo(() => mergeByMaterial(staticParts()), [])
-  const ledGeo = useMemo(() => mergeByMaterial(ledParts()).get('led')!, [])
+  const staticParts = useMemo(() => buildDeskParts(), [])
+  const ledGeo = useMemo(() => buildLedGeometry(), [])
   useEffect(
     () => () => {
-      staticGeo.forEach((g) => g.dispose())
+      staticParts.forEach((p) => p.geometry.dispose())
       ledGeo.dispose()
     },
-    [staticGeo, ledGeo],
+    [staticParts, ledGeo],
   )
 
   const hovered = useStore((s) => s.hoveredId === DESK_TERMINAL_ID)
@@ -167,8 +167,8 @@ export function DeskProps() {
         name="desk:terminal"
         {...interactable({ id: DESK_TERMINAL_ID, kind: 'desk', label: 'Log a new escape room', event: { type: 'record:open', payload: {} } })}
       >
-        {[...staticGeo].map(([k, geo]) => (
-          <mesh key={k} geometry={geo} material={get(k)} castShadow receiveShadow />
+        {staticParts.map((p) => (
+          <mesh key={p.key} name={`desk:${p.key}`} geometry={p.geometry} material={get(p.mat)} castShadow={p.castShadow} receiveShadow />
         ))}
         <mesh geometry={ledGeo} material={own.led} />
 

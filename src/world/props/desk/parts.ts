@@ -1,10 +1,12 @@
 /**
- * Static desk geometry as a list of primitive parts, merged into one geometry
- * per material so the whole set costs a handful of draw calls.
+ * Static desk geometry, built with the living set's PartsBuilder (rounded, lathed and tubed parts
+ * merged into one geometry per (material, castShadow) bucket) so the whole set costs a handful of
+ * draw calls. Everything here is in the desk anchor's local frame.
  */
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Vec3 } from '@/contracts/scene'
+import { PartsBuilder, type BuiltPart } from '../living/builder'
+import { cushion, deform, helix, type V2 } from '../living/geo'
 import { D, LAMP_BULB_LOCAL } from './layout'
 
 export type PartMat =
@@ -24,253 +26,350 @@ export type PartMat =
   | 'led'
   | 'shade'
 
-type Shape =
-  | { g: 'box'; a: [number, number, number] }
-  | { g: 'cyl'; a: [number, number, number, number?, boolean?] }
-  | { g: 'sphere'; a: [number, number?, number?] }
-  | { g: 'torus'; a: [number, number, number?, number?] }
+type B = PartsBuilder<PartMat>
 
-export type Part = Shape & { m: PartMat; p: Vec3; r?: Vec3; s?: Vec3 }
-
-function geometryFor(part: Part): THREE.BufferGeometry {
-  switch (part.g) {
-    case 'box':
-      return new THREE.BoxGeometry(...part.a)
-    case 'cyl':
-      return new THREE.CylinderGeometry(part.a[0], part.a[1], part.a[2], part.a[3] ?? 10, 1, part.a[4] ?? false)
-    case 'sphere':
-      return new THREE.SphereGeometry(part.a[0], part.a[1] ?? 10, part.a[2] ?? 8)
-    case 'torus':
-      return new THREE.TorusGeometry(part.a[0], part.a[1], part.a[2] ?? 6, part.a[3] ?? 16)
-  }
-}
-
-/** Applies a parent transform (position + Y rotation) to a list of parts. Rotations use 'YXZ' order so yaws add. */
-function place(parts: Part[], pos: Vec3, rotY: number): Part[] {
-  const c = Math.cos(rotY)
-  const s = Math.sin(rotY)
-  return parts.map((pt) => ({
-    ...pt,
-    p: [pos[0] + pt.p[0] * c + pt.p[2] * s, pos[1] + pt.p[1], pos[2] - pt.p[0] * s + pt.p[2] * c] as Vec3,
-    r: [pt.r?.[0] ?? 0, (pt.r?.[1] ?? 0) + rotY, pt.r?.[2] ?? 0] as Vec3,
-  }))
-}
-
-const box = (m: PartMat, a: [number, number, number], p: Vec3, r?: Vec3): Part => ({ g: 'box', m, a, p, r })
-const cyl = (m: PartMat, a: [number, number, number, number?, boolean?], p: Vec3, r?: Vec3): Part => ({ g: 'cyl', m, a, p, r })
-
-function deskParts(): Part[] {
+function desk(b: B) {
   const { topY, topT, width, backZ, frontZ } = D
   const depth = frontZ - backZ
   const cz = (frontZ + backZ) / 2
   const legH = topY - topT
-  const parts: Part[] = [
-    // Chunky top with a darker lip.
-    box('woodLight', [width, topT, depth], [0, topY - topT / 2, cz]),
-    box('woodDark', [width + 0.02, 0.025, 0.03], [0, topY - topT - 0.005, frontZ - 0.005]),
-    // Slab legs and modesty panel.
-    box('woodLight', [0.09, legH, depth - 0.04], [-width / 2 + 0.07, legH / 2, cz]),
-    box('woodLight', [0.09, legH, depth - 0.04], [width / 2 - 0.07, legH / 2, cz]),
-    box('woodDark', [width - 0.2, 0.42, 0.04], [0, legH - 0.24, backZ + 0.06]),
-    // Drawer cabinet on the right.
-    box('woodLight', [0.48, legH - 0.04, depth - 0.1], [0.74, (legH - 0.04) / 2 + 0.02, cz - 0.02]),
-  ]
+  // Thick top with rounded corners and a soft bevel.
+  b.slab('woodLight', [width, topT, depth], [0, topY - topT / 2, cz], { r: 0.03, bevel: 0.012 })
+  // Front apron (the LED strip runs just in front of it) and a modesty panel.
+  b.box('woodDark', [width - 0.22, 0.05, 0.025], [0, legH - 0.025, frontZ - 0.08], { radius: 0.006 })
+  b.box('woodDark', [width - 0.2, 0.42, 0.03], [0, legH - 0.24, backZ + 0.06], { radius: 0.008 })
+  // Left slab leg with a foot rail.
+  b.box('woodLight', [0.07, legH, depth - 0.05], [-width / 2 + 0.07, legH / 2, cz], { radius: 0.012 })
+  b.box('woodDark', [0.09, 0.025, depth - 0.02], [-width / 2 + 0.07, 0.0125, cz], { radius: 0.008 })
+  // Drawer cabinet on the right: carcass, plinth, three bevelled drawer fronts with bar pulls.
+  const cx = 0.74
+  const cw = 0.48
+  const cd = depth - 0.1
+  b.box('woodLight', [cw, legH - 0.04, cd], [cx, (legH - 0.04) / 2 + 0.04, cz - 0.02], { radius: 0.012 })
+  b.box('woodDark', [cw - 0.04, 0.04, cd - 0.04], [cx, 0.02, cz - 0.02], { radius: 0.006 })
+  const fz = cz - 0.02 + cd / 2
   for (let i = 0; i < 3; i++) {
     const y = 0.16 + i * 0.22
-    parts.push(box('woodDark', [0.42, 0.18, 0.02], [0.74, y, frontZ - 0.06]))
-    parts.push(cyl('brass', [0.018, 0.018, 0.03, 8], [0.74, y, frontZ - 0.035], [Math.PI / 2, 0, 0]))
+    b.box('woodDark', [0.43, 0.2, 0.024], [cx, y, fz + 0.004], { radius: 0.007 })
+    b.tube('brass', [[cx - 0.08, y + 0.05, fz + 0.016], [cx - 0.075, y + 0.05, fz + 0.04], [cx + 0.075, y + 0.05, fz + 0.04], [cx + 0.08, y + 0.05, fz + 0.016]], 0.006, {
+      seg: 16,
+      radial: 6,
+    })
   }
-  return parts
+  // Cable bundle from the back of the monitors down behind the desk.
+  b.tube('plastic', [[0.1, topY + 0.02, -0.29], [0.05, topY + 0.01, backZ + 0.03], [0.02, topY - 0.15, backZ - 0.01], [-0.05, 0.25, backZ - 0.015], [-0.2, 0.01, backZ - 0.01]], 0.009, {
+    seg: 24,
+    radial: 6,
+  })
 }
 
-function monitorParts(pos: Vec3, w: number, h: number, rotY: number): Part[] {
+function monitor(b: B, pos: Vec3, w: number, h: number, rotY: number) {
   const standH = pos[1] - D.topY
-  return place(
-    [
-      // Bezel (screen face is a separate mesh in front of it).
-      box('plastic', [w + 0.04, h + 0.04, 0.035], [0, 0, 0]),
-      box('plastic', [w * 0.6, h * 0.6, 0.06], [0, 0, -0.04]),
-      // Stand.
-      box('metalDark', [0.05, standH, 0.04], [0, -standH / 2, -0.07]),
-      box('metalDark', [0.26, 0.015, 0.18], [0, -standH + 0.008, -0.03]),
-    ],
-    pos,
-    rotY,
-  )
+  b.group(pos, rotY, () => {
+    // Slim bezel; the screen plane sits just in front of it at z = 0.019.
+    b.box('plastic', [w + 0.026, h + 0.026, 0.02], [0, 0, 0.008], { radius: 0.006 })
+    // Chin with a tiny power LED.
+    b.box('plastic', [w * 0.4, 0.012, 0.012], [0, -h / 2 - 0.016, 0.006], { radius: 0.004, seg: 1 })
+    // Tapered back housing.
+    b.soft('plastic', [w * 0.82, h * 0.78, 0.05], [0, -0.01, -0.024], {
+      radius: 0.02,
+      edgeSeg: 2,
+      deform: (p, u) => {
+        const k = 1 - 0.12 * Math.max(0, -u.z)
+        p.x *= k
+        p.y *= k
+      },
+    })
+    // VESA plate, neck and a rounded foot.
+    b.box('metalDark', [0.12, 0.12, 0.02], [0, -0.04, -0.055], { radius: 0.006, seg: 1 })
+    b.box('metalDark', [0.055, standH - 0.01, 0.026], [0, -standH / 2 - 0.02, -0.075], { radius: 0.01, rot: [0.06, 0, 0] })
+    b.slab('metalDark', [0.27, 0.014, 0.19], [0, -standH + 0.007, -0.04], { r: 0.06, bevel: 0.004 })
+  })
 }
 
 const TOWER_POS: Vec3 = [-0.97, D.topY, -0.18]
 
-function towerParts(): Part[] {
-  const pos: Vec3 = TOWER_POS
-  return place(
-    [
-      box('metalDark', [0.22, 0.46, 0.42], [0, 0.23, 0]),
-      box('plastic', [0.2, 0.06, 0.4], [0, 0.03, 0]),
-      // Front fan grille (LED ring is separate).
-      cyl('metal', [0.06, 0.06, 0.012, 14], [0, 0.3, 0.212], [Math.PI / 2, 0, 0]),
-      cyl('metal', [0.06, 0.06, 0.012, 14], [0, 0.15, 0.212], [Math.PI / 2, 0, 0]),
-    ],
-    pos,
-    0,
-  )
+function tower(b: B) {
+  b.group(TOWER_POS, 0, () => {
+    b.box('metalDark', [0.22, 0.46, 0.42], [0, 0.245, 0], { radius: 0.014 })
+    for (const x of [-0.08, 0.08]) for (const z of [-0.17, 0.17]) b.cyl('plastic', 0.018, 0.02, 0.018, [x, 0.009, z], { seg: 12 })
+    // Front mesh panel and top vents.
+    b.box('plastic', [0.2, 0.42, 0.006], [0, 0.245, 0.211], { radius: 0.003, seg: 1 })
+    for (let i = 0; i < 6; i++) b.box('plastic', [0.15, 0.003, 0.012], [0, 0.476, -0.15 + i * 0.05], { shadow: false })
+    // Two fans: housing ring, hub and blades (LED rings are separate).
+    for (const y of [0.3, 0.15]) {
+      b.torus('metal', 0.058, 0.004, [0, y + 0.005, 0.215], { seg: 24, radial: 5, shadow: false })
+      b.cyl('metal', 0.02, 0.02, 0.008, [0, y + 0.005, 0.216], { rot: [Math.PI / 2, 0, 0], seg: 14, shadow: false })
+      for (let k = 0; k < 7; k++) {
+        const a = (k / 7) * Math.PI * 2
+        b.box('metal', [0.036, 0.016, 0.002], [Math.cos(a) * 0.036, y + 0.005 + Math.sin(a) * 0.036, 0.215], { rot: [0.35, 0, a], shadow: false })
+      }
+    }
+    b.cyl('metal', 0.008, 0.008, 0.004, [0.07, 0.44, 0.215], { rot: [Math.PI / 2, 0, 0], seg: 10, shadow: false })
+  })
 }
 
-/** LED parts on the PC tower + a thin strip along the desk underside front. */
-export function ledParts(): Part[] {
-  const pos: Vec3 = TOWER_POS
-  return [
-    ...place(
-      [
-        { g: 'torus', m: 'led', a: [0.062, 0.008, 6, 20], p: [0, 0.3, 0.22] },
-        { g: 'torus', m: 'led', a: [0.062, 0.008, 6, 20], p: [0, 0.15, 0.22] },
-        box('led', [0.012, 0.4, 0.012], [-0.1, 0.24, 0.215]),
-        box('led', [0.14, 0.01, 0.01], [0, 0.43, 0.215]),
-      ],
-      pos,
-      0,
-    ),
-    box('led', [D.width - 0.3, 0.012, 0.012], [0, D.topY - D.topT - 0.03, D.frontZ - 0.05]),
-  ]
+/** LED parts on the PC tower + a thin strip along the desk underside front (one separate glowing mesh). */
+export function buildLedGeometry(): THREE.BufferGeometry {
+  const b = new PartsBuilder<PartMat>()
+  b.group(TOWER_POS, 0, () => {
+    b.torus('led', 0.062, 0.008, [0, 0.3, 0.22], { seg: 32, radial: 6 })
+    b.torus('led', 0.062, 0.008, [0, 0.15, 0.22], { seg: 32, radial: 6 })
+    b.box('led', [0.012, 0.4, 0.012], [-0.1, 0.24, 0.215], { radius: 0.004, seg: 1 })
+    b.box('led', [0.14, 0.01, 0.01], [0, 0.43, 0.215], { radius: 0.004, seg: 1 })
+  })
+  b.box('led', [D.width - 0.3, 0.012, 0.012], [0, D.topY - D.topT - 0.03, D.frontZ - 0.05], { radius: 0.005, seg: 1 })
+  return b.build()[0].geometry
 }
 
-function peripheralsParts(): Part[] {
+/** Row-by-row keyboard layout in key units; numbers are key widths. */
+const KEY_ROWS: number[][] = [
+  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2],
+  [1.5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.5],
+  [1.75, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2.25],
+  [2.25, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2.75],
+  [1.25, 1.25, 1.25, 6.25, 1.25, 1.25, 1.25, 1.25],
+]
+
+function keyboard(b: B) {
+  b.group([0.15, D.topY, 0.16], 0.03, () => {
+    b.box('plastic', [0.46, 0.022, 0.155], [0, 0.011, 0], { radius: 0.007 })
+    const unit = 0.0305
+    const key = unit - 0.004
+    KEY_ROWS.forEach((row, r) => {
+      const total = row.reduce((a, c) => a + c, 0) * unit
+      let x = -total / 2
+      const z = -0.058 + r * unit
+      row.forEach((wu, i) => {
+        const w = wu * unit - 0.004
+        const accent = (r === 0 && i === 0) || (r === 2 && i === row.length - 1)
+        b.box(accent ? 'fabricOrange' : 'metal', [w, 0.009, key], [x + (wu * unit) / 2, 0.026, z], { radius: 0.0028, seg: 1, shadow: false })
+        x += wu * unit
+      })
+    })
+  })
+  // Mouse: a smooth sculpted shell with a split and a scroll wheel.
+  const mouse = deform(new THREE.SphereGeometry(1, 20, 14), (p) => {
+    const front = p.z < 0 ? 1 : 0
+    p.set(p.x * 0.032 * (1 - 0.15 * front * -p.z), Math.max(0, p.y) * 0.02 + 0.002 * (1 + p.y), p.z * 0.058)
+  })
+  b.add('plastic', mouse, [0.55, D.topY, 0.2], { rot: [0, 0.1, 0] })
+  b.cyl('metal', 0.006, 0.006, 0.005, [0.548, D.topY + 0.022, 0.18], { rot: [0, 0.1, Math.PI / 2], seg: 12, shadow: false })
+  // Desk mat.
+  b.slab('fabricTeal', [0.95, 0.005, 0.36], [0.25, D.topY + 0.0025, 0.18], { r: 0.03, bevel: 0.002 })
+}
+
+function deskItems(b: B) {
   const y = D.topY
-  const parts: Part[] = [
-    // Keyboard with key rows.
-    box('plastic', [0.5, 0.025, 0.17], [0.15, y + 0.0125, 0.16], [0, 0.03, 0]),
-    ...[0, 1, 2, 3].map((i) => box('metal', [0.44, 0.012, 0.025], [0.15, y + 0.03, 0.1 + i * 0.038], [0, 0.03, 0])),
-    // Desk mat.
-    box('fabricTeal', [0.95, 0.006, 0.36], [0.25, y + 0.003, 0.18]),
-    // Mouse.
-    { g: 'sphere', m: 'plastic', a: [0.035, 10, 6], p: [0.55, y + 0.012, 0.2], s: [0.85, 0.45, 1.3] },
-    // Mug with handle.
-    cyl('ceramic', [0.045, 0.04, 0.1, 12], [-0.3, y + 0.05, 0.22]),
-    { g: 'torus', m: 'ceramic', a: [0.028, 0.009, 5, 10], p: [-0.25, y + 0.055, 0.22], r: [0, 0, 0] },
-    cyl('woodDark', [0.04, 0.04, 0.005, 12], [-0.3, y + 0.095, 0.22]),
-    // Tiny cactus in a pot.
-    cyl('pot', [0.045, 0.035, 0.07, 10], [-0.68, y + 0.035, 0.23]),
-    cyl('leaf', [0.026, 0.03, 0.1, 8], [-0.68, y + 0.12, 0.23]),
-    { g: 'sphere', m: 'leaf', a: [0.026, 8, 6], p: [-0.68, y + 0.17, 0.23] },
-    cyl('leaf', [0.014, 0.016, 0.05, 6], [-0.65, y + 0.13, 0.23], [0, 0, -0.9]),
-    { g: 'sphere', m: 'stickyPink', a: [0.012, 6, 4], p: [-0.68, y + 0.198, 0.23] },
-    // Sticky notes: on the main monitor bezel and on the desk.
-    box('stickyYellow', [0.07, 0.07, 0.003], [D.mainMonitor.pos[0] + D.mainMonitor.w / 2 - 0.01, D.mainMonitor.pos[1] + 0.2, D.mainMonitor.pos[2] + 0.02], [0, 0, 0.12]),
-    box('stickyPink', [0.07, 0.07, 0.003], [D.mainMonitor.pos[0] - D.mainMonitor.w / 2 + 0.02, D.mainMonitor.pos[1] - 0.21, D.mainMonitor.pos[2] + 0.02], [0, 0, -0.1]),
-    box('stickyYellow', [0.08, 0.004, 0.08], [-0.15, y + 0.002, 0.3], [0, 0.3, 0]),
-    box('stickyYellow', [0.08, 0.004, 0.08], [-0.12, y + 0.006, 0.31], [0, -0.15, 0]),
-  ]
-  return parts
+  // Mug with handle and coffee.
+  b.group([-0.3, y, 0.22], 0, () => {
+    const r = 0.042
+    const h = 0.1
+    b.lathe('ceramic', [[0, 0.004], [r * 0.85, 0], [r * 0.95, 0.004], [r, h * 0.3], [r * 1.02, h - 0.003], [r * 0.98, h], [r * 0.9, h - 0.004], [r * 0.86, 0.012], [0, 0.012]], [0, 0, 0], {
+      seg: 28,
+    })
+    b.lathe('woodDark', [[r * 0.88, h - 0.02], [0, h - 0.018]], [0, 0, 0], { seg: 20, shadow: false })
+    b.tube('ceramic', [[r * 0.9, h * 0.78, 0], [r + 0.03, h * 0.82, 0], [r + 0.035, h * 0.45, 0], [r + 0.012, h * 0.25, 0], [r * 0.9, h * 0.24, 0]], 0.0065, { seg: 16 })
+  })
+  // Tiny ribbed cactus in a pot.
+  b.group([-0.68, y, 0.23], 0, () => {
+    b.lathe('pot', [[0, 0], [0.034, 0], [0.036, 0.006], [0.045, 0.062], [0.049, 0.064], [0.049, 0.072], [0.042, 0.072], [0.04, 0.06]], [0, 0, 0], { seg: 24 })
+    b.lathe('woodDark', [[0.041, 0.058], [0, 0.062]], [0, 0, 0], { seg: 16, shadow: false })
+    const ribbed = (r: number, h: number) =>
+      deform(
+        new THREE.LatheGeometry(
+          Array.from({ length: 9 }, (_, i) => {
+            const t = i / 8
+            return new THREE.Vector2(t < 0.7 ? r : r * Math.sqrt(Math.max(0, 1 - ((t - 0.7) / 0.3) ** 2)), t * h)
+          }),
+          28,
+        ),
+        (p) => {
+          const k = 1 + 0.12 * Math.abs(Math.cos(Math.atan2(p.z, p.x) * 4))
+          p.x *= k
+          p.z *= k
+        },
+      )
+    b.add('leaf', ribbed(0.028, 0.15), [0, 0.055, 0])
+    b.add('leaf', ribbed(0.013, 0.06), [0.04, 0.11, 0])
+    b.tube('leaf', [[0.015, 0.105, 0], [0.035, 0.105, 0], [0.04, 0.115, 0]], 0.011, { seg: 6, radial: 8 })
+    b.sphere('stickyPink', 0.011, [0, 0.207, 0], { w: 10, h: 6, scale: [1, 0.6, 1], shadow: false })
+  })
+  // Sticky notes: on the main monitor bezel and on the desk (slightly curled).
+  const mm = D.mainMonitor
+  b.box('stickyYellow', [0.07, 0.07, 0.002], [mm.pos[0] + mm.w / 2 - 0.01, mm.pos[1] + 0.2, mm.pos[2] + 0.0195], { rot: [0.05, 0, 0.12], shadow: false })
+  b.box('stickyPink', [0.07, 0.07, 0.002], [mm.pos[0] - mm.w / 2 + 0.02, mm.pos[1] - 0.21, mm.pos[2] + 0.0195], { rot: [0.05, 0, -0.1], shadow: false })
+  b.box('stickyYellow', [0.08, 0.003, 0.08], [-0.15, y + 0.0015, 0.3], { rot: [0, 0.3, 0], shadow: false })
+  b.box('stickyYellow', [0.08, 0.003, 0.08], [-0.12, y + 0.0045, 0.31], { rot: [0.04, -0.15, 0], shadow: false })
 }
 
-/** Podcast mic on a boom arm clamped to the back edge. */
-function micParts(): Part[] {
+/** Podcast mic on a two-section boom arm (with springs) clamped to the back edge. */
+function mic(b: B) {
   const base: Vec3 = [0.64, D.topY, -0.4]
   const elbow: Vec3 = [0.64, D.topY + 0.5, -0.3]
-  const mic: Vec3 = [0.66, D.topY + 0.3, 0.12]
-  return [
-    box('metalDark', [0.06, 0.05, 0.08], [base[0], base[1] + 0.025, base[2]]),
-    ...segment('metalDark', [base[0], base[1] + 0.04, base[2]], elbow, 0.012),
-    ...segment('metalDark', elbow, [mic[0], mic[1] + 0.07, mic[2] - 0.02], 0.012),
-    { g: 'torus', m: 'metal', a: [0.05, 0.007, 5, 14], p: [mic[0], mic[1] + 0.01, mic[2]], r: [0, Math.PI / 2, 0] },
-    cyl('metalDark', [0.032, 0.032, 0.13, 12], mic, [0.25, 0, 0]),
-    { g: 'sphere', m: 'metal', a: [0.034, 10, 8], p: [mic[0], mic[1] + 0.065, mic[2] + 0.015] },
-  ]
+  const m: Vec3 = [0.66, D.topY + 0.3, 0.12]
+  // Desk clamp.
+  b.box('metalDark', [0.06, 0.05, 0.08], [base[0], base[1] + 0.025, base[2]], { radius: 0.008 })
+  b.box('metalDark', [0.05, 0.1, 0.02], [base[0], base[1] - 0.04, D.backZ - 0.005], { radius: 0.006, seg: 1 })
+  b.lathe('metalDark', [[0, base[1] + 0.05], [0.02, base[1] + 0.05], [0.02, base[1] + 0.1], [0, base[1] + 0.1]], [base[0], 0, base[2]], { seg: 16 })
+  const arm = (from: Vec3, to: Vec3) => {
+    for (const off of [-0.012, 0.012]) b.rod('metalDark', [from[0] + off, from[1], from[2]], [to[0] + off, to[1], to[2]], 0.006, { seg: 8 })
+    // Spring running along the arm.
+    const a = new THREE.Vector3(...from)
+    const c = new THREE.Vector3(...to)
+    const len = a.distanceTo(c)
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.clone().sub(a).normalize())
+    const e = new THREE.Euler().setFromQuaternion(q)
+    const mid = a.clone().lerp(c, 0.5)
+    b.add('metal', helix(0.007, -len * 0.3, len * 0.3, 14, 0.0015, 96), [mid.x, mid.y + 0.018, mid.z], { rot: [e.x, e.y, e.z], shadow: false })
+  }
+  arm([base[0], base[1] + 0.1, base[2]], elbow)
+  arm(elbow, [m[0], m[1] + 0.09, m[2] - 0.03])
+  b.cyl('metal', 0.016, 0.016, 0.04, elbow, { rot: [0, 0, Math.PI / 2], seg: 16 })
+  // Shock mount and the mic: turned body with a grille head.
+  b.group(m, 0, () => {
+    b.torus('metal', 0.05, 0.005, [0, 0.01, 0], { rot: [0, Math.PI / 2, 0], seg: 28 })
+    b.torus('metal', 0.05, 0.005, [0, -0.04, 0], { rot: [0, Math.PI / 2, 0], seg: 28 })
+    b.lathe('metalDark', [[0, -0.08], [0.02, -0.08], [0.03, -0.07], [0.032, -0.02], [0.033, 0.03], [0, 0.03]], [0, 0, 0], { seg: 24 })
+    b.lathe('metal', [[0.033, 0.03], [0.035, 0.05], [0.034, 0.08], [0.025, 0.1], [0, 0.106]], [0, 0, 0], { seg: 24 })
+    b.torus('metalDark', 0.034, 0.003, [0, 0.03, 0], { rot: [Math.PI / 2, 0, 0], seg: 24, shadow: false })
+  }, [0.25, 0, 0])
 }
 
-/** A cylinder from a to b. */
-function segment(m: PartMat, a: Vec3, b: Vec3, radius: number): Part[] {
-  const va = new THREE.Vector3(...a)
-  const vb = new THREE.Vector3(...b)
-  const len = va.distanceTo(vb)
-  const mid = va.clone().add(vb).multiplyScalar(0.5)
-  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), vb.clone().sub(va).normalize())
-  const e = new THREE.Euler().setFromQuaternion(q, 'YXZ')
-  return [cyl(m, [radius, radius, len, 6], [mid.x, mid.y, mid.z], [e.x, e.y, e.z])]
-}
-
-/** Desk lamp: base on the desk, arm up and over, shade around the contract bulb position. */
-function lampParts(): Part[] {
+/** Desk lamp: weighted base, two articulated arms with springs, conical shade around the contract bulb. */
+function lamp(b: B) {
   const [bx, by, bz] = LAMP_BULB_LOCAL
   const base: Vec3 = [bx + 0.12, D.topY, bz - 0.32]
   const elbow: Vec3 = [bx + 0.12, by + 0.2, bz - 0.36]
-  const head: Vec3 = [bx, by + 0.09, bz]
-  return [
-    cyl('fabricOrange', [0.08, 0.09, 0.03, 14], [base[0], base[1] + 0.015, base[2]]),
-    ...segment('brass', [base[0], base[1] + 0.03, base[2]], elbow, 0.012),
-    ...segment('brass', elbow, head, 0.012),
-    { g: 'sphere', m: 'brass', a: [0.02, 8, 6], p: elbow },
-    // Shade: open cone around the bulb (bulb mesh is separate).
-    { g: 'cyl', m: 'shade', a: [0.04, 0.11, 0.13, 14, true], p: [bx, by + 0.04, bz] },
+  const head: Vec3 = [bx, by + 0.11, bz - 0.02]
+  b.lathe('fabricOrange', [[0, 0], [0.085, 0], [0.09, 0.006], [0.088, 0.02], [0.07, 0.03], [0.03, 0.036], [0, 0.036]], base, { seg: 32 })
+  b.lathe('brass', [[0.02, 0.036], [0.02, 0.06], [0, 0.062]], base, { seg: 14 })
+  const pivot: Vec3 = [base[0], base[1] + 0.06, base[2]]
+  const arm = (from: Vec3, to: Vec3) => {
+    for (const off of [-0.01, 0.01]) b.rod('brass', [from[0] + off, from[1], from[2]], [to[0] + off, to[1], to[2]], 0.005, { seg: 8 })
+    const a = new THREE.Vector3(...from)
+    const c = new THREE.Vector3(...to)
+    const len = a.distanceTo(c)
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), c.clone().sub(a).normalize())
+    const e = new THREE.Euler().setFromQuaternion(q)
+    const mid = a.clone().lerp(c, 0.4)
+    b.add('metal', helix(0.0055, -len * 0.18, len * 0.18, 12, 0.0012, 80), [mid.x + 0.02, mid.y, mid.z], { rot: [e.x, e.y, e.z], shadow: false })
+  }
+  arm(pivot, elbow)
+  arm(elbow, head)
+  for (const j of [pivot, elbow]) b.cyl('brass', 0.016, 0.016, 0.034, j, { rot: [0, 0, Math.PI / 2], seg: 16 })
+  b.sphere('brass', 0.014, head, { w: 12, h: 8 })
+  // Shade: open cone with real thickness around the bulb (bulb mesh is separate). No shadows: the light sits inside.
+  const sh = 0.13
+  const prof: V2[] = [
+    [0.11, -sh / 2],
+    [0.04, sh / 2],
+    [0.04, sh / 2],
+    [0.016, sh / 2 + 0.012],
+    [0.016, sh / 2 + 0.035],
+    [0, sh / 2 + 0.036],
   ]
+  const inner: V2[] = [
+    [0.035, sh / 2 - 0.002],
+    [0.105, -sh / 2 + 0.001],
+  ]
+  b.lathe('shade', prof, [bx, by + 0.04, bz], { seg: 32, shadow: false })
+  b.lathe('shade', inner, [bx, by + 0.04, bz], { seg: 32, shadow: false })
+  b.torus('brass', 0.108, 0.0035, [bx, by + 0.04 - sh / 2, bz], { rot: [Math.PI / 2, 0, 0], seg: 32, radial: 5, shadow: false })
+  // Cord from the base towards the back of the desk.
+  b.tube('plastic', [[base[0] - 0.08, D.topY + 0.006, base[2]], [base[0] - 0.14, D.topY + 0.004, base[2] - 0.02], [base[0] - 0.2, D.topY + 0.004, D.backZ + 0.01], [base[0] - 0.22, D.topY - 0.1, D.backZ - 0.01]], 0.0035, {
+    seg: 18,
+    radial: 5,
+    shadow: false,
+  })
 }
 
-function chairParts(): Part[] {
-  const local: Part[] = [
-    // Five-star base + caster balls.
-    ...[0, 1, 2, 3, 4].flatMap((i): Part[] => {
+/** Gaming office chair: 5-star base on twin-wheel casters, gas lift, padded seat and wrap-around back. */
+function chair(b: B) {
+  b.group(D.chair.pos, D.chair.rotY, () => {
+    // Hub and five tapered legs sloping down to the casters.
+    b.lathe('metalDark', [[0, 0.07], [0.055, 0.07], [0.06, 0.09], [0.045, 0.12], [0.03, 0.125], [0, 0.125]], [0, 0, 0], { seg: 24 })
+    for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2
-      return [
-        box('metalDark', [0.05, 0.04, 0.3], [Math.sin(a) * 0.14, 0.07, Math.cos(a) * 0.14], [0, a, 0]),
-        { g: 'sphere', m: 'metalDark', a: [0.03, 6, 4], p: [Math.sin(a) * 0.28, 0.03, Math.cos(a) * 0.28] },
-      ]
-    }),
-    cyl('metal', [0.03, 0.03, 0.34, 8], [0, 0.26, 0]),
-    // Seat.
-    box('metalDark', [0.44, 0.05, 0.44], [0, 0.44, 0]),
-    box('fabricTeal', [0.5, 0.09, 0.5], [0, 0.5, 0]),
-    box('fabricOrange', [0.52, 0.03, 0.06], [0, 0.53, -0.23]),
-    // Backrest (chair faces local -Z, toward the desk), side bolsters, headrest pillow.
-    box('fabricTeal', [0.46, 0.66, 0.09], [0, 0.92, 0.24], [-0.12, 0, 0]),
-    box('fabricOrange', [0.07, 0.62, 0.11], [-0.24, 0.9, 0.245], [-0.12, 0, 0]),
-    box('fabricOrange', [0.07, 0.62, 0.11], [0.24, 0.9, 0.245], [-0.12, 0, 0]),
-    box('fabricOrange', [0.26, 0.11, 0.08], [0, 1.15, 0.24], [-0.12, 0, 0]),
-    box('metalDark', [0.06, 0.18, 0.06], [0, 0.6, 0.24]),
-    // Armrests.
-    box('metalDark', [0.04, 0.2, 0.04], [-0.27, 0.6, 0.02]),
-    box('metalDark', [0.04, 0.2, 0.04], [0.27, 0.6, 0.02]),
-    box('fabricTeal', [0.07, 0.04, 0.26], [-0.27, 0.71, 0]),
-    box('fabricTeal', [0.07, 0.04, 0.26], [0.27, 0.71, 0]),
-  ]
-  return place(local, D.chair.pos, D.chair.rotY)
-}
-
-export function staticParts(): Part[] {
-  return [
-    ...deskParts(),
-    ...monitorParts(D.mainMonitor.pos, D.mainMonitor.w, D.mainMonitor.h, D.mainMonitor.rotY),
-    ...monitorParts(D.sideMonitor.pos, D.sideMonitor.w, D.sideMonitor.h, D.sideMonitor.rotY),
-    ...towerParts(),
-    ...peripheralsParts(),
-    ...micParts(),
-    ...lampParts(),
-    ...chairParts(),
-  ]
-}
-
-/** Merge parts into one geometry per material. */
-export function mergeByMaterial(parts: Part[]): Map<PartMat, THREE.BufferGeometry> {
-  const groups = new Map<PartMat, THREE.BufferGeometry[]>()
-  const m = new THREE.Matrix4()
-  const q = new THREE.Quaternion()
-  for (const part of parts) {
-    const g = geometryFor(part)
-    const [rx, ry, rz] = part.r ?? [0, 0, 0]
-    q.setFromEuler(new THREE.Euler(rx, ry, rz, 'YXZ'))
-    m.compose(new THREE.Vector3(...part.p), q, new THREE.Vector3(...(part.s ?? [1, 1, 1])))
-    g.applyMatrix4(m)
-    const list = groups.get(part.m) ?? []
-    list.push(g)
-    groups.set(part.m, list)
-  }
-  const out = new Map<PartMat, THREE.BufferGeometry>()
-  for (const [k, list] of groups) {
-    const merged = mergeGeometries(list, false)
-    list.forEach((g) => g.dispose())
-    if (merged) {
-      merged.computeBoundingSphere()
-      out.set(k, merged)
+      b.group([0, 0, 0], a, () => {
+        b.soft('metalDark', [0.05, 0.036, 0.27], [0, 0.088, 0.16], {
+          radius: 0.012,
+          edgeSeg: 2,
+          rot: [0.1, 0, 0],
+          deform: (p, u) => {
+            const t = (u.z + 1) / 2
+            p.x *= 1 - 0.3 * t
+            p.y *= 1 - 0.35 * t
+          },
+        })
+        // Caster: stem, fork and twin wheels.
+        b.cyl('metalDark', 0.008, 0.008, 0.03, [0, 0.065, 0.29], { seg: 8 })
+        b.box('plastic', [0.034, 0.024, 0.04], [0, 0.05, 0.3], { radius: 0.008, seg: 1 })
+        for (const s of [-1, 1]) b.cyl('plastic', 0.026, 0.026, 0.012, [s * 0.013, 0.026, 0.31], { rot: [0, 0, Math.PI / 2], seg: 16 })
+        b.cyl('metal', 0.006, 0.006, 0.036, [0, 0.026, 0.31], { rot: [0, 0, Math.PI / 2], seg: 8, shadow: false })
+      })
     }
-  }
-  return out
+    // Gas lift: chrome piston in a stepped shroud.
+    b.lathe('metalDark', [[0.03, 0.12], [0.03, 0.2], [0.026, 0.205], [0.026, 0.27], [0.022, 0.275], [0.022, 0.31], [0, 0.31]], [0, 0, 0], { seg: 20 })
+    b.cyl('metal', 0.015, 0.015, 0.13, [0, 0.37, 0], { seg: 16 })
+    // Tilt mechanism and lever.
+    b.box('metalDark', [0.22, 0.045, 0.26], [0, 0.44, 0.02], { radius: 0.01 })
+    b.tube('metal', [[0.1, 0.43, -0.03], [0.2, 0.425, -0.05], [0.24, 0.43, -0.1]], 0.005, { seg: 8 })
+    b.sphere('plastic', 0.012, [0.24, 0.43, -0.1], { w: 10, h: 8 })
+    // Seat: shell plus a crowned cushion with a waterfall front edge and orange side bolsters.
+    b.box('plastic', [0.48, 0.03, 0.48], [0, 0.465, 0], { radius: 0.012 })
+    const seatC = cushion({ crown: 0.012, sag: 0.006, bulge: 0.008, wrinkle: 0.0015, seed: 61 })
+    b.soft('fabricTeal', [0.5, 0.085, 0.5], [0, 0.52, 0], {
+      radius: 0.035,
+      deform: (p, u) => {
+        seatC(p, u)
+        if (u.z < -0.5) p.y -= 0.02 * ((-u.z - 0.5) / 0.5) ** 2
+      },
+    })
+    for (const s of [-1, 1])
+      b.soft('fabricOrange', [0.07, 0.08, 0.46], [s * 0.225, 0.56, 0.01], { radius: 0.03, deform: cushion({ bulge: 0.004, wrinkle: 0.001, seed: 62 + s }) })
+    // Back spine from the mechanism up behind the backrest.
+    b.tube('metalDark', [[0, 0.44, 0.13], [0, 0.46, 0.27], [0, 0.6, 0.31], [0, 0.72, 0.32]], 0.02, { seg: 16, radial: 8 })
+    // Wrap-around backrest (chair faces local -Z, toward the desk) with bolsters and a headrest pillow.
+    b.group([0, 0.98, 0.26], 0, () => {
+      b.soft('fabricTeal', [0.46, 0.7, 0.09], [0, 0, 0], {
+        radius: 0.035,
+        deform: (p, u) => {
+          p.z -= 0.05 * u.x * u.x
+          p.z -= 0.025 * Math.exp(-((u.y + 0.45) ** 2) / 0.08)
+          if (u.z < 0) p.z -= 0.01 * (1 - u.x * u.x) * (1 - u.y * u.y)
+        },
+      })
+      for (const s of [-1, 1])
+        b.soft('fabricOrange', [0.075, 0.64, 0.11], [s * 0.235, -0.02, -0.035], {
+          rot: [0, s * 0.35, 0],
+          radius: 0.035,
+          deform: cushion({ bulge: 0.006, wrinkle: 0.0015, seed: 70 + s }),
+        })
+      b.box('plastic', [0.44, 0.66, 0.02], [0, -0.01, 0.05], { radius: 0.01 })
+      b.soft('fabricOrange', [0.26, 0.12, 0.08], [0, 0.25, -0.06], { radius: 0.035, deform: cushion({ pinch: 0.5, wrinkle: 0.002, seed: 73 }) })
+      b.soft('fabricOrange', [0.3, 0.13, 0.07], [0, -0.26, -0.065], { radius: 0.03, deform: cushion({ pinch: 0.45, wrinkle: 0.002, seed: 74 }) })
+    }, [-0.12, 0, 0])
+    // Armrests: posts and padded tops.
+    for (const s of [-1, 1]) {
+      b.box('metalDark', [0.04, 0.05, 0.12], [s * 0.2, 0.46, 0.03], { radius: 0.01, seg: 1 })
+      b.box('metalDark', [0.035, 0.22, 0.05], [s * 0.27, 0.58, 0.03], { radius: 0.012 })
+      b.soft('plastic', [0.075, 0.035, 0.26], [s * 0.27, 0.705, 0.0], { radius: 0.016, deform: cushion({ crown: 0.004, seed: 80 }) })
+    }
+  })
+}
+
+/** All static furniture, merged per (material, shadow) bucket. */
+export function buildDeskParts(): BuiltPart<PartMat>[] {
+  const b = new PartsBuilder<PartMat>()
+  desk(b)
+  monitor(b, D.mainMonitor.pos, D.mainMonitor.w, D.mainMonitor.h, D.mainMonitor.rotY)
+  monitor(b, D.sideMonitor.pos, D.sideMonitor.w, D.sideMonitor.h, D.sideMonitor.rotY)
+  tower(b)
+  keyboard(b)
+  deskItems(b)
+  mic(b)
+  lamp(b)
+  chair(b)
+  return b.build()
 }
