@@ -132,11 +132,10 @@ test('friends meet in a room, chat, wave and visit each other', async ({ browser
     await host.keyboard.press('f')
     await expect(host.getByTestId('people-panel')).toBeVisible()
     await expect(host.locator(`[data-testid="person-row"][data-handle="${B.handle}"]`)).toBeVisible()
-    await expect(host.locator(`[data-testid="visit-friend"][data-handle="${B.handle}"]`)).toHaveAttribute('data-online', 'true', { timeout: SLOW })
-    const guestRow = host.locator(`[data-testid="visit-friend"][data-handle="${B.handle}"]`)
-    await expect(guestRow).toContainText('Here with you')
-    // No Visit button for someone already in your room (it would take you to their empty one).
-    await expect(guestRow.getByTestId('visit-friend-button')).toHaveCount(0)
+    // A friend already listed under "Here now" is not repeated under "Visit a friend" (QA r3), so
+    // there is no Visit button that would take you to their empty room.
+    await expect(host.getByText('All your friends are here with you.')).toBeVisible({ timeout: SLOW })
+    await expect(host.locator(`[data-testid="visit-friend"][data-handle="${B.handle}"]`)).toHaveCount(0)
     await host.screenshot({ path: info.outputPath('host-people-panel.png') })
     await host.keyboard.press('Escape')
 
@@ -156,7 +155,9 @@ test('friends meet in a room, chat, wave and visit each other', async ({ browser
     if (!phone) {
       // The host visits the guest from the people panel; the guest gets them in their room.
       await host.getByTestId('people-button').click()
-      await host.locator(`[data-testid="visit-friend"][data-handle="${B.handle}"]`).getByTestId('visit-friend-button').click()
+      const guestRow = host.locator(`[data-testid="visit-friend"][data-handle="${B.handle}"]`)
+      await expect(guestRow).toHaveAttribute('data-online', 'true', { timeout: SLOW })
+      await guestRow.getByTestId('visit-friend-button').click()
       await host.waitForURL((u) => u.pathname === `/home/${B.handle}`, { timeout: SLOW })
       await waitRoom(host)
       await waitJoined(host, B.handle)
