@@ -144,7 +144,8 @@ export const usePhotoQueue = create<QueueState>()((set, get) => {
         patch(next.key, { status: 'uploading', progress: 0, error: null })
         try {
           const photo = await deps.upload(visitId, next.resized, { signal: ctl.signal, onProgress: (f) => patch(next.key, { progress: f }) })
-          if (find(next.key)) patch(next.key, { status: 'done', progress: 1, photo })
+          // Keep only the small resized JPEG (it backs the thumbnail); let the original, up to 40 MB, go.
+          if (find(next.key)) patch(next.key, { status: 'done', progress: 1, photo, source: next.resized.blob })
           for (const fn of listeners) fn(next.target, photo)
         } catch (err) {
           if (find(next.key)) {

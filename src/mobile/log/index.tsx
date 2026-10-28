@@ -6,7 +6,7 @@
  * If the upload or transcription fails, the recording stays queued for a later retry and the
  * flow carries on with the browser's live captions, or typing.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiCallError } from '../../contracts/errors'
 import type { CrewTag, GameSummary, Me, VenueSummary } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
@@ -221,8 +221,10 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
     }
   }
 
+  const pickSeq = useRef(0)
   /** The room search on the form: a game is the answer; a venue or a new room opens the matcher there. */
   const changeRoom = async (pick: RoomPick | { kind: 'create'; text: string }) => {
+    const seq = ++pickSeq.current
     if (pick.kind === 'game') {
       const g = pick.game
       let venue = choice?.venue.id === g.venueId ? choice.venue : null
@@ -233,7 +235,8 @@ export function LogFlow({ onDone, resumeRecordingId = null, me = null, fetch: fe
           venue = { id: g.venueId, slug: g.venueSlug, name: g.venueName, brand: null, address: '', city: g.city, citySlug: '', region: '', country: g.country, lat: null, lng: null, status: 'active', gameCount: 1 }
         }
       }
-      setChoice({ venue, game: g })
+      // A later pick wins: don't let a slow venue lookup overwrite it.
+      if (seq === pickSeq.current) setChoice({ venue, game: g })
     } else if (pick.kind === 'venue') {
       setStep({ kind: 'match', mode: { kind: 'venue', venue: pick.venue } })
     } else {
