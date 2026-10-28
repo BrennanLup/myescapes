@@ -1,6 +1,7 @@
 /**
- * Lighting workstream: warm lamp pools, teal LED strips, dusk window fill,
- * one soft shadow caster and the app's only EffectComposer (bloom, tone mapping, vignette).
+ * Lighting workstream: warm lamp pools, teal LED strips, shadowed moonlight through the windows,
+ * a generated room environment map, light shafts, lamp haze, dust, and the app's only
+ * EffectComposer (AO, bloom, tone mapping, grade, vignette, grain).
  * The rig itself is described by the pure `lightRig(quality)` in `rig.ts`.
  */
 import { useEffect, useLayoutEffect, useMemo } from 'react'
@@ -9,10 +10,11 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useStore } from '@/state/store'
 import { LedStrips } from './LedStrips'
 import { PostFx } from './PostFx'
+import { Atmosphere } from './Atmosphere'
 import { lightRig, type LightSpec, type SpotLightSpec, type DirectionalLightSpec } from './rig'
 
-export { lightRig, shadowCasterCount } from './rig'
-export type { LightRig, LightSpec } from './rig'
+export { lightRig, shadowCasterCount, moonDirection } from './rig'
+export type { LightRig, LightSpec, AtmosphereSpec } from './rig'
 
 function TargetedSpot({ spec }: { spec: SpotLightSpec }) {
   const target = useMemo(() => new THREE.Object3D(), [])
@@ -52,10 +54,30 @@ function TargetedDirectional({ spec }: { spec: DirectionalLightSpec }) {
     target.position.set(...spec.target)
     target.updateMatrixWorld()
   }, [target, spec.target])
+  const size = spec.shadowMapSize ?? 0
   return (
     <>
       <primitive object={target} />
-      <directionalLight name={`light:${spec.id}`} position={spec.position} target={target} color={spec.color} intensity={spec.intensity} />
+      <directionalLight
+        name={`light:${spec.id}`}
+        position={spec.position}
+        target={target}
+        color={spec.color}
+        intensity={spec.intensity}
+        castShadow={!!spec.castShadow}
+        shadow-mapSize-width={size}
+        shadow-mapSize-height={size}
+        shadow-bias={-0.0006}
+        shadow-normalBias={0.03}
+        shadow-radius={3}
+        // An orthographic box around the whole room, seen from the moon.
+        shadow-camera-left={-14}
+        shadow-camera-right={14}
+        shadow-camera-top={12}
+        shadow-camera-bottom={-12}
+        shadow-camera-near={2}
+        shadow-camera-far={40}
+      />
     </>
   )
 }
@@ -110,6 +132,7 @@ export function Lighting() {
         <RigLight key={`${quality}:${l.id}`} spec={l} />
       ))}
       <LedStrips emissiveIntensity={rig.ledEmissiveIntensity} />
+      <Atmosphere spec={rig.atmosphere} />
       <RendererSettings postEnabled={rig.post.enabled} />
       {rig.post.enabled && <PostFx spec={rig.post} />}
     </group>

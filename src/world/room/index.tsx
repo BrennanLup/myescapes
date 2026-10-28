@@ -47,7 +47,8 @@ function bucketMaterial(bucket: Exclude<Bucket, 'glass'>): THREE.Material {
 }
 
 const SHADOW_RECEIVERS = new Set<Bucket>(['plaster', 'plasterAccent', 'floor', 'baseboard', 'trim', 'ceiling'])
-const SHADOW_CASTERS = new Set<Bucket>(['beams', 'trim'])
+// Walls and ceiling cast so the moonlight only gets in through the window openings.
+const SHADOW_CASTERS = new Set<Bucket>(['beams', 'trim', 'plaster', 'plasterAccent', 'ceiling'])
 
 function makeGlassMaterial(): THREE.Material {
   const m = getMaterial('glass').clone()
