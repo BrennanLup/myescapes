@@ -50,16 +50,26 @@ export interface CameraRig {
   distance: number
   side: number
   up: number
+  /** The camera looks this much (radians) below your look pitch (0 = straight along it). */
+  tilt: number
 }
 
 /** Mouse and keyboard: over the right shoulder, so your head never covers the reticle. */
-export const DESKTOP_RIG: CameraRig = { distance: THIRD_PERSON.distance, side: THIRD_PERSON.side, up: THIRD_PERSON.up }
+export const DESKTOP_RIG: CameraRig = { distance: THIRD_PERSON.distance, side: THIRD_PERSON.side, up: THIRD_PERSON.up, tilt: 0 }
 
 /**
- * Touch: centred and a little further back and higher, so the character stands in the middle,
- * below the reticle, clear of the joystick on the left and the button column on the right.
+ * Touch: centred (a portrait screen is too narrow for a shoulder offset), further back, well
+ * above the head and looking a little down (about 10 degrees), so the character stands in the
+ * lower third of the screen, under the reticle and the door or friend you walk up to, and the
+ * ceiling takes less of the screen. (A phone screen is tall: at 70 degrees vertical field of view
+ * the head lands about 65% of the way down, the feet about 90%.)
  */
-export const TOUCH_RIG: CameraRig = { distance: THIRD_PERSON.distance + 0.4, side: 0, up: 0.5 }
+export const TOUCH_RIG: CameraRig = { distance: THIRD_PERSON.distance + 0.5, side: 0, up: 1.45, tilt: 0.17 }
+
+/** Where the centre of the screen sits (from 0 at the top to 1 at the bottom) for a point seen at `angle` radians below the view direction. */
+export function screenY(angleBelow: number, fovDeg = 70): number {
+  return 0.5 + Math.tan(angleBelow) / (2 * Math.tan((fovDeg * Math.PI) / 360))
+}
 
 /**
  * Look pitch limits while blending into third person (`third` from 0 to 1): from the first-person

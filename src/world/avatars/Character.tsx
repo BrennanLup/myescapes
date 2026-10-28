@@ -7,17 +7,22 @@
  * -Z, so `rotation-y={yaw}` uses the same yaw as the camera (`runtime.player.yaw`). Eyes are at
  * PLAYER.eyeHeight (1.6 m). The whole character is ignored by the interaction raycast.
  *
+ * The JSX below describes the look as ~40 small meshes; after each new look `bakeCharacter`
+ * (bake.ts) merges them into about a dozen, one per joint and finish, so each character costs a
+ * dozen draw calls instead of forty. The animation moves the joints, so it moves the merged meshes.
+ *
  * Used for you (LocalAvatar), the wardrobe preview, and other players (workstream C):
  *
  *   const motion = useMemo(() => ({ speed: 0, action: 'idle' as CharacterAction }), [])
  *   // update motion.speed / motion.action from the network each frame, no re-render needed
  *   <Character outfit={outfit} motion={motion} position={[x, 0, z]} rotation-y={yaw} />
  */
-import { memo, useRef, type ReactNode, type RefObject } from 'react'
+import { memo, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { useFrame, type ThreeElements } from '@react-three/fiber'
 import type * as THREE from 'three'
 import { advancePhase, poseAt, type CharacterAction } from './animation'
 import { fabricHex, hairHex, skinHex, type Outfit } from './catalog'
+import { bakeCharacter, disposeFades, EMPTY_BAKE, fadeCharacter, showDetail, unbake, type Baked } from './bake'
 import { G, KIT_COLORS, M, shade } from './kit'
 
 /** Mutable motion input, read every frame (write to it instead of re-rendering). */
@@ -32,6 +37,8 @@ export interface CharacterMotion {
    * meshes, which are a pixel or two at that distance anyway. Set by RemotePlayers.
    */
   far?: boolean
+  /** 0..1, default 1: see-through (your own character when it is in the way). */
+  opacity?: number
 }
 
 export type CharacterProps = Omit<ThreeElements['group'], 'children'> & {
@@ -75,14 +82,34 @@ export const Character = memo(function Character({ outfit, motion, speed = 0, ac
     elR: useRef<THREE.Group>(null),
     head: useRef<THREE.Group>(null),
   }
-  /** Groups of small details hidden when `motion.far` (registered by the parts that have them). */
-  const details = useRef<THREE.Group[]>([])
+  const root = useRef<THREE.Group>(null)
+  /** The merged meshes (see bake.ts), redone when the look changes. */
+  const bake = useRef<Baked>(EMPTY_BAKE)
   const shownDetail = useRef(true)
+  const opacity = useRef(1)
+  const fades = useRef(new Map<THREE.Material, THREE.Material>())
+  useLayoutEffect(() => {
+    const g = root.current
+    if (!g) return
+    const joints = new Set<THREE.Object3D>()
+    for (const r of Object.values(j)) if (r.current) joints.add(r.current)
+    bake.current = bakeCharacter(g, joints, shadows, bake.current)
+    showDetail(bake.current, shownDetail.current)
+    // New meshes start solid: let the next frame fade them again if needed.
+    opacity.current = 1
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the joints are stable refs
+  }, [outfit, shadows])
+  useLayoutEffect(() => {
+    const cache = fades.current
+    return () => {
+      unbake(bake.current)
+      bake.current = EMPTY_BAKE
+      disposeFades(cache)
+    }
+  }, [])
+  /** Marks a group of small details: baked into the "near" meshes only (see bake.ts). */
   const detailRef = (g: THREE.Group | null) => {
-    if (!g || details.current.includes(g)) return
-    // A part that mounts later (a new outfit) starts in the current detail state.
-    g.visible = shownDetail.current
-    details.current.push(g)
+    if (g) g.userData.detail = true
   }
   const anim = useRef({ phase: 0, time: Math.random() * 10 })
 
@@ -114,15 +141,18 @@ export const Character = memo(function Character({ outfit, motion, speed = 0, ac
     const detail = !motion?.far
     if (detail !== shownDetail.current) {
       shownDetail.current = detail
-      details.current = details.current.filter((g) => g.parent)
-      for (const g of details.current) g.visible = detail
+      showDetail(bake.current, detail)
     }
+    const o = Math.min(1, Math.max(0, motion?.opacity ?? 1))
+    // Re-applied every frame while see-through (a far/near swap may show another mesh).
+    if ((o < 0.999 || opacity.current < 0.999) && root.current) fadeCharacter(root.current, o, fades.current)
+    opacity.current = o
   })
 
   const c = colours(outfit)
   return (
     <group {...group} userData={{ raycastIgnore: true, ...(group.userData ?? {}) }}>
-      <Shadows on={shadows}>
+      <group ref={root}>
         <group ref={j.body}>
           {/* Legs */}
           <group position={[0, HIP_Y, 0]}>
@@ -142,7 +172,7 @@ export const Character = memo(function Character({ outfit, motion, speed = 0, ac
             <TorsoAccessory outfit={outfit} c={c} detailRef={detailRef} />
           </group>
         </group>
-      </Shadows>
+      </group>
     </group>
   )
 })
@@ -159,27 +189,12 @@ function colours(o: Outfit) {
   }
 }
 
-/** Turns castShadow on for every mesh below (by walking once after mount). */
-function Shadows({ on, children }: { on: boolean; children: ReactNode }) {
-  return (
-    <group
-      ref={(g) => {
-        g?.traverse((o) => {
-          if ((o as THREE.Mesh).isMesh) o.castShadow = on
-        })
-      }}
-    >
-      {children}
-    </group>
-  )
-}
-
 interface PartProps {
   outfit: Outfit
   c: Colours
 }
 
-/** Registers a group of small details that is hidden far away (see `CharacterMotion.far`). */
+/** Flags a group of small details that is skipped far away (see `CharacterMotion.far`). */
 type DetailRef = (g: THREE.Group | null) => void
 
 // ---------------------------------------------------------------- legs and shoes

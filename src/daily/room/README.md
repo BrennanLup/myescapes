@@ -29,6 +29,7 @@ Today's Escape of the Day as a small room you walk around in, at **`/daily/room`
 | `Shell.tsx` | Floor, walls, corridor and its glow, exit door, lights, `ExitWatcher` |
 | `PuzzleProps.tsx` | Lock box, clue posters/banner/panel/sign, chalkboard, hint bell, plaque |
 | `Furniture.tsx` | Furniture and hiding spots (lift animation, found tokens) and their colliders |
+| `MergeStatic.tsx` | `<MergeStatic>`: merges never-moving decoration into one mesh per material after mount (the shell and the static furniture; hiding spots stay separate). About 95 draw calls down to about 40 on a phone. |
 | `textures.ts` | Canvas drawings (redrawn once the web fonts load) |
 | `RoomUi.tsx` | Entry card, HUD, panels, toast, confetti, leaving fade |
 | `playStore.ts`, `uiStore.ts` | Small zustand stores: what the 3D props draw; which panel is open |
