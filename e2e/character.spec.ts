@@ -68,9 +68,16 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
     await page.waitForFunction(() => window.__ESCAPE_VIEW__!.playerView.avatarOpacity < 0.8, null, { timeout: SLOW })
   }
 
-  // Back to a wall (QA r3): the camera rises over your head instead of collapsing into it.
+  // Back to a wall (QA r3, r4): the camera slides up over your shoulder instead of collapsing into
+  // your head, and keeps looking into the room (at most 25 degrees down, not a top-down view).
   await page.evaluate(() => window.__ESCAPE__!.requestTeleport([0, 1.6, 7.4], 0, 0))
-  await page.waitForFunction(() => window.__ESCAPE_VIEW__!.playerView.cameraDistance > 0.95, null, { timeout: SLOW })
+  await page.waitForFunction(() => window.__ESCAPE_VIEW__!.playerView.crane > 0.95, null, { timeout: SLOW })
+  const craned = await page.evaluate(() => {
+    const v = window.__ESCAPE_VIEW__!.playerView
+    return { pitch: v.cameraPitch, distance: v.cameraDistance }
+  })
+  expect(craned.pitch).toBeGreaterThan(-0.45)
+  expect(craned.distance).toBeGreaterThan(0.6)
 
   // Too far away is still too far (reach is not measured from the camera).
   await aimAt(page, [0, 1.6, 1.5], GATE_DOOR)
@@ -87,12 +94,15 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
   await waitOverlay(page, 'wardrobe')
   const dialog = page.getByTestId('wardrobe-overlay')
   await expect(dialog).toBeVisible()
+  // The room stops drawing behind the wardrobe (QA r4), and starts again once it closes.
+  await expect(page.locator('#world-canvas')).toHaveAttribute('data-render', 'paused')
   await expect(page.getByTestId('key-balance')).toContainText('20')
   await page.getByTestId('wardrobe-tab-hair').click()
   await page.getByTestId('item-hair-bob').click()
   await page.getByTestId('swatch-teal').click()
   await page.getByTestId('wardrobe-primary').click()
   await waitOverlay(page, null)
+  await expect(page.locator('#world-canvas')).toHaveAttribute('data-render', 'live')
 
   // QA r3: try on the trench (50, too dear) and the headphones (10). Unlocking the headphones
   // wears them at once; the trench stays a try-on and the button names it, on a phone too.
