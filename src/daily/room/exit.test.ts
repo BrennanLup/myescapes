@@ -46,6 +46,20 @@ describe('leaving the puzzle room', () => {
     expect(readWelcomeNote()).toBeNull()
   })
 
+  it('sends phones straight to /m with the from=daily flag after a finished day', () => {
+    expect(exitTarget(false, true)).toBe('/m?from=daily')
+    const to = walkHome({ progress: solved, maxGuesses: 6, signedIn: false, phone: true })
+    expect(to).toBe('/m?from=daily')
+    expect(window.location.pathname + window.location.search).toBe('/m?from=daily')
+    expect(readWelcomeNote()).toMatchObject({ number: 3, solved: true, signedIn: false })
+  })
+
+  it('a phone leaving before finishing just goes to /m', () => {
+    const to = walkHome({ progress: { ...newProgress('2026-10-28', 3), status: 'playing', startedAt: 1 }, maxGuesses: 6, signedIn: true, phone: true })
+    expect(to).toBe('/m')
+    expect(readWelcomeNote()).toBeNull()
+  })
+
   it('the note is read once and goes stale', () => {
     walkHome({ progress: { ...solved, status: 'failed' }, maxGuesses: 6, signedIn: false })
     const n = takeWelcomeNote()

@@ -1,7 +1,8 @@
 /**
- * Today's Escape of the Day as a small 3D room (the /daily/room page). Same player controller,
- * interaction system, reticle, touch controls and audio as your own room; its own shell, props and
- * DOM panels. The play logic is the 2D game's (`useDailyPlay`), so hints, timer, streaks, the share
+ * Today's Escape of the Day as a small 3D room (the /daily/room page). Same player controller and
+ * camera modes (your character in third person), perf governor, interaction system, reticle, touch
+ * controls and audio as your own room; its own shell, props and DOM panels. The play logic is the
+ * 2D game's (`useDailyPlay`), so hints, timer, streaks, the share
  * grid and the saved result (leaderboards) behave exactly the same.
  */
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -16,6 +17,10 @@ import { useStore } from '@/state/store'
 import { AudioSystem } from '@/audio'
 import { InteractionSystem, Reticle } from '@/interaction'
 import { MobileControls, PlayerController } from '@/player'
+import { PerfMonitor } from '@/ui/shell/PerfMonitor'
+import { useShell } from '@/ui/shell/shellStore'
+import { useWardrobe } from '@/ui/wardrobe/store'
+import { LocalAvatar } from '@/world/avatars/LocalAvatar'
 import { warmMaterials } from '@/world/materials'
 import { useDailyPlay, type DailyPlayApi } from '../ui/DailyGame'
 import { markDoorSolved } from '../ui/overlay'
@@ -25,7 +30,7 @@ import { Furniture } from './Furniture'
 import { SPAWN } from './layout'
 import { EMPTY_ROUND, resetRoomPlay, useRoomPlay } from './playStore'
 import { Clues, ExitSign, GuessBoard, HintBell, LockBox, Plaque } from './PuzzleProps'
-import { Confetti, ControlsHint, EntryCard, LeavingFade, ROOM_CSS, RoomHud, RoomPanels, Toast } from './RoomUi'
+import { CameraToggle, Confetti, ControlsHint, EntryCard, LeavingFade, ROOM_CSS, RoomHud, RoomPanels, Toast } from './RoomUi'
 import { ExitDoor, ExitWatcher, RoomLights, RoomShell } from './Shell'
 import { assignTargets, canLook, look, roundFromGuesses, type SearchRound } from './search'
 import { useRoomUi } from './uiStore'
@@ -56,8 +61,17 @@ function useRoomBoot() {
   useEffect(() => {
     installTestHooks()
     const offBridge = installBridge()
+    // Your look, for third person (saved to your account, or this device when signed out).
+    const w = useWardrobe.getState()
+    if (w.status === 'idle') void w.load()
+    // The perf governor reports a quality step-down through the shell's toast, which this page
+    // doesn't draw: say it in the room's own toast instead.
+    const offToast = useShell.subscribe((s, prev) => {
+      if (s.toast && s.toast.id !== prev.toast?.id) useRoomUi.getState().say(s.toast.text)
+    })
     return () => {
       offBridge()
+      offToast()
       useRoomUi.getState().reset()
       resetRoomPlay()
       const st = useStore.getState()
@@ -222,6 +236,7 @@ export function DailyRoom({ today, setToday, reload }: { today: DailyToday; setT
       </Canvas>
       {worldReady && <RoomHud play={play} />}
       {worldReady && <ControlsHint />}
+      {worldReady && <CameraToggle />}
       <Reticle />
       <MobileControls />
       <RoomPanels play={play} onLeave={leave} />
@@ -249,9 +264,10 @@ function RoomScene({ play, onExit }: { play: DailyPlayApi; onExit(): void }) {
       <HintBell />
       <Plaque c={c} />
       <Furniture searchSymbol={c.kind === 'search' ? c.data.symbol : null} />
-      {/* No character is drawn in here, so a remembered third-person view would look at nothing. */}
-      <PlayerController firstPersonOnly />
+      <PlayerController />
+      <LocalAvatar />
       <InteractionSystem />
+      <PerfMonitor />
       <ExitWatcher onExit={onExit} />
     </>
   )

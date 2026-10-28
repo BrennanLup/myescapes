@@ -52,6 +52,15 @@ test.describe('Escape of the Day in 3D', () => {
     await enterRoom(page)
     await expect(page.getByTestId('daily-timer')).toBeVisible()
     if (isMobile) await expect(page.locator('[data-look-surface]').first()).toBeAttached()
+    // Camera modes: third person shows your character, and back to first person.
+    const toggle = page.getByTestId('camera-toggle')
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await page.waitForFunction(() => (window.__ESCAPE_VIEW__?.playerView.blend ?? 0) > 0.9, null, { timeout: SLOW })
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await page.waitForFunction(() => (window.__ESCAPE_VIEW__?.playerView.blend ?? 1) < 0.1, null, { timeout: SLOW })
     // Clues from a prop, and a hint from the bell.
     await page.evaluate(() => window.__ESCAPE__!.bus.emit('interact', { id: 'daily:plaque', kind: 'prop' }))
     await expect(page.getByTestId('daily-room-clues')).toBeVisible()
@@ -65,9 +74,13 @@ test.describe('Escape of the Day in 3D', () => {
     await expect(page.getByTestId('daily-share-text')).toContainText(/Escape #\d+ 🔓 1\/6/)
     await walkOut(page)
     if (isMobile) {
-      expect(new URL(page.url()).pathname).toBe('/m')
-      // Signed out on a phone, home is the phone app's sign-in screen.
+      await page.waitForURL((u) => u.pathname === '/m', { timeout: SLOW })
+      // Signed out on a phone, home is the phone app's sign-in screen, with the celebration on top.
       await expect(page.getByTestId('mobile-signin')).toBeVisible({ timeout: SLOW })
+      await expect(page.getByTestId('daily-welcome-line')).toContainText(/You escaped #\d+ in 1\/6/)
+      await expect(page.getByTestId('daily-welcome-signin')).toContainText(/keep your streak/)
+      // The flag is dropped so a reload doesn't celebrate again.
+      expect(new URL(page.url()).search).toBe('')
       expect(errors).toEqual([])
       return
     }

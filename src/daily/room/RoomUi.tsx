@@ -5,10 +5,14 @@
  * the 3D props are the way in, these panels are where you read and answer.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCameraMode } from '@/player/view'
+import { useStore } from '@/state/store'
+import { IconEye, IconPerson } from '@/ui/wardrobe/icons'
 import { Link } from '../../router'
 import { formatDuration } from '../engine'
 import { Finished, KIND_LABEL, useTick, type DailyPlayApi } from '../ui/DailyGame'
 import { btnGhost, btnPrimary, GuessHistory, GuessInput, PuzzleClues } from '../ui/views'
+import { exitsToPhoneApp } from './exit'
 import { useRoomPlay } from './playStore'
 import { foundNow, looksLeft } from './search'
 import { useRoomUi, type RoomPanel } from './uiStore'
@@ -104,7 +108,7 @@ function entryLine(play: DailyPlayApi): string {
 export function ControlsLine({ className }: { className?: string }) {
   return (
     <p className={className} data-testid="daily-room-controls">
-      <span className="hidden sm:inline">WASD to walk · mouse to look · E or click to use things</span>
+      <span className="hidden sm:inline">WASD to walk · mouse to look · E or click to use things · V to switch view</span>
       <span className="sm:hidden">Left stick to walk · drag to look · Tap to use things</span>
     </p>
   )
@@ -157,6 +161,71 @@ export function RoomHud({ play }: { play: DailyPlayApi }) {
           Result
         </button>
       )}
+    </div>
+  )
+}
+
+const SAFE_RIGHT = 'max(14px, env(safe-area-inset-right))'
+const SAFE_BOTTOM = 'max(16px, env(safe-area-inset-bottom))'
+
+/**
+ * First / third person toggle (also `V`), bottom right: the camera half of the main room's
+ * character HUD (src/ui/wardrobe/CharacterHud.tsx), same looks. No wardrobe in here: the puzzle
+ * room is a short visit, and the wardrobe lives in your own room.
+ */
+export function CameraToggle() {
+  const panel = useRoomUi((s) => s.panel)
+  const leaving = useRoomUi((s) => s.leaving)
+  const isTouch = useStore((s) => s.isTouch)
+  const mode = useCameraMode((s) => s.mode)
+  const toggle = useCameraMode((s) => s.toggle)
+  if (panel || leaving) return null
+  const third = mode === 'third'
+  const label = third ? 'Switch to first person (V)' : 'Switch to third person (V)'
+
+  if (isTouch) {
+    return (
+      <div className="pointer-events-none fixed z-30 font-body" style={{ right: SAFE_RIGHT, bottom: `calc(${SAFE_BOTTOM} + 18px)` }}>
+        <button
+          type="button"
+          data-testid="camera-toggle"
+          aria-label={label}
+          aria-pressed={third}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={toggle}
+          className={`pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full shadow-[0_8px_20px_rgba(40,20,20,.35)] ring-2 transition active:scale-95 ${
+            third ? 'bg-teal text-white ring-[rgba(255,255,255,.6)]' : 'bg-panel/95 text-ink ring-panel-edge'
+          }`}
+        >
+          {third ? <IconPerson width={26} height={26} /> : <IconEye width={26} height={26} />}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pointer-events-none fixed z-30 font-body text-ink" style={{ right: SAFE_RIGHT, bottom: SAFE_BOTTOM }}>
+      <button
+        type="button"
+        data-testid="camera-toggle"
+        title={label}
+        aria-label={label}
+        aria-pressed={third}
+        onClick={(e) => {
+          toggle()
+          // Keep V and the mouse working: don't leave focus on the button.
+          e.currentTarget.blur()
+        }}
+        className={`pointer-events-auto flex h-11 items-center gap-2 rounded-full py-1 pr-3 pl-1.5 shadow-[0_6px_18px_rgba(40,20,20,.28)] ring-1 backdrop-blur transition hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal active:scale-95 ${
+          third ? 'bg-teal text-white ring-teal' : 'bg-panel/90 text-ink ring-panel-edge'
+        }`}
+      >
+        <span className={`flex h-8 w-8 items-center justify-center rounded-full ${third ? 'bg-white/15' : 'bg-[rgba(47,143,138,.12)] text-teal'}`}>
+          {third ? <IconPerson width={20} height={20} /> : <IconEye width={20} height={20} />}
+        </span>
+        <span className="text-sm font-bold">{third ? 'Third person' : 'First person'}</span>
+        <kbd className={`rounded-md border-b-2 px-1.5 font-mono text-[11px] font-semibold ${third ? 'border-white/40 bg-white/15' : 'border-panel-edge bg-paper text-ink-soft'}`}>V</kbd>
+      </button>
     </div>
   )
 }
@@ -343,7 +412,7 @@ function PanelBody({ panel, play, close, onLeave }: { panel: Exclude<RoomPanel, 
                 Walk out through the door
               </button>
               <button type="button" data-testid="daily-room-home" className={btnGhost} onClick={onLeave}>
-                {play.signedIn ? 'Straight to my room' : 'Go to the demo room'}
+                {play.signedIn ? 'Straight to my room' : exitsToPhoneApp() ? 'Leave the room' : 'Go to the demo room'}
               </button>
             </div>
           </div>

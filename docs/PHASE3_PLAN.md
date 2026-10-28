@@ -197,3 +197,6 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
 - (C client) Others see your starter look until your wardrobe has loaded; looks from the network are repaired with `normalizeOutfit`, never trusted as-is.
 - (C client) In a friend's room spoilers stay hidden unless you press the banner's Spoilers toggle (it reloads their room with `?spoilers=1`).
 - (C client) `/home/*` pages are `noindex`, out of `robots.txt`, and their head never echoes the @handle.
+- (D fix) The puzzle room now has the camera modes and your character (`LocalAvatar`), with only the camera half of the character HUD: the wardrobe stays in your own room, since this page is a short visit and would otherwise pull the wardrobe overlay and its preview canvas into its bundle.
+- (D fix) Phones that finish the puzzle room go straight to `/m?from=daily` (the router's own phone rule for `/`) and see the same "Welcome home" card there; the card and the note moved to store-free files (`WelcomeCard.tsx`, `welcomeNote.ts`) so the phone bundle stays free of the 3D room's store. Leaving early on a phone goes to plain `/m`. Two lines in `src/mobile/shell/index.tsx` mount it.
+- (D fix) `PerfMonitor` runs in the puzzle room too; its "switched quality" message is forwarded to the room's own toast, because that page doesn't draw the shell's toast.
