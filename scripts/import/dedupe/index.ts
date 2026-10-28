@@ -20,6 +20,7 @@ import type { Db } from '../../../server/db/client'
 import { citySlug, haversineKm, slugify } from '../../../server/db/util'
 import {
   SEED_FORMAT,
+  decodeSeed,
   loadSeedRegion,
   type SeedCity,
   type SeedManifest,
@@ -250,7 +251,8 @@ const cellKey = (lat: number, lng: number) => `${Math.floor(lat / CELL_DEG)}:${M
  * Merges duplicates (union-find over pairs within 300 m). Places without coordinates are merged
  * only with an exact name + city + country match. Output order is stable: by primary source id.
  */
-export function dedupePlaces(input: readonly RawPlace[]): MergedVenue[] {
+export function dedupePlaces(input: readonly RawPlace[], opts: { preferIds?: ReadonlySet<string> } = {}): MergedVenue[] {
+  const preferred = (p: RawPlace) => (opts.preferIds?.has(p.sourceId) ? 1 : 0)
   // The same source record twice (two regions, a re-run): keep the first.
   const seen = new Set<string>()
   const places = input.filter((p) => {
@@ -303,7 +305,9 @@ export function dedupePlaces(input: readonly RawPlace[]): MergedVenue[] {
   })
   const merged: MergedVenue[] = []
   for (const members of groups.values()) {
-    const sorted = [...members].sort((a, b) => quality(b) - quality(a) || a.sourceId.localeCompare(b.sourceId))
+    // A record that was a venue's primary before stays the primary (the venue's fsq_id, so the
+    // database row and its URL stay the same); otherwise the best record wins.
+    const sorted = [...members].sort((a, b) => preferred(b) - preferred(a) || quality(b) - quality(a) || a.sourceId.localeCompare(b.sourceId))
     const best = sorted[0]
     const fill = <K extends keyof RawPlace>(k: K): RawPlace[K] => {
       const v = best[k]
@@ -377,6 +381,131 @@ export function latinizeCities(venues: MergedVenue[], maxKm = 5): void {
   }
 }
 
+/** A city's spellings and venues while unifyCities groups them. */
+interface CityCluster {
+  key: string
+  venues: MergedVenue[]
+  lat: number
+  lng: number
+  located: number
+}
+
+const mostCommon = (values: string[], better: (a: string, b: string) => number = () => 0): string => {
+  const counts = new Map<string, number>()
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1)
+  return [...counts.entries()].sort((a, b) => better(a[0], b[0]) || b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? ''
+}
+/** Latin before other scripts, mixed case before ALL CAPS / all lower. */
+const preferSpelling = (a: string, b: string) =>
+  Number(isNonLatinCity(a)) - Number(isNonLatinCity(b)) || Number(a === a.toUpperCase() || a === a.toLowerCase()) - Number(b === b.toUpperCase() || b === b.toLowerCase())
+
+/**
+ * One city page per real city in a whole-country region. Foursquare spells a city many ways
+ * across records: "Москва" / "Moscow", "Thessaloniki" / "THESSALONIKI" / "Θεσσαλονίκη", and with
+ * varying region strings ("Tehran" / "Tehran Province" / none), which would make one city page
+ * each. Venues are grouped by the city's slug (so case, accents and Cyrillic/Greek spellings
+ * meet), split where the same name is used more than `sameNameKm` apart; a group named in
+ * another script joins the nearest Latin-named group within `scriptKm`, and groups centred
+ * within `sameCentreKm` of each other ("Kyiv" / "Kiev") become one. Each group then takes
+ * its most common Latin spelling; the biggest group of a name gets no region (`moscow-ru`), a
+ * smaller one of the same name keeps its most common region (`frankfurt-brandenburg-de`).
+ */
+export function unifyCities(venues: MergedVenue[], opts: { sameNameKm?: number; scriptKm?: number; sameCentreKm?: number } = {}): void {
+  const sameNameKm = opts.sameNameKm ?? 50
+  const scriptKm = opts.scriptKm ?? 15
+  const sameCentreKm = opts.sameCentreKm ?? 3
+  const cityKey = (city: string) => {
+    const s = slugify(city)
+    return s === 'item' ? `~${normaliseName(city)}` : s
+  }
+  const byKey = new Map<string, MergedVenue[]>()
+  for (const v of venues) {
+    if (!v.primary.city) continue
+    const k = cityKey(v.primary.city)
+    const list = byKey.get(k) ?? []
+    list.push(v)
+    byKey.set(k, list)
+  }
+  const clusters: CityCluster[] = []
+  const centre = (c: CityCluster) => {
+    const pts = c.venues.filter((v) => v.primary.lat != null && v.primary.lng != null)
+    c.located = pts.length
+    c.lat = pts.length ? pts.reduce((n, v) => n + v.primary.lat!, 0) / pts.length : NaN
+    c.lng = pts.length ? pts.reduce((n, v) => n + v.primary.lng!, 0) / pts.length : NaN
+  }
+  for (const [key, list] of byKey) {
+    // Single-link clusters of the located venues; unlocated ones join the biggest.
+    const located = list.filter((v) => v.primary.lat != null && v.primary.lng != null)
+    const groups: MergedVenue[][] = []
+    for (const v of located) {
+      const near = groups.filter((g) => g.some((w) => haversineKm(v.primary.lat!, v.primary.lng!, w.primary.lat!, w.primary.lng!) <= sameNameKm))
+      const merged = near.flat()
+      merged.push(v)
+      for (const g of near) groups.splice(groups.indexOf(g), 1)
+      groups.push(merged)
+    }
+    groups.sort((a, b) => b.length - a.length)
+    const rest = list.filter((v) => v.primary.lat == null || v.primary.lng == null)
+    if (groups.length) groups[0].push(...rest)
+    else groups.push(rest)
+    for (const g of groups) {
+      const c: CityCluster = { key, venues: g, lat: NaN, lng: NaN, located: 0 }
+      centre(c)
+      clusters.push(c)
+    }
+  }
+  // A group mostly named in another script ("Москва", with a few "Moskva") joins the nearest
+  // group mostly named in Latin letters ("Moscow"). Decided before merging, so merges don't chain.
+  const usable = (c: CityCluster) => c.located > 0 && c.key !== 'unknown'
+  const latin = new Map(clusters.map((c) => [c, !c.key.startsWith('~') && c.venues.filter((v) => !isNonLatinCity(v.primary.city)).length * 2 > c.venues.length]))
+  const absorb = (into: CityCluster, from: CityCluster) => {
+    into.venues.push(...from.venues)
+    from.venues = []
+  }
+  for (const c of clusters) {
+    if (latin.get(c) || !usable(c)) continue
+    // Prefer a spelling that sounds alike ("sankt-peterburg" ~ "saint-petersburg" over the
+    // nearer "Tsentralny Rayon"), else the nearest.
+    let best: CityCluster | null = null
+    let bestScore = -1
+    for (const t of clusters) {
+      if (t === c || !latin.get(t) || !usable(t)) continue
+      const km = haversineKm(c.lat, c.lng, t.lat, t.lng)
+      if (km > scriptKm) continue
+      const sim = c.key.startsWith('~') ? 0 : nameSimilarity(c.key.replace(/-/g, ' '), t.key.replace(/-/g, ' '))
+      const score = (sim >= 0.3 ? 1 + sim : 0) + (1 - km / scriptKm) / 2
+      if (score > bestScore) {
+        bestScore = score
+        best = t
+      }
+    }
+    if (best) absorb(best, c)
+  }
+  // Two spellings centred on the same spot ("Kyiv" / "Kiev", a district named as the city) are
+  // one city: the smaller group joins the bigger.
+  const bySize = clusters.filter((c) => c.venues.length && usable(c)).sort((a, b) => b.venues.length - a.venues.length)
+  for (const big of bySize) {
+    if (!big.venues.length) continue
+    for (const small of bySize) {
+      if (small === big || !small.venues.length || small.venues.length > big.venues.length) continue
+      if (haversineKm(big.lat, big.lng, small.lat, small.lng) <= sameCentreKm) absorb(big, small)
+    }
+  }
+  const live = clusters.filter((c) => c.venues.length)
+  // Names and regions: the biggest group of a slug key gets no region.
+  const named = live.map((c) => {
+    const name = mostCommon(c.venues.map((v) => v.primary.city), preferSpelling)
+    return { c, name, key: cityKey(name) }
+  })
+  named.sort((a, b) => b.c.venues.length - a.c.venues.length || a.name.localeCompare(b.name))
+  const seenKey = new Set<string>()
+  for (const { c, name, key } of named) {
+    const region = seenKey.has(key) ? mostCommon(c.venues.map((v) => v.primary.region).filter(Boolean), preferSpelling) : ''
+    seenKey.add(key)
+    for (const v of c.venues) v.primary = { ...v.primary, city: name, region }
+  }
+}
+
 /**
  * Chains: a website host shared by venues in at least 3 cities names the brand (the shortest
  * venue name among them, e.g. "Escapology"). Hosts used in one city only are not brands.
@@ -415,9 +544,24 @@ export function venueSlugBase(p: Pick<RawPlace, 'name' | 'city' | 'sourceId'>): 
   return slugify(nameHasCity || city === 'item' ? name : `${name} ${city}`, 100)
 }
 
-/** Assigns unique slugs (in order), skipping `taken`. Mutates and returns `taken`. */
-export function assignSlugs(bases: string[], taken: Set<string> = new Set()): string[] {
-  return bases.map((base) => {
+/**
+ * Assigns unique slugs (in order), skipping `taken`, and adds them to `taken`. `keep[i]`, when
+ * set, is the slug venue i had in the previous seed: it keeps it (it is expected in `taken`
+ * already, reserved so no other venue takes it), so regenerating never renames a venue.
+ */
+export function assignSlugs(
+  bases: string[],
+  taken: Set<string> = new Set(),
+  keep: readonly (string | null | undefined)[] = [],
+  claimed: Set<string> = new Set(),
+): string[] {
+  return bases.map((base, i) => {
+    const k = keep[i]
+    if (k && !claimed.has(k)) {
+      claimed.add(k)
+      taken.add(k)
+      return k
+    }
     let slug = base
     for (let i = 2; taken.has(slug); i++) slug = `${base}-${i}`
     taken.add(slug)
@@ -431,14 +575,50 @@ export interface RegionSeed {
   stats: { read: number; merged: number; dropped: number }
 }
 
+export interface BuildSeedOptions {
+  /**
+   * Slugs from the previous seed by Foursquare id (any merged record's id): a venue found here
+   * keeps its slug. Every slug in it must also be in `takenSlugs` (buildSeeds does this).
+   */
+  previousSlugs?: ReadonlyMap<string, string>
+  /** Venue ids (primary Foursquare ids) of the previous seed: they stay primary when merged. */
+  previousPrimaries?: ReadonlySet<string>
+  /**
+   * City regions (with a bbox). In a whole-country region, a venue whose city has a city
+   * region's name ("London" just outside the London box) joins that city's page (`london-gb`)
+   * instead of making a second one (`london-england-gb`).
+   */
+  cityRegions?: readonly Region[]
+  /** Previous slugs already kept by a venue (shared across regions by buildSeeds). */
+  claimedSlugs?: Set<string>
+}
+
+/** A whole-country region's venue named after one of its country's city regions takes that city. */
+export function joinCityRegion(p: RawPlace, cityRegions: readonly Region[]): RawPlace {
+  if (!p.city) return p
+  const key = normaliseName(p.city)
+  const r = cityRegions.find((c) => c.bbox && c.country === p.country && normaliseName(c.name) === key)
+  return r ? { ...p, city: r.name, region: '' } : p
+}
+
 /** RawPlaces of one region -> its seed file (slugs unique against `takenSlugs`). */
-export function buildRegionSeed(region: Region, raw: readonly RawPlace[], takenSlugs: Set<string> = new Set(), generatedAt = new Date().toISOString()): RegionSeed {
+export function buildRegionSeed(
+  region: Region,
+  raw: readonly RawPlace[],
+  takenSlugs: Set<string> = new Set(),
+  generatedAt = new Date().toISOString(),
+  opts: BuildSeedOptions = {},
+): RegionSeed {
   const cleaned = raw.map((p) => normalisePlace(p, region)).filter((p) => p.country === region.country)
-  const merged = dedupePlaces(cleaned)
+  const merged = dedupePlaces(cleaned, { preferIds: opts.previousPrimaries })
   fillMissingCities(merged, region.bbox ? region.name : 'Unknown')
-  latinizeCities(merged)
+  if (region.unifyCities) unifyCities(merged)
+  else latinizeCities(merged)
+  if (!region.bbox && opts.cityRegions?.length) for (const m of merged) m.primary = joinCityRegion(m.primary, opts.cityRegions)
   tagBrands(merged)
-  const slugs = assignSlugs(merged.map((m) => venueSlugBase(m.primary)), takenSlugs)
+  const prev = opts.previousSlugs
+  const keep = prev ? merged.map((m) => m.members.map((x) => prev.get(x.sourceId)).find(Boolean)) : []
+  const slugs = assignSlugs(merged.map((m) => venueSlugBase(m.primary)), takenSlugs, keep, opts.claimedSlugs)
   const cities = new Map<string, SeedCity & { n: number; latSum: number; lngSum: number }>()
   const venues: SeedVenue[] = merged.map((m, i) => {
     const p = m.primary
@@ -504,10 +684,17 @@ export function buildRegionSeed(region: Region, raw: readonly RawPlace[], takenS
 }
 
 /** Every region in import order, with slugs unique across regions. */
-export function buildSeeds(regions: readonly Region[], byRegion: Map<string, RawPlace[]>, opts: { takenSlugs?: Set<string> } = {}): RegionSeed[] {
+export function buildSeeds(
+  regions: readonly Region[],
+  byRegion: Map<string, RawPlace[]>,
+  opts: { takenSlugs?: Set<string> } & BuildSeedOptions = {},
+): RegionSeed[] {
   const taken = opts.takenSlugs ?? new Set<string>()
+  // Reserve every previous slug up front so a new venue never takes one an older venue keeps.
+  for (const slug of opts.previousSlugs?.values() ?? []) taken.add(slug)
   const generatedAt = new Date().toISOString()
-  return regions.filter((r) => byRegion.has(r.id)).map((r) => buildRegionSeed(r, byRegion.get(r.id) ?? [], taken, generatedAt))
+  const build: BuildSeedOptions = { previousSlugs: opts.previousSlugs, previousPrimaries: opts.previousPrimaries, cityRegions: opts.cityRegions ?? regions.filter((r) => r.bbox), claimedSlugs: new Set() }
+  return regions.filter((r) => byRegion.has(r.id)).map((r) => buildRegionSeed(r, byRegion.get(r.id) ?? [], taken, generatedAt, build))
 }
 
 /** Seeds serialise as compact arrays; see server/routes/directory.seed.ts for the reader. */
@@ -593,6 +780,37 @@ export function seedSlugs(dir: string, except: Set<string> = new Set()): Set<str
     for (const v of data.venues) out.add(String(v[0]))
   }
   return out
+}
+
+/**
+ * Slug of every Foursquare record in the committed seed files, by id (each merged record of a
+ * venue maps to the venue's slug; a primary id wins over a secondary one). For `previousSlugs`.
+ */
+/** Venue ids (primary Foursquare ids) in the committed seed files. For `previousPrimaries`. */
+export function seedPrimaryIds(dir: string): Set<string> {
+  const out = new Set<string>()
+  if (!existsSync(dir)) return out
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.json.gz')) continue
+    for (const v of decodeSeed(readFileSync(path.join(dir, f))).venues) out.add(v.fsqId)
+  }
+  return out
+}
+
+export function seedSlugsById(dir: string): Map<string, string> {
+  const primary = new Map<string, string>()
+  const secondary = new Map<string, string>()
+  if (!existsSync(dir)) return primary
+  for (const f of readdirSync(dir).sort()) {
+    if (!f.endsWith('.json.gz')) continue
+    const file = decodeSeed(readFileSync(path.join(dir, f)))
+    for (const v of file.venues) {
+      primary.set(v.fsqId, v.slug)
+      for (const s of v.src) if (s.id !== v.fsqId && !secondary.has(s.id)) secondary.set(s.id, v.slug)
+    }
+  }
+  for (const [id, slug] of secondary) if (!primary.has(id)) primary.set(id, slug)
+  return primary
 }
 
 /**

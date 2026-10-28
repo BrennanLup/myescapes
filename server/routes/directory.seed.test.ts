@@ -209,6 +209,23 @@ describe('the committed seed', () => {
     expect(slugs.size).toBeGreaterThan(1000)
   })
 
+  it('covers the world: a region for every country with escape rooms, readable city slugs', () => {
+    const countries = new Set(manifest!.regions.map((r) => r.country))
+    expect(countries.size).toBeGreaterThan(100)
+    for (const r of manifest!.regions) if (!r.id.includes('-')) expect(r.id, r.id).toBe(r.country.toLowerCase())
+    for (const cc of ['GB', 'DE', 'FR', 'RU', 'BR', 'KR', 'JP']) expect(manifest!.regions.some((r) => r.id === cc.toLowerCase()), cc).toBe(true)
+    let venues = 0
+    let hashed = 0
+    for (const r of manifest!.regions) {
+      const file = decodeSeed(readFileSync(path.join(DEFAULT_DIRECTORY_SEED_DIR, r.file)))
+      venues += file.venues.length
+      hashed += file.venues.filter((v) => /^city-[0-9a-f]{8}-/.test(v.citySlug)).length
+      expect(r.bytes, r.file).toBeLessThan(1024 * 1024)
+    }
+    // Only names in scripts with no transliteration (CJK, Arabic, Hebrew...) get hashed city slugs.
+    expect(hashed / venues).toBeLessThan(0.02)
+  })
+
   it('loads into Postgres in reasonable time and is idempotent', async () => {
     const t0 = Date.now()
     const r = await loadDirectorySeed(tdb.db)

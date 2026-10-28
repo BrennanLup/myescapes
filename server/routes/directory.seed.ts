@@ -260,6 +260,8 @@ export async function loadSeedRegion(db: Db, file: SeedRegionFile): Promise<Load
         })
       out.sources += chunk.length
     }
+    // Let queued requests run between batches (PGlite has one connection; a full seed is ~100 batches).
+    await new Promise((r) => setImmediate(r))
   }
   return out
 }

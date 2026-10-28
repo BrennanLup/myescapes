@@ -22,6 +22,8 @@ import {
   normalisePlace,
   phoneDigits,
   seedSlugs,
+  seedPrimaryIds,
+  seedSlugsById,
   tagBrands,
   venueSlugBase,
   websiteHost,
@@ -235,6 +237,50 @@ describe('cities, brands and slugs', () => {
     expect(venueSlugBase({ name: 'Escape Room Fayetteville', city: 'Fayetteville', sourceId: 'abc' })).toBe('escape-room-fayetteville')
     expect(venueSlugBase({ name: '방탈출 카페', city: 'Seoul', sourceId: '5f2c2834b6d0551' })).toBe('escape-room-seoul-6d0551')
     expect(assignSlugs(['a', 'a', 'b', 'a'], new Set(['b']))).toEqual(['a', 'a-2', 'b-2', 'a-3'])
+    // Previous slugs are kept (once), even when they are reserved in `taken`.
+    expect(assignSlugs(['a', 'a', 'a'], new Set(['a-2']), [undefined, 'a-2', 'a-2'])).toEqual(['a', 'a-2', 'a-3'])
+  })
+
+  it('makes one city page per city in a whole-country region, whatever the spelling', () => {
+    const ru = (city: string, region: string, lat: number, lng: number, name = `Квест ${city} ${lat}`) => place({ name, city, region, country: 'RU', lat, lng })
+    const seed = buildRegionSeed({ id: 'ru', name: 'Russia', country: 'RU', unifyCities: true }, [
+      ru('Москва', 'Москва', 55.75, 37.62),
+      ru('Москва', '', 55.76, 37.6),
+      ru('Moscow', 'Moscow', 55.74, 37.63),
+      ru('Moskva', '', 55.751, 37.621),
+      ru('Санкт-Петербург', 'Санкт-Петербург', 59.93, 30.33),
+      ru('Tsentralny Rayon', '', 59.935, 30.34),
+      ru('Saint Petersburg', '', 59.95, 30.31),
+      ru('Saint Petersburg', '', 59.96, 30.32),
+      ru('Казань', 'Татарстан', 55.79, 49.12),
+      ru('Kazan', '', 55.8, 49.1),
+      // The same name far away is another town.
+      ru('Kirovsk', 'Мурманская область', 67.61, 33.67),
+      ru('Kirovsk', 'Ленинградская область', 59.88, 30.99),
+      ru('Kirovsk', 'Ленинградская область', 59.87, 30.98),
+    ])
+    const cityOf = (lat: number) => seed.file.venues.find((v) => v.lat === lat)!
+    expect(new Set([55.75, 55.76, 55.74, 55.751].map((l) => cityOf(l).citySlug))).toEqual(new Set(['moscow-ru']))
+    expect(cityOf(55.75).city).toBe('Moscow')
+    expect(new Set([59.93, 59.935, 59.95, 59.96].map((l) => cityOf(l).citySlug))).toEqual(new Set(['saint-petersburg-ru']))
+    expect(new Set([55.79, 55.8].map((l) => cityOf(l).citySlug))).toEqual(new Set(['kazan-ru']))
+    expect(cityOf(59.88).citySlug).toBe('kirovsk-ru')
+    expect(cityOf(67.61).citySlug).toBe('kirovsk-murmanskaya-oblast-ru')
+    expect(seed.file.cities.map((c) => c.slug).sort()).toEqual(['kazan-ru', 'kirovsk-murmanskaya-oblast-ru', 'kirovsk-ru', 'moscow-ru', 'saint-petersburg-ru'])
+    // Without the flag (us, ca), cities are kept as Foursquare tags them.
+    const plain = buildRegionSeed({ id: 'ru', name: 'Russia', country: 'RU' }, [ru('Москва', 'Москва', 55.75, 37.62), ru('Moscow', 'Moscow', 55.74, 37.63)])
+    expect(plain.file.cities).toHaveLength(2)
+  })
+
+  it('files a whole-country venue named after a city region under that city', () => {
+    const gb: Region = { id: 'gb', name: 'United Kingdom', country: 'GB' }
+    const seed = buildRegionSeed(gb, [
+      place({ name: 'Edge Escape', city: 'london', region: 'England', country: 'GB', lat: 51.7, lng: -0.2 }),
+      place({ name: 'Leeds Escape', city: 'Leeds', region: 'England', country: 'GB', lat: 53.8, lng: -1.55 }),
+    ], new Set(), undefined, { cityRegions: [LONDON] })
+    expect(seed.file.venues.map((v) => [v.city, v.citySlug]).sort()).toEqual([['Leeds', 'leeds-england-gb'], ['London', 'london-gb']])
+    // The city region itself makes the same slug.
+    expect(buildRegionSeed(LONDON, [place({ city: 'Camden', country: 'GB', lat: 51.54, lng: -0.14 })]).file.venues[0].citySlug).toBe('london-gb')
   })
 })
 
@@ -281,5 +327,31 @@ describe('seed files', () => {
     const m2 = writeSeeds(dir, again, { merge: true })
     expect(m2.regions.map((r) => r.id).sort()).toEqual(['fr-paris', 'us'])
     expect(m2.version).not.toBe(m1.version)
+  })
+
+  it('keeps every venue\'s slug from the previous seed when new venues arrive', () => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'seed-test-'))
+    const old1 = place({ sourceId: 'm', name: 'Escape Room', city: 'Austin', lat: 30.2, lng: -97.7 })
+    const old2 = place({ sourceId: 'p', name: 'Puzzle Hub', city: 'Austin', lat: 30.3, lng: -97.7 })
+    writeSeeds(dir, buildSeeds([US], new Map([['us', [old1, old2]]])))
+    const before = seedSlugsById(dir)
+    expect(before.get('m')).toBe('escape-room-austin')
+    // A new record with the same name and an earlier id would take "escape-room-austin" without memory;
+    // a second record merged into Puzzle Hub, now the primary, still maps to its old slug.
+    const newcomer = place({ sourceId: 'a', name: 'Escape Room', city: 'Austin', lat: 30.25, lng: -97.7 })
+    const better = place({ sourceId: 'b', name: 'Puzzle Hub', city: 'Austin', lat: 30.3, lng: -97.7, website: 'https://puzzlehub.example.com', phone: '512 555 0100' })
+    const seeds = buildSeeds([US], new Map([['us', [old1, old2, newcomer, better]]]), { previousSlugs: before })
+    const slug = (id: string) => seeds[0].file.venues.find((v) => v.src.some((s) => s.id === id))!.slug
+    expect(slug('m')).toBe('escape-room-austin')
+    expect(slug('a')).toBe('escape-room-austin-2')
+    expect(seeds[0].file.venues.find((v) => v.fsqId === 'b')).toBeDefined()
+    expect(slug('b')).toBe(before.get('p'))
+    // With the previous primaries, the old record stays the venue's id (its database row).
+    const stable = buildSeeds([US], new Map([['us', [old1, old2, newcomer, better]]]), { previousSlugs: before, previousPrimaries: seedPrimaryIds(dir) })
+    const hub = stable[0].file.venues.find((v) => v.src.some((s) => s.id === 'b'))!
+    expect(hub.fsqId).toBe('p')
+    expect(hub.slug).toBe(before.get('p'))
+    // Gaps are still filled from the better record.
+    expect(hub.website).toBe('https://puzzlehub.example.com/')
   })
 })

@@ -37,6 +37,12 @@ export interface Region {
   country: string
   /** [south, west, north, east] for city regions; omitted for whole countries. */
   bbox?: [number, number, number, number]
+  /**
+   * Whole-country regions added for worldwide coverage: merge the many spellings of a city into
+   * one city page (scripts/import/dedupe `unifyCities`). Off for `us` and `ca`, whose city pages
+   * already exist under their state-qualified slugs.
+   */
+  unifyCities?: boolean
 }
 
 /** Import order: the US and Canada first, then major cities in Europe, Asia and Australia. */
