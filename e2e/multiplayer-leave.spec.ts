@@ -1,7 +1,8 @@
 /**
  * Phase 3, workstream C (QA round 2): finding a friend from the phone home, and what happens when
  * the host asks you to leave. The phone's /m home lists the host under "Friends online" with a
- * Visit button; the guest (on a laptop) visits, the host asks them to leave, and the room closes
+ * Visit button; the guest (on a laptop) visits, the host asks them to leave (from the people panel,
+ * confirming the question first), and the room closes
  * into the "asked you to leave" page. It stays closed after the host goes away and the guest
  * reloads (the cool-down outlives the empty home).
  *
@@ -61,11 +62,17 @@ test('the phone finds a friend online; a guest asked to leave stays out', async 
 
     // The host asks them to leave: the room closes for the guest.
     await host.waitForFunction((h) => Object.values(window.__ESCAPE_NET__!.store.getState().players).some((p) => p.user.handle === h), B.handle, { timeout: SLOW })
-    await host.evaluate((h) => {
-      const net = window.__ESCAPE_NET__!
-      const p = Object.values(net.store.getState().players).find((x) => x.user.handle === h)!
-      net.client()!.kick(p.sid)
-    }, B.handle)
+    // From the people panel: "Ask to leave" asks first, and Cancel keeps the guest in.
+    await host.getByTestId('people-button').click()
+    const row = host.getByTestId('person-row').filter({ hasText: 'Sam Guest' })
+    await row.getByTestId('kick-player').click()
+    const confirm = host.getByTestId('kick-confirm')
+    await expect(confirm).toContainText("Ask Sam to leave? They can't come back for 10 minutes.")
+    await host.getByTestId('kick-confirm-cancel').click()
+    await expect(confirm).toHaveCount(0)
+    await expect(guest.getByTestId('visit-error')).toHaveCount(0)
+    await row.getByTestId('kick-player').click()
+    await host.getByTestId('kick-confirm-yes').click()
     await expect(guest.getByTestId('visit-error')).toHaveAttribute('data-problem', 'kicked', { timeout: SLOW })
     await expect(guest.getByRole('heading', { level: 1 })).toHaveText('Robin asked you to leave')
     await expect(guest.locator('canvas')).toHaveCount(0)
