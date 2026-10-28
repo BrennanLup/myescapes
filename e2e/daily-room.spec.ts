@@ -86,9 +86,11 @@ test.describe('Escape of the Day in 3D', () => {
     }
     await expect(page.getByTestId('daily-welcome')).toBeVisible({ timeout: SLOW })
     await expect(page.getByTestId('daily-welcome-signin')).toBeVisible()
-    // You arrive just inside your room's daily door, facing the board.
+    // You arrive a few steps inside your room's daily door (room for the third-person camera), facing the board.
     const z = await page.evaluate(() => window.__ESCAPE__!.runtime.player.position[2])
-    expect(z).toBeGreaterThan(5)
+    expect(z).toBeGreaterThan(4)
+    // Without the "How to play" card over the welcome.
+    await expect(page.getByTestId('controls-hint')).toHaveCount(0)
     expect(errors).toEqual([])
   })
 

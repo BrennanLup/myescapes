@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { stepMovement, type MoveState } from '@/player/movement'
-import { BELL_POS, BOARD_POS, clueSlots, DR, EXIT_Z, isThroughExit, roomColliders, SPAWN } from './layout'
+import { clearDistance, orbitPitch, segmentBoxT, THIRD_PERSON, thirdPersonOffset } from '@/player/camera'
+import type { Vec3 } from '@/contracts/scene'
+import { BANNER_POS, BELL_POS, BOARD_POS, clueSlots, DR, EXIT_Z, isThroughExit, PENDANT, ROOM_RIGS, roomColliders, SPAWN } from './layout'
 import { furnitureColliders } from './Furniture'
 import { HIDING_SPOTS } from './search'
 import { boxFromCenter } from '@/contracts/colliders'
@@ -84,5 +86,43 @@ describe('puzzle room layout', () => {
       expect(s.position[2]).toBeGreaterThanOrEqual(DR.minZ)
       expect(s.position[2]).toBeLessThanOrEqual(DR.maxZ)
     }
+  })
+})
+
+describe('third-person camera in the puzzle room', () => {
+  const boxes = () => [...roomColliders(false), ...furnitureColliders()]
+  const pivot: Vec3 = [SPAWN.position[0], SPAWN.position[1] - THIRD_PERSON.pivotDrop, SPAWN.position[2]]
+  /** Where the camera sits at the spawn with a rig, and how much of the rig's distance it keeps. */
+  function cameraAtSpawn(rig: { distance: number; side: number; up: number }) {
+    const orbit = orbitPitch(SPAWN.pitch, pivot[1], rig, DR.height)
+    const want = thirdPersonOffset(SPAWN.yaw, orbit, rig.distance, rig.side, rig.up)
+    const len = Math.hypot(...want)
+    const clear = Math.min(len, clearDistance(pivot, want, boxes()))
+    const k = clear / len
+    const cam: Vec3 = [pivot[0] + want[0] * k, pivot[1] + want[1] * k, pivot[2] + want[2] * k]
+    return { cam, clear, len }
+  }
+
+  it('keeps (nearly) its full distance at the spawn: the south wall does not pull it into your back', () => {
+    for (const rig of [ROOM_RIGS.touch, ROOM_RIGS.desktop]) {
+      const { clear, len } = cameraAtSpawn(rig)
+      expect(clear / len).toBeGreaterThan(0.9)
+      expect(clear).toBeGreaterThan(1.9)
+    }
+  })
+
+  it('the phone rig is closer and higher than the main room one', () => {
+    expect(ROOM_RIGS.touch.distance).toBeLessThan(THIRD_PERSON.distance)
+    expect(ROOM_RIGS.touch.up).toBeGreaterThan(THIRD_PERSON.up)
+  })
+
+  it('the pendant lamp never hides the banner above the door from the spawn', () => {
+    const shade: Vec3 = [PENDANT.x, DR.height - PENDANT.drop, PENDANT.z]
+    const lampBox = { min: [shade[0] - 0.4, shade[1] - 0.25, shade[2] - 0.4] as Vec3, max: [shade[0] + 0.4, shade[1] + 0.25, shade[2] + 0.4] as Vec3 }
+    // The banner's corners and centre (2.0 x 0.5 m).
+    const targets: Vec3[] = []
+    for (const dx of [-1, 0, 1]) for (const dy of [-0.25, 0, 0.25]) targets.push([BANNER_POS[0] + dx, BANNER_POS[1] + dy, BANNER_POS[2]])
+    const eyes: Vec3[] = [SPAWN.position, cameraAtSpawn(ROOM_RIGS.touch).cam, cameraAtSpawn(ROOM_RIGS.desktop).cam]
+    for (const eye of eyes) for (const t of targets) expect(segmentBoxT(eye, t, lampBox), `${eye} -> ${t}`).toBeNull()
   })
 })

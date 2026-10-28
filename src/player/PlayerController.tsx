@@ -24,6 +24,7 @@ import {
   THIRD_PERSON,
   thirdPersonOffset,
   TOUCH_RIG,
+  type CameraRig,
 } from './camera'
 import { eventCode, inputFromKeys, isMoveKey, isTypingTarget } from './keyboard'
 import {
@@ -52,9 +53,11 @@ function controlsEnabled() {
 export interface PlayerControllerProps {
   /** Pin the camera to first person and ignore `V` (rooms that don't draw your character). */
   firstPersonOnly?: boolean
+  /** Third-person rig overrides for this room (small rooms bring the camera closer). */
+  rigs?: { desktop?: CameraRig; touch?: CameraRig }
 }
 
-export function PlayerController({ firstPersonOnly = false }: PlayerControllerProps = {}) {
+export function PlayerController({ firstPersonOnly = false, rigs }: PlayerControllerProps = {}) {
   const gl = useThree((s) => s.gl)
   const held = useRef(new Set<string>())
   const look = useRef({ x: 0, y: 0 })
@@ -305,7 +308,7 @@ export function PlayerController({ firstPersonOnly = false }: PlayerControllerPr
     view.lookPitch = s.pitch
     view.speed = speed
 
-    const rig = st.isTouch ? TOUCH_RIG : DESKTOP_RIG
+    const rig = st.isTouch ? (rigs?.touch ?? TOUCH_RIG) : (rigs?.desktop ?? DESKTOP_RIG)
     // The camera may look a little below your look pitch (the phone rig), easing in with the blend.
     const camPitch = s.pitch - rig.tilt * third
     camera.rotation.set(camPitch, s.yaw, 0, 'YXZ')

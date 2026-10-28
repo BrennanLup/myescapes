@@ -8,13 +8,39 @@
 import { useEffect, useState } from 'react'
 import { signInWithGoogle } from '../../auth'
 import { useStore } from '../../state/store'
+import { useShell } from '../../ui/shell/shellStore'
 import { WELCOME_CSS, WelcomeCard, WelcomeConfetti } from './WelcomeCard'
-import { clearWelcomeNote, readWelcomeNote, type WelcomeNote } from './welcomeNote'
+import { clearWelcomeNote, readWelcomeNote, takeArrivingFromDaily, type WelcomeNote } from './welcomeNote'
 
 export { clearWelcomeNote, leaveWelcomeNote, readWelcomeNote, takeWelcomeNote, welcomeLine, type WelcomeNote } from './welcomeNote'
 
+/**
+ * Walking in from the puzzle room: skip the main room's automatic "How to play" card (the HUD opens
+ * it once the world is ready), which would cover the welcome. Only that first automatic open is
+ * skipped; the help button still opens it.
+ */
+function useSkipFirstHintAfterDaily() {
+  // Read at the first render, before any effect (the HUD's included) can open the card.
+  const [arrival] = useState(() => (typeof window === 'undefined' ? null : takeArrivingFromDaily() ? { base: useShell.getState().hintNonce } : null))
+  useEffect(() => {
+    if (!arrival) return
+    /** Handles the first open after arriving; true once there is nothing left to watch. */
+    const handle = (s: { hintOpen: boolean; hintNonce: number }) => {
+      if (s.hintNonce <= arrival.base) return false
+      if (s.hintOpen && s.hintNonce === arrival.base + 1) useShell.getState().closeHint()
+      return true
+    }
+    if (handle(useShell.getState())) return
+    const unsub = useShell.subscribe((s) => {
+      if (handle(s)) unsub()
+    })
+    return unsub
+  }, [arrival])
+}
+
 /** Celebration toast in the 3D room after the daily room. Renders nothing without a fresh note. */
 export function DailyWelcome() {
+  useSkipFirstHintAfterDaily()
   const [note] = useState<WelcomeNote | null>(() => (typeof window === 'undefined' ? null : readWelcomeNote()))
   const [open, setOpen] = useState(true)
   // Shown once: a reload of the room does not celebrate again.

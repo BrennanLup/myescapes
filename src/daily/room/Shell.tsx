@@ -12,7 +12,7 @@ import { runtime } from '@/contracts/runtime'
 import { LIGHT, PALETTE } from '@/contracts/style'
 import { useStore } from '@/state/store'
 import { getMaterial } from '@/world/materials'
-import { DOOR_HINGE, DOOR_LEAF_T, DR, isThroughExit, roomColliders } from './layout'
+import { DOOR_HINGE, DOOR_LEAF_T, DR, isThroughExit, PENDANT, roomColliders } from './layout'
 import { MergeStatic } from './MergeStatic'
 import { useRoomPlay } from './playStore'
 
@@ -208,15 +208,16 @@ export function RoomLights() {
 
 function PendantLamp() {
   const shade = getMaterial('fabricOrange')
+  const { x, z, drop } = PENDANT
   return (
-    <group position={[0, H, CZ - 0.5]}>
-      <mesh position={[0, -0.35, 0]} material={getMaterial('metalDark')}>
-        <cylinderGeometry args={[0.008, 0.008, 0.7, 6]} />
+    <group position={[x, H, z]}>
+      <mesh position={[0, -drop / 2 + 0.025, 0]} material={getMaterial('metalDark')}>
+        <cylinderGeometry args={[0.008, 0.008, drop - 0.05, 6]} />
       </mesh>
-      <mesh position={[0, -0.8, 0]} material={shade}>
+      <mesh position={[0, -drop, 0]} material={shade}>
         <coneGeometry args={[0.32, 0.3, 18, 1, true]} />
       </mesh>
-      <mesh position={[0, -0.88, 0]}>
+      <mesh position={[0, -drop - 0.08, 0]}>
         <sphereGeometry args={[0.07, 12, 10]} />
         <meshBasicMaterial color={LIGHT.lampWarm} toneMapped={false} />
       </mesh>
