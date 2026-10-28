@@ -12,6 +12,7 @@ import { resizePhoto, type ResizedPhoto } from './resize'
 
 export { fitWithin, encodeUnderBudget, resizePhoto, TARGET_MAX_PX, TARGET_MAX_BYTES } from './resize'
 export { PhotoAttach, type PhotoAttachProps } from './PhotoAttach'
+export { Lightbox, PhotoThumbs, isLightboxOpen, type LightboxPhoto } from './Lightbox'
 export {
   usePhotoQueue,
   visitTarget,

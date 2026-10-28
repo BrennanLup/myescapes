@@ -9,11 +9,14 @@
  * photo, too big, over the limit) get a short line under the status. Removing a photo that is
  * already uploaded hides it at once with "Photo removed · Undo"; the server delete waits
  * `removeUndoMs()` (5 s), or happens right away when another photo is removed or the form closes.
+ * Tapping a thumbnail opens it full size (`Lightbox`). With `editToggle` (read views such as the
+ * review overlay) saved photos show no remove button until "Edit photos" is pressed.
  * Light: no three.js.
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import type { PhotoV2 } from '@/contracts/models'
 import { ROUTES, callApi } from '@/contracts/routes'
+import { Lightbox, type LightboxPhoto } from './Lightbox'
 import { MAX_PHOTOS_PER_VISIT, removeUndoMs, summarize, usePhotoQueue, visitTarget, watchTarget, type PendingPhoto } from './queue'
 
 export interface PhotoAttachProps {
@@ -31,6 +34,11 @@ export interface PhotoAttachProps {
   disabledReason?: string | null
   /** Smaller heading-less variant for the overlays. */
   compact?: boolean
+  /**
+   * Read views: hide the remove buttons on saved photos behind an "Edit photos" toggle, so every
+   * photo doesn't carry a ×. Uploads still in progress or failed keep theirs.
+   */
+  editToggle?: boolean
   testId?: string
   fetch?: typeof fetch
 }
@@ -59,7 +67,7 @@ interface PendingDelete {
   queueKey: string | null
 }
 
-export function PhotoAttach({ target: draftTarget, visitId = null, existing = [], meId = null, onExistingDeleted, disabledReason = null, compact = false, testId = 'photo-attach', fetch: fetchImpl }: PhotoAttachProps) {
+export function PhotoAttach({ target: draftTarget, visitId = null, existing = [], meId = null, onExistingDeleted, disabledReason = null, compact = false, editToggle = false, testId = 'photo-attach', fetch: fetchImpl }: PhotoAttachProps) {
   // Once the visit exists its photos live under the visit's key (see attachToVisit).
   const target = visitId ? visitTarget(visitId) : draftTarget
   const all = usePhotoQueue((s) => s.items)
@@ -81,6 +89,9 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
   const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const mounted = useRef(true)
   const hintId = useId()
+  const [editing, setEditing] = useState(false)
+  /** Key (photo id or queue key) of the photo open full size. */
+  const [viewing, setViewing] = useState<string | null>(null)
 
   useEffect(() => {
     if (visitId) attachToVisit(draftTarget, visitId)
@@ -98,6 +109,15 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
   const used = existing.filter((p) => !queued.has(p.id) && !gone.has(p.id)).length + items.filter((i) => !(i.status === 'error' && i.permanent)).length
   const slots = Math.max(0, MAX_PHOTOS_PER_VISIT - used)
   const sum = summarize(shownItems)
+  const canRemoveSaved = !editToggle || editing
+  const mine = (p: PhotoV2) => !!meId && p.uploaderId === meId
+  const removableSaved = shownExisting.some(mine) || shownItems.some((i) => i.status === 'done')
+  // What the lightbox pages through: every thumbnail that has a picture to show.
+  const viewable: (LightboxPhoto & { key: string })[] = [
+    ...shownExisting.map((p, i) => ({ key: p.id, src: p.url, alt: p.caption || `Photo ${i + 1}`, caption: p.caption })),
+    ...shownItems.flatMap((it, i) => (it.previewUrl && it.status !== 'error' ? [{ key: it.key, src: it.previewUrl, alt: `Photo ${shownExisting.length + i + 1}` }] : [])),
+  ]
+  const viewIndex = viewing === null ? -1 : viewable.findIndex((v) => v.key === viewing)
 
   const pick = (files: FileList | File[] | null) => {
     const list = files ? [...files] : []
@@ -189,8 +209,10 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
         <ul className={'grid gap-2 ' + (compact ? 'grid-cols-4 sm:grid-cols-6' : 'grid-cols-3 sm:grid-cols-4')} data-testid="photo-tiles">
           {shownExisting.map((p, i) => (
             <li key={p.id} className={tile} data-testid="photo-tile" data-status="saved">
-              <img src={p.url} alt={p.caption || `Photo ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
-              {meId && p.uploaderId === meId && <RemoveButton label={`Remove photo ${i + 1}`} disabled={deleting === p.id} onClick={() => requestDelete({ photoId: p.id, queueKey: null })} />}
+              <OpenButton label={`Open photo ${i + 1}`} onClick={() => setViewing(p.id)}>
+                <img src={p.url} alt={p.caption || `Photo ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
+              </OpenButton>
+              {mine(p) && canRemoveSaved && <RemoveButton label={`Remove photo ${i + 1}`} disabled={deleting === p.id} onClick={() => requestDelete({ photoId: p.id, queueKey: null })} />}
             </li>
           ))}
           {shownItems.map((it, i) => (
@@ -200,6 +222,8 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
               index={shownExisting.length + i + 1}
               waitingForSave={!visitId}
               deleting={deleting === it.photo?.id}
+              removable={it.status !== 'done' || canRemoveSaved}
+              onOpen={viewable.some((v) => v.key === it.key) ? () => setViewing(it.key) : undefined}
               onRetry={() => retry(it.key)}
               onRemove={() => {
                 const uploaded = it.status === 'done' ? it.photo : null
@@ -212,9 +236,12 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
       )}
 
       {disabledReason ? (
-        <p className="rounded-xl bg-paper px-3 py-2 text-sm text-ink-soft" data-testid="photo-disabled">
-          {disabledReason}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="flex-1 rounded-xl bg-paper px-3 py-2 text-sm text-ink-soft" data-testid="photo-disabled">
+            {disabledReason}
+          </p>
+          {editToggle && removableSaved && <EditToggle editing={editing} onToggle={() => setEditing((e) => !e)} />}
+        </div>
       ) : (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <label
@@ -241,6 +268,7 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
             {slots === 0 ? `That's the limit of ${MAX_PHOTOS_PER_VISIT} photos.` : `${used} of ${MAX_PHOTOS_PER_VISIT}`}
             {!compact && slots > 0 && <span className="hidden sm:inline"> · or drop them here</span>}
           </span>
+          {editToggle && removableSaved && <EditToggle editing={editing} onToggle={() => setEditing((e) => !e)} />}
         </div>
       )}
 
@@ -277,7 +305,40 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
           {deleteError}
         </p>
       )}
+      {viewIndex >= 0 && <Lightbox photos={viewable} index={viewIndex} onIndex={(i) => setViewing(viewable[i]?.key ?? null)} onClose={() => setViewing(null)} />}
     </div>
+  )
+}
+
+/** The whole thumbnail is the tap target that opens the photo full size. */
+function OpenButton({ label, onClick, children }: { label: string; onClick(): void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      data-testid="photo-open"
+      onClick={onClick}
+      className="block h-full w-full cursor-zoom-in focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-accent"
+    >
+      {children}
+    </button>
+  )
+}
+
+function EditToggle({ editing, onToggle }: { editing: boolean; onToggle(): void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={editing}
+      data-testid="photo-edit-toggle"
+      onClick={onToggle}
+      className={
+        'ml-auto min-h-10 rounded-full px-3 text-sm font-bold transition focus-visible:outline-3 focus-visible:outline-accent ' +
+        (editing ? 'bg-teal text-white hover:brightness-110' : 'text-teal underline underline-offset-2 hover:bg-teal/10')
+      }
+    >
+      {editing ? 'Done' : 'Edit photos'}
+    </button>
   )
 }
 
@@ -290,13 +351,37 @@ function statusLine(s: ReturnType<typeof summarize>, bound: boolean): string | n
   return s.done ? `${n(s.done)} added.` : null
 }
 
-function PendingTile({ item, index, waitingForSave, deleting, onRetry, onRemove }: { item: PendingPhoto; index: number; waitingForSave: boolean; deleting: boolean; onRetry(): void; onRemove(): void }) {
+function PendingTile({
+  item,
+  index,
+  waitingForSave,
+  deleting,
+  removable,
+  onOpen,
+  onRetry,
+  onRemove,
+}: {
+  item: PendingPhoto
+  index: number
+  waitingForSave: boolean
+  deleting: boolean
+  removable: boolean
+  onOpen?(): void
+  onRetry(): void
+  onRemove(): void
+}) {
   const [broken, setBroken] = useState(false)
   const pct = Math.round(item.progress * 100)
   return (
     <li className={tile + (item.status === 'error' ? ' border-bad' : '')} data-testid="photo-tile" data-status={item.status}>
       {item.previewUrl && !broken ? (
-        <img src={item.previewUrl} alt={`Photo ${index}`} className={'h-full w-full object-cover transition ' + (item.status === 'done' ? '' : 'opacity-80')} onError={() => setBroken(true)} />
+        onOpen ? (
+          <OpenButton label={`Open photo ${index}`} onClick={onOpen}>
+            <img src={item.previewUrl} alt={`Photo ${index}`} className={'h-full w-full object-cover transition ' + (item.status === 'done' ? '' : 'opacity-80')} onError={() => setBroken(true)} />
+          </OpenButton>
+        ) : (
+          <img src={item.previewUrl} alt={`Photo ${index}`} className={'h-full w-full object-cover transition ' + (item.status === 'done' ? '' : 'opacity-80')} onError={() => setBroken(true)} />
+        )
       ) : (
         <span className="grid h-full w-full place-items-center text-ink-soft/70" aria-label={`Photo ${index}`}>
           <CameraIcon />
@@ -326,7 +411,7 @@ function PendingTile({ item, index, waitingForSave, deleting, onRetry, onRemove 
           )}
         </span>
       )}
-      <RemoveButton label={`Remove photo ${index}`} disabled={deleting} onClick={onRemove} />
+      {removable && <RemoveButton label={`Remove photo ${index}`} disabled={deleting} onClick={onRemove} />}
     </li>
   )
 }

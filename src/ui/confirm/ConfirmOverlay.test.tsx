@@ -55,13 +55,72 @@ describe('ConfirmOverlay', () => {
     useStore.setState({ addEntry })
     render(<ConfirmOverlay draft={sampleDraft()} />)
     const save = screen.getByTestId('confirm-save') as HTMLButtonElement
-    expect(save.disabled).toBe(true)
+    expect(save.getAttribute('aria-disabled')).toBe('true')
     expect(screen.getByTestId('confirm-save-reason').textContent).toMatch(/Still needed: City/)
-    expect(screen.getByTestId('error-room.city')).toBeTruthy()
+    // Nothing is shown in red before the user has done anything.
+    expect(screen.queryByTestId('error-room.city')).toBeNull()
     fireEvent.click(save)
     expect(addEntry).not.toHaveBeenCalled()
+    // Pressing Save shows every problem.
+    expect(screen.getByTestId('error-room.city')).toBeTruthy()
+    expect(screen.getByTestId('error-review.ratings.storyline.score')).toBeTruthy()
     fillRequired()
+    expect(save.getAttribute('aria-disabled')).toBeNull()
     expect(save.disabled).toBe(false)
+  })
+
+  it('shows a field error only once the field is left', () => {
+    render(<ConfirmOverlay draft={sampleDraft()} />)
+    const city = screen.getByTestId('field-room.city')
+    fireEvent.focus(city)
+    expect(screen.queryByTestId('error-room.city')).toBeNull()
+    fireEvent.blur(city)
+    expect(screen.getByTestId('error-room.city').textContent).toBe('City is required')
+    // Other fields stay quiet.
+    expect(screen.queryByTestId('error-review.ratings.storyline.score')).toBeNull()
+    // Moving from the slider to the number box is still the same field.
+    const slider = screen.getByTestId('field-review.ratings.storyline.score-slider')
+    const box = screen.getByTestId('field-review.ratings.storyline.score')
+    fireEvent.blur(slider, { relatedTarget: box })
+    expect(screen.queryByTestId('error-review.ratings.storyline.score')).toBeNull()
+    fireEvent.blur(box, { relatedTarget: city })
+    expect(screen.getByTestId('error-review.ratings.storyline.score')).toBeTruthy()
+  })
+
+  it('offers "Not sure" for the features and saves them as unknown', async () => {
+    const addEntry = vi.fn(async (e: Entry) => e)
+    useStore.setState({ addEntry })
+    render(<ConfirmOverlay draft={sampleDraft()} />)
+    // The sample draft leaves multiRoom and liveActors unset: "Not sure" is selected, nothing is required.
+    expect(screen.getByTestId('field-review.multiRoom-unsure').getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByTestId('confirm-save-reason').textContent).not.toMatch(/Multiple rooms|Live actors/)
+    // Escaped stays a yes/no question.
+    expect(screen.queryByTestId('field-review.escaped-unsure')).toBeNull()
+    fireEvent.click(screen.getByTestId('field-review.flashlights-unsure'))
+    expect(screen.getByTestId('field-review.flashlights').dataset.value).toBe('unset')
+    fireEvent.change(screen.getByTestId('field-room.city'), { target: { value: 'San Francisco' } })
+    fireEvent.change(screen.getByTestId('field-review.ratings.storyline.score'), { target: { value: '81' } })
+    fireEvent.change(screen.getByTestId('field-review.puzzles.1.type'), { target: { value: 'math' } })
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('confirm-save'))
+    })
+    const entry = addEntry.mock.calls[0][0]
+    expect(entry.review.multiRoom).toBeNull()
+    expect(entry.review.flashlights).toBeNull()
+  })
+
+  it('moves between Yes, No and Not sure with the arrow keys', () => {
+    render(<ConfirmOverlay draft={sampleDraft()} />)
+    const yes = screen.getByTestId('field-review.liveActors-yes')
+    const unsure = screen.getByTestId('field-review.liveActors-unsure')
+    // Only the checked option is a tab stop.
+    expect(unsure.tabIndex).toBe(0)
+    expect(yes.tabIndex).toBe(-1)
+    fireEvent.keyDown(unsure, { key: 'ArrowRight' })
+    expect(screen.getByTestId('field-review.liveActors').dataset.value).toBe('true')
+    expect(document.activeElement).toBe(yes)
+    fireEvent.keyDown(yes, { key: 'ArrowRight' })
+    expect(screen.getByTestId('field-review.liveActors').dataset.value).toBe('false')
   })
 
   it('saves a valid entry via addEntry, reusing the room id on a revisit', async () => {

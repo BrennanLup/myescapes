@@ -103,29 +103,35 @@ export function Ratings({ review }: { review: Review }) {
 interface BadgeSpec {
   key: string
   label: string
-  value: boolean
+  /** null: the player wasn't sure ("Not sure" on the forms). */
+  value: boolean | null
   icon: ReactNode
   detail?: string | null
 }
 
 function Badge({ spec }: { spec: BadgeSpec }) {
-  const on = spec.value
+  const on = spec.value === true
+  const unknown = spec.value === null
   return (
     <li
       data-testid={`badge-${spec.key}`}
-      data-value={on ? 'yes' : 'no'}
+      data-value={unknown ? 'unknown' : on ? 'yes' : 'no'}
       className={`flex min-h-14 items-center gap-2.5 rounded-[14px] border px-3 py-2 ${
-        on ? 'border-good/40 bg-good/12 text-ink' : 'border-ink-soft/20 bg-ink-soft/8 text-ink-soft'
+        on ? 'border-good/40 bg-good/12 text-ink' : unknown ? 'border-dashed border-ink-soft/30 text-ink-soft' : 'border-ink-soft/20 bg-ink-soft/8 text-ink-soft'
       }`}
     >
       <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${on ? 'bg-white text-good' : 'bg-white/70 text-ink-soft/80'}`}>{spec.icon}</span>
       <span className="flex min-w-0 flex-col leading-tight">
         <span className="text-sm font-bold">{spec.label}</span>
-        {spec.detail && <span className="text-xs font-semibold text-ink-soft">{spec.detail}</span>}
+        {unknown ? <span className="text-xs font-semibold text-ink-soft">Not sure</span> : spec.detail && <span className="text-xs font-semibold text-ink-soft">{spec.detail}</span>}
       </span>
-      <span className={`ml-auto grid h-6 w-6 shrink-0 place-items-center rounded-full ${on ? 'bg-good text-white' : 'bg-ink-soft/25 text-white'}`}>
-        {on ? <CheckIcon size={15} strokeWidth={3} /> : <CrossIcon size={14} strokeWidth={3} />}
-        <span className="sr-only">{on ? 'yes' : 'no'}</span>
+      <span
+        className={`ml-auto grid h-6 w-6 shrink-0 place-items-center rounded-full ${
+          on ? 'bg-good text-white' : unknown ? 'border border-dashed border-ink-soft/50 text-sm font-bold text-ink-soft' : 'bg-ink-soft/25 text-white'
+        }`}
+      >
+        {on ? <CheckIcon size={15} strokeWidth={3} /> : unknown ? <span aria-hidden="true">?</span> : <CrossIcon size={14} strokeWidth={3} />}
+        <span className="sr-only">{unknown ? 'not sure' : on ? 'yes' : 'no'}</span>
       </span>
     </li>
   )

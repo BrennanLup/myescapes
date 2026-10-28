@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef } from 'react'
 import { bus } from '@/contracts/events'
 import { latestReviewFor, type Review, type Room } from '@/contracts/types'
 import { useStore } from '@/state/store'
+import { isLightboxOpen } from '@/ui/photos/Lightbox'
 import { Gallery } from './Gallery'
 import { CalendarIcon, ChevronLeft, ChevronRight, CloseIcon, GlobeIcon, PinIcon } from './icons'
 import {
@@ -213,6 +214,8 @@ export function ReviewOverlay({ roomId }: { roomId: string }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A photo open full size takes Esc, the arrows and Tab itself.
+      if (isLightboxOpen()) return
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()

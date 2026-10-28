@@ -4,7 +4,7 @@ import { callApi, ROUTES } from '@/contracts/routes'
 import { COMMON_TOOLS, GENRES, PUZZLE_TYPES, RATING_KEYS, type ReviewDraft } from '@/contracts/types'
 import { PUZZLE_TYPE_COLORS } from '@/contracts/style'
 import { useStore } from '@/state/store'
-import { PhotoAttach, newDraftTarget, summarize, usePhotoQueue } from '@/ui/photos'
+import { PhotoAttach, isLightboxOpen, newDraftTarget, summarize, usePhotoQueue } from '@/ui/photos'
 import type { RoomPick } from '@/ui/roompicker'
 import { ensureRoomPhotoSync } from '@/ui/review/photoSync'
 import { useKeyboardInset, useRevealFocusedField } from './keyboard'
@@ -60,6 +60,9 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [discarding, setDiscarding] = useState(false)
+  // Field errors show once a field has been left (blurred) or after Save was pressed, not on open.
+  const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set())
+  const [attempted, setAttempted] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dataSource = useStore((s) => s.dataSource)
   const signedIn = dataSource === 'postgres'
@@ -135,7 +138,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   // Esc asks to discard (capture phase so nothing else closes the overlay first).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      if (e.key !== 'Escape' || isLightboxOpen()) return
       // An open room-search list closes itself first.
       const t = e.target as HTMLElement | null
       if (t?.getAttribute?.('role') === 'combobox' && t.getAttribute('aria-expanded') === 'true') return
@@ -158,8 +161,17 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
     focusable?.focus({ preventScroll: true })
   }
 
+  const touch = (path: string) => setTouched((t) => (t.has(path) ? t : new Set(t).add(path)))
+  const errorShown = (path: string) => (attempted || touched.has(path) ? errors[path] : undefined)
+
   const save = async () => {
-    if (!valid || saving) return
+    if (saving) return
+    if (!valid) {
+      // Save looks disabled but still answers: show every problem and go to the first.
+      setAttempted(true)
+      jumpTo(errorKeys[0])
+      return
+    }
     setSaving(true)
     setSaveError(null)
     try {
@@ -192,7 +204,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
 
   const f = form
   const r = form.review
-  const fieldProps = (path: string) => ({ path, flagged: isFlagged(path), error: errors[path] })
+  const fieldProps = (path: string) => ({ path, flagged: isFlagged(path), error: errorShown(path), onLeave: touch })
 
   return (
     <div
@@ -383,7 +395,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                   </Field>
                   {BOOL_FEATURES.map((k) => (
                     <Field key={k} label={FEATURE_LABELS[k]} {...fieldProps(`review.${k}`)}>
-                      <YesNo path={`review.${k}`} value={r[k]} onChange={(v) => edit(`review.${k}`, (n) => void (n.review[k] = v))} />
+                      <YesNo path={`review.${k}`} value={r[k]} unsure onChange={(v) => edit(`review.${k}`, (n) => void (n.review[k] = v))} />
                     </Field>
                   ))}
                 </div>
@@ -410,7 +422,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                   const score = r.ratings[k].score
                   return (
                     <div key={k} className="grid gap-4">
-                      <Field label={RATING_LABELS[k]} path={sp} flagged={isFlagged(sp)} error={errors[sp]} labelFor={inputId(sp)}>
+                      <Field label={RATING_LABELS[k]} path={sp} flagged={isFlagged(sp)} error={errorShown(sp)} onLeave={touch} labelFor={inputId(sp)}>
                         <div className="flex items-center gap-3">
                           <ScoreSlider
                             label={`${RATING_LABELS[k]} slider`}
@@ -432,7 +444,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                           />
                         </div>
                       </Field>
-                      <Field label={`${RATING_LABELS[k]} comment`} hideLabel path={cp} flagged={isFlagged(cp)} error={errors[cp]}>
+                      <Field label={`${RATING_LABELS[k]} comment`} hideLabel path={cp} flagged={isFlagged(cp)} error={errorShown(cp)} onLeave={touch}>
                         <input id={inputId(cp)} data-testid={`field-${cp}`} className={INPUT + ' text-sm'} value={r.ratings[k].comment} placeholder={`Notes on ${RATING_LABELS[k].toLowerCase()}…`}
                           onChange={(e) => edit(cp, (n) => void (n.review.ratings[k].comment = e.target.value))} />
                       </Field>
@@ -539,12 +551,16 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
             {saveError ? (
               <p role="alert" data-testid="confirm-error" className="font-bold text-bad">Couldn't save: {saveError}</p>
             ) : saveReason ? (
-              <p data-testid="confirm-save-reason" className="text-ink-soft">
+              <p data-testid="confirm-save-reason" className={attempted ? 'font-semibold text-bad' : 'text-ink-soft'}>
+                {attempted && <span className="sr-only">Fix the highlighted fields first. </span>}
                 {saveReason}{' '}
                 <button
                   type="button"
                   data-testid="confirm-next-missing"
-                  onClick={() => jumpTo(errorKeys[0])}
+                  onClick={() => {
+                    touch(errorKeys[0])
+                    jumpTo(errorKeys[0])
+                  }}
                   className="min-h-10 rounded-full px-2 font-bold text-accent underline underline-offset-2 hover:bg-accent/10"
                 >
                   Show me
@@ -570,10 +586,11 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
             <button
               type="button"
               data-testid="confirm-save"
-              disabled={!valid || saving}
+              disabled={saving}
+              aria-disabled={!valid || undefined}
               title={saveReason ?? undefined}
               onClick={() => void save()}
-              className="min-h-12 flex-[2] rounded-xl bg-accent px-6 font-display text-lg font-semibold text-accent-ink shadow-md transition hover:brightness-105 disabled:cursor-not-allowed disabled:bg-ink-soft/40 disabled:shadow-none sm:flex-none"
+              className="min-h-12 flex-[2] rounded-xl bg-accent px-6 font-display text-lg font-semibold text-accent-ink shadow-md transition hover:brightness-105 disabled:cursor-not-allowed disabled:bg-ink-soft/40 disabled:shadow-none aria-disabled:cursor-not-allowed aria-disabled:bg-ink-soft/40 aria-disabled:shadow-none aria-disabled:hover:brightness-100 sm:flex-none"
             >
               {saving ? 'Saving…' : 'Save & pin'}
             </button>
@@ -627,22 +644,29 @@ function Field(props: {
   hideLabel?: boolean
   labelFor?: string
   className?: string
+  /** Called when focus leaves the field (to start showing its error). */
+  onLeave?(path: string): void
   children: ReactNode
 }) {
-  const { path, label, flagged, error, hideLabel, className = '', children } = props
+  const { path, label, flagged, error, hideLabel, className = '', onLeave, children } = props
   return (
     <div
       id={anchorId(path)}
       data-flagged={flagged ? 'true' : 'false'}
+      data-invalid={error ? 'true' : undefined}
+      onBlur={(e) => {
+        // Moving between parts of one field (slider -> number box) is not leaving it.
+        if (onLeave && !e.currentTarget.contains(e.relatedTarget as Node | null)) onLeave(path)
+      }}
       className={
         '-m-2 flex min-w-0 flex-col gap-1 rounded-2xl p-2 transition ' +
-        (flagged ? 'bg-warn/15 ring-2 ring-warn ' : '') +
+        (flagged ? 'bg-warn/15 ring-2 ring-warn ' : error ? 'bg-bad/5 ring-2 ring-bad/50 ' : '') +
         className
       }
     >
       {(!hideLabel || flagged) && (
         <div className="flex items-center gap-2">
-          <label htmlFor={props.labelFor ?? inputId(path)} className={'text-sm font-bold text-ink-soft ' + (hideLabel ? 'sr-only' : '')}>
+          <label id={`cf-label-${path}`} htmlFor={props.labelFor ?? inputId(path)} className={'text-sm font-bold text-ink-soft ' + (hideLabel ? 'sr-only' : '')}>
             {label}
           </label>
           {flagged && (
@@ -659,7 +683,7 @@ function Field(props: {
       )}
       {children}
       {error && (
-        <p data-testid={`error-${path}`} className="text-sm font-semibold text-bad">
+        <p data-testid={`error-${path}`} id={`cf-error-${path}`} className="text-sm font-semibold text-bad">
           {error}
         </p>
       )}
@@ -667,35 +691,54 @@ function Field(props: {
   )
 }
 
-function YesNo(props: { path: string; value: boolean | null; onChange: (v: boolean) => void; yes?: string; no?: string }) {
-  const { path, value, onChange, yes = 'Yes', no = 'No' } = props
-  const btn = (v: boolean, text: string) => {
-    const on = value === v
-    return (
-      <button
-        type="button"
-        role="radio"
-        aria-checked={on}
-        data-testid={`field-${path}-${v ? 'yes' : 'no'}`}
-        id={v ? inputId(path) : undefined}
-        onClick={() => onChange(v)}
-        className={
-          'min-h-12 flex-1 rounded-xl border-2 px-3 font-bold transition ' +
-          (on
-            ? v
-              ? 'border-good bg-good text-white'
-              : 'border-bad bg-bad text-white'
-            : 'border-panel-edge bg-white/70 text-ink-soft hover:border-accent')
-        }
-      >
-        {text}
-      </button>
-    )
+function YesNo(props: { path: string; value: boolean | null; onChange: (v: boolean | null) => void; yes?: string; no?: string; unsure?: boolean }) {
+  const { path, value, onChange, yes = 'Yes', no = 'No', unsure = false } = props
+  const opts: { v: boolean | null; text: string; id: string; onCls: string }[] = [
+    { v: true, text: yes, id: 'yes', onCls: 'border-good bg-good text-white' },
+    { v: false, text: no, id: 'no', onCls: 'border-bad bg-bad text-white' },
+    ...(unsure ? [{ v: null, text: 'Not sure', id: 'unsure', onCls: 'border-ink-soft bg-ink-soft text-white' }] : []),
+  ]
+  // Roving tab stop: the checked option, else the first.
+  const tabStop = opts.findIndex((o) => o.v === value)
+  const move = (from: number, d: number, el: HTMLElement) => {
+    const i = (from + d + opts.length) % opts.length
+    onChange(opts[i].v)
+    const next = el.parentElement?.children[i] as HTMLElement | undefined
+    next?.focus()
   }
   return (
-    <div role="radiogroup" data-testid={`field-${path}`} data-value={value === null ? 'unset' : String(value)} className="flex gap-2">
-      {btn(true, yes)}
-      {btn(false, no)}
+    <div role="radiogroup" aria-labelledby={`cf-label-${path}`} data-testid={`field-${path}`} data-value={value === null ? 'unset' : String(value)} className="flex gap-2">
+      {opts.map((o, i) => {
+        const on = value === o.v
+        return (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={i === (tabStop < 0 ? 0 : tabStop) ? 0 : -1}
+            data-testid={`field-${path}-${o.id}`}
+            id={i === 0 ? inputId(path) : undefined}
+            onClick={() => onChange(o.v)}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                e.preventDefault()
+                move(i, 1, e.currentTarget)
+              } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                e.preventDefault()
+                move(i, -1, e.currentTarget)
+              }
+            }}
+            className={
+              'min-h-12 min-w-0 flex-1 rounded-xl border-2 px-2 font-bold transition ' +
+              (o.v === null ? 'text-sm ' : '') +
+              (on ? o.onCls : 'border-panel-edge bg-white/70 text-ink-soft hover:border-accent')
+            }
+          >
+            {o.text}
+          </button>
+        )
+      })}
     </div>
   )
 }

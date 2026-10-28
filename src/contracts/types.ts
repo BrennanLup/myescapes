@@ -113,10 +113,11 @@ export const ReviewSchema = z.object({
   escaped: z.boolean(),
   /** Minutes taken (or minutes used when failing). Null when unknown. */
   escapeTimeMinutes: z.number().min(0).max(600).nullable(),
-  visibleTimer: z.boolean(),
-  multiRoom: z.boolean(),
-  flashlights: z.boolean(),
-  liveActors: z.boolean(),
+  /** The four room features: null when the player wasn't sure ("Not sure" on both forms). */
+  visibleTimer: z.boolean().nullable(),
+  multiRoom: z.boolean().nullable(),
+  flashlights: z.boolean().nullable(),
+  liveActors: z.boolean().nullable(),
   toolsUsed: z.array(z.string()).default([]),
   voiceTranscript: z.string().default(''),
   photos: z.array(PhotoSchema).default([]),
