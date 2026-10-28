@@ -10,6 +10,7 @@
  *   /venues/:slug     public venue page (17)
  *   /cities/:slug     public city page (17)
  *   /daily            Escape of the Day (22)
+ *   /daily/room       Escape of the Day as a 3D puzzle room (Phase 3, workstream D; loads three.js)
  *   /settings         account settings: name, handle, export, delete (35)
  *   /invite/:code     invite landing (35)
  *   /welcome          landing + sign-in (19)
@@ -46,6 +47,7 @@ export const ROUTE_TABLE: RouteEntry[] = [
   { pattern: '/venues/:slug', page: page(() => import('./public/venue'), (m) => m.VenuePage) },
   { pattern: '/cities/:slug', page: page(() => import('./public/city'), (m) => m.CityPage) },
   { pattern: '/daily', page: page(() => import('./daily/ui'), (m) => m.DailyPage) },
+  { pattern: '/daily/room', page: page(() => import('./daily/room'), (m) => m.DailyRoomPage) },
   { pattern: '/settings', page: page(() => import('./social/settings'), (m) => m.SettingsPage) },
   { pattern: '/invite/:code', page: page(() => import('./social'), (m) => m.InvitePage) },
   { pattern: '/welcome', page: page(() => import('./public/landing'), (m) => m.Landing) },

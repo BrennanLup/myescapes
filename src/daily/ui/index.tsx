@@ -1,6 +1,8 @@
 /**
  * Escape of the Day UI (workstream 22).
- * - `DailyPage`: the /daily page, for phones and desktops (no three.js).
+ * - `DailyPage`: the /daily page, for phones and desktops (no three.js), with a "Play in 3D" way
+ *   into the puzzle room (/daily/room, src/daily/room). The 2D game stays as the fallback for
+ *   low-end devices and accessibility.
  * - `DailyCard`: the mobile home-screen card linking to /daily.
  * - The door overlay for the 3D room lives in ./overlay (`DailyOverlay`), so this entry stays
  *   free of the 3D room's store.
@@ -10,6 +12,7 @@ import type { RouteProps } from '../../router'
 import { Link } from '../../router'
 import { formatDuration } from '../engine'
 import { DailyGame, useDailyToday } from './DailyGame'
+import { PlayIn3D } from './Play3D'
 import { loadProgress } from './state'
 
 export { DailyGame, StreakStats } from './DailyGame'
@@ -33,7 +36,10 @@ export function DailyPage(_props: Partial<RouteProps>) {
             My rooms
           </Link>
         </nav>
-        <div className="mt-2 flex-1 rounded-cozy bg-white/60 px-3 py-5 shadow-sm ring-1 ring-panel-edge sm:px-6">
+        <div className="mt-2">
+          <PlayIn3D />
+        </div>
+        <div className="mt-3 flex-1 rounded-cozy bg-white/60 px-3 py-5 shadow-sm ring-1 ring-panel-edge sm:px-6">
           <DailyGame />
         </div>
         <footer className="mt-6 flex justify-center gap-4 text-xs text-ink-soft underline">
