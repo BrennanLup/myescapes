@@ -125,7 +125,7 @@ export const RoomPicker = forwardRef<HTMLInputElement, RoomPickerProps>(function
       if (!rows.length) return
       e.preventDefault()
       setOpen(true)
-      // A closed list reopens on the row that was highlighted; from none, ↓ goes to the first row, ↑ to the last.
+      // From no highlighted row, ↓ goes to the first row and ↑ to the last.
       const d = e.key === 'ArrowDown' ? 1 : -1
       setActive(activeIndex < 0 ? (d > 0 ? 0 : rows.length - 1) : (activeIndex + d + rows.length) % rows.length)
     } else if (e.key === 'Enter' && showList && activeIndex >= 0 && rows[activeIndex]) {

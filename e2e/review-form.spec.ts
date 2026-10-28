@@ -213,6 +213,8 @@ test('review form: room search, photos while reviewing, on the phone and in the 
       } as never)
     })
     await expect(lp.getByTestId('confirm-overlay')).toBeVisible()
+    // The dialog starts with focus on its title, inside the dialog.
+    await expect(lp.getByRole('heading', { name: 'Check your review' })).toBeFocused()
     // Nothing is red before the user has touched anything; the footer says what's still needed.
     await expect(lp.locator('[data-testid^="error-"]')).toHaveCount(0)
     // The features have "Not sure", and it isn't required.
@@ -222,8 +224,6 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     await expect(lp.getByTestId('field-room.genre')).toHaveValue('')
     await expect(lp.getByTestId('error-room.genre')).toHaveCount(0)
     await expect(lp.getByTestId('field-review.ratings.overall.score-slider-hint')).toHaveCount(0)
-    // The dialog starts with focus on its title, inside the dialog.
-    await expect(lp.getByRole('heading', { name: 'Check your review' })).toBeFocused()
     // Keyboard search: nothing is highlighted until ArrowDown, which lands on the first result.
     const search = lp.getByTestId('confirm-room-search')
     await search.fill('Lighth')
