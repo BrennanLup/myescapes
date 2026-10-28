@@ -41,12 +41,39 @@ describe('RoomPicker', () => {
     render(<RoomPicker onPick={onPick} allowCreate onCreate={onCreate} search={async () => ({ games: [game], venues: [venue] })} />)
     await typeAndWait('vault')
     const input = screen.getByRole('combobox')
+    // Nothing is highlighted until an arrow key: the first ↓ lands on the first result.
+    expect(input.getAttribute('aria-activedescendant')).toBeNull()
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(screen.getAllByRole('option')[0].getAttribute('aria-selected')).toBe('true')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onPick).toHaveBeenCalledWith({ kind: 'game', game })
+    fireEvent.focus(input)
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(onPick).toHaveBeenCalledWith({ kind: 'venue', venue })
+    expect(onPick).toHaveBeenLastCalledWith({ kind: 'venue', venue })
     fireEvent.focus(input)
     fireEvent.click(screen.getByTestId('roompicker-option-create'))
     expect(onCreate).toHaveBeenCalledWith('vault')
+  })
+
+  it('Enter on the "Add" row adds, like a click; with no row highlighted Enter is left to the form', async () => {
+    vi.useFakeTimers()
+    const onCreate = vi.fn()
+    const onSubmit = vi.fn((e: { preventDefault(): void }) => e.preventDefault())
+    render(
+      <form onSubmit={onSubmit}>
+        <RoomPicker onPick={() => {}} allowCreate onCreate={onCreate} search={async () => ({ games: [game], venues: [] })} />
+      </form>,
+    )
+    await typeAndWait('lighth')
+    const input = screen.getByRole('combobox')
+    const enter = () => fireEvent.keyDown(input, { key: 'Enter' })
+    expect(enter()).toBe(true) // not prevented: the form may submit
+    fireEvent.keyDown(input, { key: 'ArrowUp' }) // from none, ↑ goes to the last row ("Add")
+    expect(screen.getByTestId('roompicker-option-create').getAttribute('aria-selected')).toBe('true')
+    expect(enter()).toBe(false)
+    expect(onCreate).toHaveBeenCalledWith('lighth')
   })
 
   it('says so when nothing matches or the search fails', async () => {
