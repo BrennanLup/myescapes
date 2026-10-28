@@ -165,7 +165,11 @@ export function DailyRoom({ today, setToday, reload }: { today: DailyToday; setT
             bus.emit('sfx', { name: 'chalk' })
             u.say(`You found a brass ${name}!`, 'good')
           } else u.say('Nothing here.')
-          setRound(res.round)
+          // Update the ref now, not on the next render: a second interact before the repaint
+          // (double click, tap bounce, E plus click) must see this look, not the round before it.
+          const next = res.guess ? roundFromGuesses(c, [...p.progress.guesses, res.guess]) : res.round
+          roundRef.current = next
+          setRound(next)
           if (res.guess) {
             const left = c.slots - c.check(res.guess).filter((m) => m === 'hit').length
             p.guess(res.guess)
