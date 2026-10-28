@@ -9,11 +9,18 @@
  *
  * Runs once (in the `desktop` project), with its own phone and laptop contexts.
  */
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import { SLOW, waitOverlay } from './helpers'
 import { newDevice, person, signIn, waitRoom, watchErrors } from './support/morning'
 
 /** A real PNG drawn in the page, so the browser-side resizer has something to decode. */
+// The phone and laptop contexts come from the worker's shared browser, so close them even when a
+// step fails: a 3D room left open keeps rendering (software WebGL) and starves the next spec.
+const opened: BrowserContext[] = []
+test.afterEach(async () => {
+  for (const c of opened.splice(0)) await c.close().catch(() => {})
+})
+
 async function pngFile(page: Page, name: string, color: string) {
   const b64 = await page.evaluate((c) => {
     const canvas = document.createElement('canvas')
@@ -46,6 +53,7 @@ test('review form: room search, photos while reviewing, on the phone and in the 
   const errors: string[] = []
 
   const phone = await newDevice(browser, baseURL!, 'phone')
+  opened.push(phone)
   await signIn(phone, me, { onboarded: true })
   const pp = await phone.newPage()
   watchErrors(pp, errors)
@@ -137,6 +145,7 @@ test('review form: room search, photos while reviewing, on the phone and in the 
   })
 
   const laptop = await newDevice(browser, baseURL!, 'laptop')
+  opened.push(laptop)
   await signIn(laptop, me, { onboarded: true })
   const lp = await laptop.newPage()
   watchErrors(lp, errors)
