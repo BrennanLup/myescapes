@@ -339,6 +339,7 @@ export function ConfirmStep(p: ConfirmProps) {
 
       <div
         data-testid="confirm-footer"
+        data-reveal-avoid
         className={
           keyboardOpen
             ? 'rounded-2xl border border-panel-edge bg-panel px-4 pt-3 pb-4'
