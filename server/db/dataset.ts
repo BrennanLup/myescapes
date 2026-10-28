@@ -99,7 +99,7 @@ export async function datasetForUser(db: Db, userId: string): Promise<Dataset> {
   return {
     rooms: [...rooms.values()],
     reviews: out,
-    wishlist: wish.map(({ gameId: _gameId, ...w }) => w),
+    wishlist: wish,
     crew: [...crewNames.values()],
     source: 'postgres',
   }
@@ -271,6 +271,9 @@ export async function putWishlistForUser(db: Db, userId: string, items: (Wishlis
             .map((r) => r.id),
         )
       : new Set<string>()
+    // A game id that no longer exists (deleted, or made up by the client) is dropped, not a 500.
+    const gameIds = [...new Set(items.map((i) => i.gameId).filter((g): g is string => !!g))]
+    const knownGames = gameIds.length ? new Set((await tx.select({ id: games.id }).from(games).where(inArray(games.id, gameIds))).map((r) => r.id)) : new Set<string>()
     await tx.delete(wishlistItems).where(eq(wishlistItems.userId, userId))
     if (items.length) {
       await tx.insert(wishlistItems).values(
@@ -283,7 +286,7 @@ export async function putWishlistForUser(db: Db, userId: string, items: (Wishlis
           addedBy: i.addedBy,
           priority: i.priority,
           done: i.done,
-          gameId: i.gameId ?? null,
+          gameId: i.gameId && knownGames.has(i.gameId) ? i.gameId : null,
         })),
       )
     }
