@@ -7,6 +7,7 @@ import { authRoutes } from '../auth'
 import type { AppContext } from '../context'
 import { seoRoutes } from '../seo'
 import { adminRoutes } from './admin'
+import { avatarRoutes } from './avatar'
 import { claimsRoutes } from './claims'
 import { dailyRoutes } from './daily'
 import { directoryRoutes } from './directory'
@@ -46,6 +47,8 @@ export const ROUTE_MODULES: readonly RouteModule[] = [
   { ws: 32, name: 'visits', file: 'server/routes/visits.ts', register: visitsRoutes },
   { ws: 33, name: 'reviews', file: 'server/routes/reviews.ts', register: reviewsRoutes },
   { ws: 34, name: 'claims', file: 'server/routes/claims.ts', register: claimsRoutes },
+  // Phase 3 workstream B (ws 302 = phase 3, workstream 2/B).
+  { ws: 302, name: 'avatar and wardrobe', file: 'server/routes/avatar.ts', register: avatarRoutes },
 ]
 
 export async function registerRoutes(app: FastifyInstance, ctx: AppContext) {

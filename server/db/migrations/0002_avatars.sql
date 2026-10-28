@@ -1,0 +1,18 @@
+CREATE TABLE "avatar_purchases" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"item_id" text NOT NULL,
+	"price" integer NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "avatar_purchases_price_ck" CHECK ("avatar_purchases"."price" > 0)
+);
+--> statement-breakpoint
+CREATE TABLE "avatars" (
+	"user_id" text PRIMARY KEY NOT NULL,
+	"outfit" jsonb NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "avatar_purchases" ADD CONSTRAINT "avatar_purchases_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "avatars" ADD CONSTRAINT "avatars_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "avatar_purchases_user_item_uq" ON "avatar_purchases" USING btree ("user_id","item_id");

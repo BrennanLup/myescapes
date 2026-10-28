@@ -577,3 +577,31 @@ export const usageCounters = pgTable(
 )
 
 export const GLOBAL_SUBJECT = '__global__'
+
+// ---------------------------------------------------------------------------
+// Characters and the wardrobe (Phase 3 workstream B). No real money: keys are earned in the app.
+// ---------------------------------------------------------------------------
+
+/** One saved look per user. `outfit` holds catalogue ids (src/world/avatars/catalog.ts). */
+export const avatars = pgTable('avatars', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  outfit: jsonb('outfit').$type<Record<string, string>>().notNull(),
+  updatedAt: updatedAt(),
+})
+
+/** Wardrobe items bought with keys. `price` is what it cost then (the balance is earned minus spent). */
+export const avatarPurchases = pgTable(
+  'avatar_purchases',
+  {
+    id: id('avp'),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    itemId: text('item_id').notNull(),
+    price: integer('price').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('avatar_purchases_user_item_uq').on(t.userId, t.itemId), check('avatar_purchases_price_ck', sql`${t.price} > 0`)],
+)
