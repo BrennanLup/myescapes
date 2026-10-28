@@ -158,7 +158,7 @@ describe('rayStartDistance', () => {
   })
 })
 
-describe('third-person pitch (no worm's-eye view)', () => {
+describe("third-person pitch (no worm's-eye view)", () => {
   const deg = (d: number) => (d * Math.PI) / 180
 
   it('narrows the look pitch smoothly while blending into third person', () => {

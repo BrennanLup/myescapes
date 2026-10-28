@@ -112,9 +112,10 @@ export function CharacterHud() {
   )
 }
 
+/** Bottom-left of the round button: clear of the camera button above it and the screen edge. */
 function KeyBadge({ n }: { n: number }) {
   return (
-    <span className="absolute -top-1.5 -right-1.5 flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full bg-warn px-1.5 text-[11px] font-extrabold text-ink shadow ring-2 ring-panel">
+    <span data-testid="wardrobe-key-badge" className="absolute -bottom-1.5 -left-2 flex h-6 min-w-6 items-center justify-center gap-0.5 rounded-full bg-warn px-1.5 text-[11px] font-extrabold text-ink shadow ring-2 ring-panel">
       <IconKey width={11} height={11} strokeWidth={2.6} />
       {n}
     </span>

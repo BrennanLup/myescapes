@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_OUTFIT, itemById, OUTFIT_SLOTS } from '@/world/avatars/catalog'
-import { colorApplies, primaryAction, priceLabel, stepIndex, tabItems, TABS } from './logic'
+import { colorApplies, primaryAction, priceLabel, scrollEdges, stepIndex, tabItems, TABS } from './logic'
+
+describe('scrollEdges', () => {
+  it('flags the edges that hide more tabs', () => {
+    expect(scrollEdges({ scrollLeft: 0, scrollWidth: 300, clientWidth: 300 })).toEqual({ start: false, end: false })
+    expect(scrollEdges({ scrollLeft: 0, scrollWidth: 500, clientWidth: 300 })).toEqual({ start: false, end: true })
+    expect(scrollEdges({ scrollLeft: 100, scrollWidth: 500, clientWidth: 300 })).toEqual({ start: true, end: true })
+    expect(scrollEdges({ scrollLeft: 199.5, scrollWidth: 500, clientWidth: 300 })).toEqual({ start: true, end: false })
+  })
+})
 
 describe('tabs', () => {
   it('cover every slot once and every outfit field', () => {

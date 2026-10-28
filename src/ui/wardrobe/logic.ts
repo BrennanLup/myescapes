@@ -80,3 +80,9 @@ export function stepIndex(current: number, key: string, count: number): number |
   if (key === 'End') return count - 1
   return null
 }
+
+/** Which edges of a horizontal scroller hide more content (for the tab strip's fade hints). */
+export function scrollEdges(el: Pick<HTMLElement, 'scrollLeft' | 'scrollWidth' | 'clientWidth'>): { start: boolean; end: boolean } {
+  const max = el.scrollWidth - el.clientWidth
+  return { start: el.scrollLeft > 2, end: max - el.scrollLeft > 2 }
+}

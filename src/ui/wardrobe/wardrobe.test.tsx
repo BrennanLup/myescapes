@@ -137,6 +137,46 @@ describe('WardrobeOverlay', () => {
     expect(closed).toHaveBeenCalled()
   })
 
+  it('asks before throwing away an unsaved look (Escape, Cancel, close button)', async () => {
+    await openLoaded()
+    const closed = vi.fn()
+    const off = bus.on('overlay:close', closed)
+    fireEvent.click(screen.getByTestId('wardrobe-tab-hair'))
+    fireEvent.click(screen.getByTestId('swatch-teal'))
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(closed).not.toHaveBeenCalled()
+    expect(screen.getByTestId('wardrobe-discard').getAttribute('role')).toBe('alertdialog')
+    expect(document.activeElement).toBe(screen.getByTestId('wardrobe-discard-no'))
+    // Escape on the prompt means keep trying on; the look is still there.
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByTestId('wardrobe-discard')).toBeNull()
+    expect(screen.getByTestId('swatch-teal').getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByTestId('wardrobe-cancel'))
+    fireEvent.click(screen.getByTestId('wardrobe-discard-no'))
+    expect(closed).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByTestId('wardrobe-close'))
+    fireEvent.click(screen.getByTestId('wardrobe-discard-yes'))
+    off()
+    expect(closed).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes at once when nothing changed', async () => {
+    await openLoaded()
+    const closed = vi.fn()
+    const off = bus.on('overlay:close', closed)
+    fireEvent.click(screen.getByTestId('wardrobe-cancel'))
+    off()
+    expect(closed).toHaveBeenCalled()
+    expect(screen.queryByTestId('wardrobe-discard')).toBeNull()
+  })
+
+  it('tab strip marks no hidden tabs when everything fits', async () => {
+    await openLoaded()
+    const strip = screen.getByTestId('wardrobe-tabs')
+    expect(strip.getAttribute('data-more-end')).toBe('false')
+    expect(screen.getByTestId('wardrobe-tab-body').className).not.toContain('transition')
+  })
+
   it('undo puts the saved look back', async () => {
     await openLoaded()
     fireEvent.click(screen.getByTestId('wardrobe-random'))
