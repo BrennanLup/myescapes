@@ -20,6 +20,7 @@ import {
   scoreWord,
 } from './helpers'
 import { Badges, EscapeStamp, PaperCard, Puzzles, Ratings, Tools, VoiceNote } from './sections'
+import { VisitPhotos } from './VisitPhotos'
 
 const KEYFRAMES = `
 @keyframes review-fade { from { opacity: 0 } to { opacity: 1 } }
@@ -169,6 +170,8 @@ export function ReviewOverlay({ roomId }: { roomId: string }) {
   const rooms = useStore((s) => s.rooms)
   const reviews = useStore((s) => s.reviews)
   const pins = useStore((s) => s.boardPins)
+  // Signed-in rooms are Postgres-backed: a review id is a visit id, so photos can be added.
+  const signedIn = useStore((s) => s.dataSource === 'postgres')
   const room = useMemo(() => rooms.find((r) => r.id === roomId), [rooms, roomId])
   const review = useMemo(() => latestReviewFor(roomId, reviews), [roomId, reviews])
   const order = useMemo(() => boardOrder(pins, rooms), [pins, rooms])
@@ -224,7 +227,7 @@ export function ReviewOverlay({ roomId }: { roomId: string }) {
         goTo(next)
       } else if (e.key === 'Tab' && dialogRef.current) {
         // Simple focus trap.
-        const focusables = dialogRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), summary, [tabindex]:not([tabindex="-1"])')
+        const focusables = dialogRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), summary, [tabindex]:not([tabindex="-1"])')
         if (focusables.length === 0) return
         const first = focusables[0]
         const last = focusables[focusables.length - 1]
@@ -303,6 +306,11 @@ export function ReviewOverlay({ roomId }: { roomId: string }) {
                   <div className="md:col-span-2">
                     <Puzzles puzzles={review.puzzles} />
                   </div>
+                  {signedIn && (
+                    <div className="md:col-span-2" data-testid="review-photos">
+                      <VisitPhotos key={review.id} visitId={review.id} />
+                    </div>
+                  )}
                   <div className="md:col-span-2">
                     <VoiceNote transcript={review.voiceTranscript} />
                   </div>

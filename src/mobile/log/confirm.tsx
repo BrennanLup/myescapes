@@ -1,10 +1,18 @@
 /**
- * The confirm step of the mobile log flow: shared facts, puzzles, scores, crew, visibility.
- * Flagged fields (the extractor wasn't sure) carry a "Check this" chip.
+ * The confirm step of the mobile log flow: the room, shared facts, puzzles, scores, photos, crew,
+ * visibility. Flagged fields (the extractor wasn't sure) carry a "Check this" chip.
+ *
+ * Every question is on one scrolling page. While the phone keyboard is up the Save bar drops back
+ * into the page flow (so it doesn't ride on top of the keyboard and cover the field), and the
+ * focused field is scrolled into the middle of what is still visible.
  */
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import type { CrewSuggestion, CrewTag, GameSummary, VenueSummary, Visibility } from '../../contracts/models'
 import { PUZZLE_TYPES, PUZZLE_TYPE_LABELS, RATING_KEYS, type PuzzleType } from '../../contracts/types'
+import { useKeyboardOpen, useRevealFocusedField } from '../../ui/confirm/keyboard'
+import { RoomSearch } from '../../ui/confirm/RoomSearch'
+import { PhotoAttach } from '../../ui/photos'
+import type { RoomPick } from '../../ui/roompicker'
 import { CrewPicker } from './crew'
 import { BOOL_FACTS, FACT_LABELS, numOrNull, puzzleKey, RATING_LABELS, todayISO, type FormErrors, type LogForm } from './form'
 
@@ -21,7 +29,12 @@ export interface ConfirmProps {
   notice: string | null
   saving: boolean
   saveError: string | null
+  /** Opens the full matcher (venue lists, add a venue). */
   onChangeGame(): void
+  /** A pick from the inline room search: a game, a venue, or "add a new room" with the typed text. */
+  onChangeRoom?(pick: RoomPick | { kind: 'create'; text: string }): void
+  /** Photo queue key for this draft (src/ui/photos/queue.ts). */
+  photoTarget?: string
   onSave(): void
 }
 
@@ -90,10 +103,14 @@ export function ConfirmStep(p: ConfirmProps) {
   const set = <K extends keyof LogForm>(k: K, v: LogForm[K]) => onChange({ ...form, [k]: v })
   const flagged = (path: string) => flags.includes(path)
   const [tool, setTool] = useState('')
+  const [changingRoom, setChangingRoom] = useState(false)
   const flagCount = flags.length
+  const root = useRef<HTMLDivElement>(null)
+  const keyboardOpen = useKeyboardOpen()
+  useRevealFocusedField(root)
 
   return (
-    <div data-testid="log-confirm" className="space-y-5 pb-28">
+    <div ref={root} data-testid="log-confirm" data-keyboard={keyboardOpen ? 'open' : 'closed'} className={`space-y-5 ${keyboardOpen ? 'pb-6' : 'pb-28'}`}>
       <div className="rounded-2xl bg-white p-4 shadow-sm">
         <p className="text-xs font-bold uppercase tracking-wide text-ink-soft">You played</p>
         <p data-testid="confirm-game" className="font-display text-xl">
@@ -103,9 +120,35 @@ export function ConfirmStep(p: ConfirmProps) {
           {p.venue.name}
           {p.venue.city ? `, ${p.venue.city}` : ''}
         </p>
-        <button type="button" data-testid="confirm-change-game" className="mt-1 text-sm text-teal underline" onClick={p.onChangeGame}>
-          Not right? Change it
-        </button>
+        {changingRoom && p.onChangeRoom ? (
+          <div className="mt-3 space-y-2 border-t border-panel-edge/60 pt-3">
+            <RoomSearch
+              label="Search the room directory"
+              inputTestId="confirm-room-search"
+              inputProps={{ id: 'm-room-search', autoFocus: true }}
+              onPick={(pick) => {
+                setChangingRoom(false)
+                p.onChangeRoom?.(pick)
+              }}
+              onCreate={(text) => {
+                setChangingRoom(false)
+                p.onChangeRoom?.({ kind: 'create', text })
+              }}
+            />
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <button type="button" className="min-h-10 text-ink-soft underline" onClick={() => setChangingRoom(false)}>
+                Keep {p.game.name}
+              </button>
+              <button type="button" data-testid="confirm-browse-directory" className="min-h-10 text-teal underline" onClick={p.onChangeGame}>
+                Browse venues instead
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" data-testid="confirm-change-game" className="mt-1 min-h-10 text-sm text-teal underline" onClick={() => (p.onChangeRoom ? setChangingRoom(true) : p.onChangeGame())}>
+            Not right? Change it
+          </button>
+        )}
       </div>
 
       {p.notice && (
@@ -265,6 +308,13 @@ export function ConfirmStep(p: ConfirmProps) {
         </Field>
       </section>
 
+      {p.photoTarget && (
+        <section className="space-y-2" data-testid="confirm-photos-section">
+          <h3 className="font-display text-lg">Photos</h3>
+          <PhotoAttach target={p.photoTarget} testId="confirm-photos" />
+        </section>
+      )}
+
       <section className="space-y-2">
         <h3 className="font-display text-lg">Who played</h3>
         <CrewPicker value={p.crew} onChange={p.onCrewChange} suggestions={p.crewSuggestions} />
@@ -289,7 +339,14 @@ export function ConfirmStep(p: ConfirmProps) {
         </label>
       </section>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-panel-edge bg-panel/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+      <div
+        data-testid="confirm-footer"
+        className={
+          keyboardOpen
+            ? 'rounded-2xl border border-panel-edge bg-panel px-4 pt-3 pb-4'
+            : 'fixed inset-x-0 bottom-0 border-t border-panel-edge bg-panel/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur'
+        }
+      >
         {p.saveError && (
           <p role="alert" data-testid="confirm-save-error" className="mb-2 text-sm text-bad">
             {p.saveError}

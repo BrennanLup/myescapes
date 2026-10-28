@@ -21,6 +21,7 @@ export interface PhotoAttachProps {
   existing?: readonly PhotoV2[]
   /** The signed-in user's id: their own existing photos get a remove button. */
   meId?: string | null
+  /** Called after one of my photos (already there, or just uploaded here) was deleted. */
   onExistingDeleted?(photoId: string): void
   /** Shown instead of the picker (for example in the signed-out demo). */
   disabledReason?: string | null
@@ -131,7 +132,14 @@ export function PhotoAttach({ target: draftTarget, visitId = null, existing = []
               waitingForSave={!visitId}
               deleting={deleting === it.photo?.id}
               onRetry={() => retry(it.key)}
-              onRemove={() => (it.status === 'done' && it.photo ? void deleteUploaded(it.photo.id, () => remove(it.key)) : remove(it.key))}
+              onRemove={() => {
+                const uploaded = it.status === 'done' ? it.photo : null
+                if (!uploaded) return remove(it.key)
+                void deleteUploaded(uploaded.id, () => {
+                  remove(it.key)
+                  onExistingDeleted?.(uploaded.id)
+                })
+              }}
             />
           ))}
         </ul>
