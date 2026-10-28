@@ -17,6 +17,7 @@ import { useStore } from '@/state/store'
 import { AudioSystem } from '@/audio'
 import { InteractionSystem, Reticle } from '@/interaction'
 import { MobileControls, PlayerController } from '@/player'
+import { CanvasBoundary } from '@/ui/shell/CanvasBoundary'
 import { PerfMonitor } from '@/ui/shell/PerfMonitor'
 import { useShell } from '@/ui/shell/shellStore'
 import { useWardrobe } from '@/ui/wardrobe/store'
@@ -222,18 +223,21 @@ export function DailyRoom({ today, setToday, reload }: { today: DailyToday; setT
   return (
     <div className="fixed inset-0 overflow-hidden bg-[var(--color-night)] select-none" data-testid="daily-room" data-kind={challenge.kind} data-status={progress.status}>
       <style>{ROOM_CSS}</style>
-      <Canvas
-        id="daily-room-canvas"
-        dpr={DPR[quality]}
-        gl={{ antialias: quality !== 'low', powerPreference: 'high-performance' }}
-        camera={{ fov: 70, near: 0.05, far: 40, position: SPAWN.position }}
-        style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
-      >
-        <color attach="background" args={[LIGHT.background]} />
-        <Suspense fallback={null}>
-          <RoomScene play={play} onExit={leave} />
-        </Suspense>
-      </Canvas>
+      {/* A WebGL failure shows a way out instead of a blank page. */}
+      <CanvasBoundary>
+        <Canvas
+          id="daily-room-canvas"
+          dpr={DPR[quality]}
+          gl={{ antialias: quality !== 'low', powerPreference: 'high-performance' }}
+          camera={{ fov: 70, near: 0.05, far: 40, position: SPAWN.position }}
+          style={{ position: 'absolute', inset: 0, touchAction: 'none' }}
+        >
+          <color attach="background" args={[LIGHT.background]} />
+          <Suspense fallback={null}>
+            <RoomScene play={play} onExit={leave} />
+          </Suspense>
+        </Canvas>
+      </CanvasBoundary>
       {worldReady && <RoomHud play={play} />}
       {worldReady && <ControlsHint />}
       {worldReady && <CameraToggle />}

@@ -34,7 +34,7 @@ Today's Escape of the Day as a small room you walk around in, at **`/daily/room`
 | `playStore.ts`, `uiStore.ts` | Small zustand stores: what the 3D props draw; which panel is open |
 | `exit.ts` | Where the exit leads (main room, demo room or `/m?from=daily` on phones) and the hand-over |
 
-Reuses as-is: `PlayerController`, `MobileControls` (src/player), `LocalAvatar` (src/world/avatars), `PerfMonitor` (src/ui/shell), `InteractionSystem`, `Reticle` (src/interaction), `AudioSystem`, shared materials via `getMaterial` (no edits). An open panel sets the shared store's overlay to `{ kind: 'gate' }`, which freezes the controls, hides the reticle and touch controls and releases pointer lock.
+Reuses as-is: `PlayerController`, `MobileControls` (src/player), `LocalAvatar` (src/world/avatars), `PerfMonitor` and `CanvasBoundary` (src/ui/shell; the boundary shows a way out if WebGL fails), `InteractionSystem`, `Reticle` (src/interaction), `AudioSystem`, shared materials via `getMaterial` (no edits). An open panel sets the shared store's overlay to `{ kind: 'gate' }`, which freezes the controls, hides the reticle and touch controls and releases pointer lock.
 
 ## Test hooks
 
