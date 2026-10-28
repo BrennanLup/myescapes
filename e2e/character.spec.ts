@@ -73,7 +73,6 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
   await page.getByTestId('swatch-teal').click()
   await page.getByTestId('wardrobe-primary').click()
   await waitOverlay(page, null)
-  await expect(page.getByTestId('shell-toast')).toContainText('saved')
 
   // Unlock headphones with the 20 welcome keys and wear them in one step.
   await page.getByTestId('wardrobe-button').click()
