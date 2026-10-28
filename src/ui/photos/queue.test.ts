@@ -35,7 +35,8 @@ describe('photo queue', () => {
     expect(statuses('draft:1')).toEqual(['ready', 'ready'])
     expect(uploads).toHaveLength(0)
 
-    q().bind('draft:1', 'vis_1')
+    q().attachToVisit('draft:1', 'vis_1')
+    expect(statuses('draft:1')).toEqual([])
     await flush()
     expect(uploads).toHaveLength(1) // one at a time
     expect(uploads[0].visitId).toBe('vis_1')
@@ -46,7 +47,7 @@ describe('photo queue', () => {
     expect(uploads).toHaveLength(2)
     uploads[1].resolve(photo('pho_2'))
     await flush()
-    expect(statuses('draft:1')).toEqual(['done', 'done'])
+    expect(statuses('visit:vis_1')).toEqual(['done', 'done'])
     expect(q().items.map((i) => i.photo?.id)).toEqual(['pho_1', 'pho_2'])
   })
 
@@ -63,7 +64,6 @@ describe('photo queue', () => {
     const seen = vi.fn()
     onPhotoUploaded(seen)
     q().addFiles('visit:vis_1', [file()])
-    q().bind('visit:vis_1', 'vis_1')
     await flush()
     uploads[0].reject(new TypeError('Failed to fetch'))
     await flush()
@@ -84,7 +84,6 @@ describe('photo queue', () => {
 
   it('treats a full visit or a wrong file type as permanent', async () => {
     q().addFiles('visit:vis_1', [file()])
-    q().bind('visit:vis_1', 'vis_1')
     await flush()
     uploads[0].reject(new ApiCallError(409, { error: 'A visit can hold at most 30 photos.', code: 'conflict' }, '409'))
     await flush()
@@ -101,7 +100,6 @@ describe('photo queue', () => {
 
   it('remove cancels an upload in flight; clear forgets a target and its binding', async () => {
     q().addFiles('visit:vis_1', [file(), file()])
-    q().bind('visit:vis_1', 'vis_1')
     await flush()
     const signal = uploads[0].opts.signal!
     q().remove(q().items[0].key)
@@ -111,6 +109,5 @@ describe('photo queue', () => {
     expect(q().items).toHaveLength(1)
     q().clear('visit:vis_1')
     expect(q().items).toHaveLength(0)
-    expect(q().bound['visit:vis_1']).toBeUndefined()
   })
 })

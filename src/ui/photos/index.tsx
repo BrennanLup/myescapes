@@ -15,6 +15,7 @@ export { PhotoAttach, type PhotoAttachProps } from './PhotoAttach'
 export {
   usePhotoQueue,
   visitTarget,
+  visitOf,
   newDraftTarget,
   onPhotoUploaded,
   summarize,

@@ -5,8 +5,9 @@
  *
  * Items belong to a *target*: a draft key (`draft:...`) for a review that isn't saved yet, or a
  * visit key (`visit:<id>`). Photos are resized as soon as they are picked, so the thumbnails
- * show at once; they upload only when their target is bound to a visit id. `bind(draft, visitId)`
- * is what "upload right after save" calls. Uploads run one at a time, oldest first, which is
+ * show at once; only visit items upload. `attachToVisit(draft, visitId)` is what "upload right
+ * after save" calls: it moves the draft's photos onto the visit, so a failed one can be retried
+ * later from anywhere that shows that visit. Uploads run one at a time, oldest first, which is
  * kindest to a weak phone signal.
  */
 import { create } from 'zustand'
@@ -71,6 +72,8 @@ export function configurePhotoQueue(over: Partial<Deps>): void {
 }
 
 export const visitTarget = (visitId: string) => `visit:${visitId}`
+/** The visit id of a `visit:<id>` target, else null. */
+export const visitOf = (target: string): string | null => (target.startsWith('visit:') ? target.slice(6) || null : null)
 let draftSeq = 0
 export const newDraftTarget = () => `draft:${Date.now().toString(36)}-${++draftSeq}`
 
@@ -84,10 +87,9 @@ export function onPhotoUploaded(fn: Listener): () => void {
 
 interface QueueState {
   items: PendingPhoto[]
-  /** Target -> visit id, once known. */
-  bound: Record<string, string>
   addFiles(target: string, files: Iterable<Blob>, opts?: { slots?: number }): AddResult
-  bind(target: string, visitId: string): void
+  /** Move a draft's photos onto a saved visit and start uploading them. */
+  attachToVisit(target: string, visitId: string): void
   retry(key: string): void
   retryAll(target: string): void
   remove(key: string): void
@@ -134,10 +136,9 @@ export const usePhotoQueue = create<QueueState>()((set, get) => {
     pumping = true
     try {
       for (;;) {
-        const { items, bound } = get()
-        const next = items.find((i) => i.status === 'ready' && bound[i.target])
+        const next = get().items.find((i) => i.status === 'ready' && visitOf(i.target))
         if (!next || !next.resized) break
-        const visitId = bound[next.target]
+        const visitId = visitOf(next.target)!
         const ctl = new AbortController()
         controllers.set(next.key, ctl)
         patch(next.key, { status: 'uploading', progress: 0, error: null })
@@ -167,7 +168,6 @@ export const usePhotoQueue = create<QueueState>()((set, get) => {
 
   return {
     items: [],
-    bound: {},
     addFiles(target, files, opts = {}) {
       const rejected: string[] = []
       const fresh: PendingPhoto[] = []
@@ -196,8 +196,9 @@ export const usePhotoQueue = create<QueueState>()((set, get) => {
       })()
       return { added: fresh.length, rejected }
     },
-    bind(target, visitId) {
-      set((s) => ({ bound: { ...s.bound, [target]: visitId } }))
+    attachToVisit(target, visitId) {
+      const to = visitTarget(visitId)
+      if (target !== to) set((s) => ({ items: s.items.map((i) => (i.target === target ? { ...i, target: to } : i)) }))
       void pump()
     },
     retry(key) {
@@ -227,11 +228,7 @@ export const usePhotoQueue = create<QueueState>()((set, get) => {
     clear(target) {
       const gone = get().items.filter((i) => i.target === target)
       gone.forEach(drop)
-      set((s) => {
-        const bound = { ...s.bound }
-        delete bound[target]
-        return { items: s.items.filter((i) => i.target !== target), bound }
-      })
+      set((s) => ({ items: s.items.filter((i) => i.target !== target) }))
     },
   }
 })
@@ -258,5 +255,5 @@ export function resetPhotoQueueForTests(): void {
   listeners.clear()
   pumping = false
   deps = defaultDeps()
-  usePhotoQueue.setState({ items: [], bound: {} })
+  usePhotoQueue.setState({ items: [] })
 }

@@ -10,9 +10,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type DragEvent } from 'react'
 import type { PhotoV2 } from '@/contracts/models'
 import { ROUTES, callApi } from '@/contracts/routes'
-import { MAX_PHOTOS_PER_VISIT, summarize, usePhotoQueue, type PendingPhoto } from './queue'
+import { MAX_PHOTOS_PER_VISIT, summarize, usePhotoQueue, visitTarget, type PendingPhoto } from './queue'
 
 export interface PhotoAttachProps {
+  /** Queue key while the visit doesn't exist yet (`newDraftTarget()`); ignored once `visitId` is set. */
   target: string
   /** Set once the visit exists: queued photos upload straight away. */
   visitId?: string | null
@@ -33,11 +34,13 @@ const tile = 'relative aspect-square overflow-hidden rounded-xl border-2 border-
 const xBtn =
   'absolute top-1 right-1 grid h-9 w-9 place-items-center rounded-full bg-ink/70 text-base font-bold text-white shadow transition hover:bg-ink focus-visible:outline-3 focus-visible:outline-accent disabled:opacity-50'
 
-export function PhotoAttach({ target, visitId = null, existing = [], meId = null, onExistingDeleted, disabledReason = null, compact = false, testId = 'photo-attach', fetch: fetchImpl }: PhotoAttachProps) {
+export function PhotoAttach({ target: draftTarget, visitId = null, existing = [], meId = null, onExistingDeleted, disabledReason = null, compact = false, testId = 'photo-attach', fetch: fetchImpl }: PhotoAttachProps) {
+  // Once the visit exists its photos live under the visit's key (see attachToVisit).
+  const target = visitId ? visitTarget(visitId) : draftTarget
   const all = usePhotoQueue((s) => s.items)
   const items = useMemo(() => all.filter((i) => i.target === target), [all, target])
   const addFiles = usePhotoQueue((s) => s.addFiles)
-  const bind = usePhotoQueue((s) => s.bind)
+  const attachToVisit = usePhotoQueue((s) => s.attachToVisit)
   const retry = usePhotoQueue((s) => s.retry)
   const retryAll = usePhotoQueue((s) => s.retryAll)
   const remove = usePhotoQueue((s) => s.remove)
@@ -49,8 +52,8 @@ export function PhotoAttach({ target, visitId = null, existing = [], meId = null
   const hintId = useId()
 
   useEffect(() => {
-    if (visitId) bind(target, visitId)
-  }, [visitId, target, bind])
+    if (visitId) attachToVisit(draftTarget, visitId)
+  }, [visitId, draftTarget, attachToVisit])
 
   // Existing photos that also came back from this queue are shown once (as the queue's tile).
   const queued = new Set(items.map((i) => i.photo?.id).filter(Boolean))
