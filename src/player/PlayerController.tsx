@@ -202,6 +202,7 @@ export function PlayerController() {
     if (w && (p.position[0] !== w.position[0] || p.position[1] !== w.position[1] || p.position[2] !== w.position[2] || p.yaw !== w.yaw || p.pitch !== w.pitch)) {
       if (p.position[1] !== w.position[1]) baseY.current = p.position[1]
       s = { ...s, pos: [p.position[0], p.position[2]], vel: [0, 0], yaw: p.yaw, pitch: p.pitch }
+      playerView.bodyYaw = p.yaw
     }
 
     const tp = runtime.pendingTeleport
@@ -215,6 +216,8 @@ export function PlayerController() {
         yaw: tp.yaw ?? s.yaw,
         pitch: tp.pitch ?? s.pitch,
       }
+      // A teleport faces your character the way you now look.
+      playerView.bodyYaw = s.yaw
     }
 
     // Look.
