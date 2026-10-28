@@ -112,3 +112,20 @@ Files: new `src/daily/room/**`, `src/daily/ui/**`, `src/gate/**` as needed, `ser
 - Realtime uses WebSockets on the same Railway service with an in-memory hub; one instance is enough
   for now.
 - Visiting a home is friends-only, read-only.
+- (D) The puzzle room is its own page, `/daily/room`, with its own Canvas, not a mode of the main room:
+  it stays out of the main room's bundle and state, and a full page swap is the simplest clean exit.
+- (D) It is built inside the main room's 20 x 16 m player bounds with its own wall colliders, because
+  the player controller always clamps to those bounds and `src/player` is not ours to change.
+- (D) Play logic is shared with the 2D game through `useDailyPlay`; no server or contract changes,
+  so the result, streaks and leaderboards go through the existing daily API.
+- (D) Props talk to the page through the generic `interact` event with `daily:*` ids (no new event
+  types in the orchestrator's contract); an open panel reuses overlay kind `gate` to freeze controls.
+- (D) Search days keep the 2D rules (one look per missing target per round, rounds are guesses) so
+  the share grid and scoring mean the same in 2D and 3D.
+- (D) A failed day still opens the exit door (with the answer shown), so nobody is stuck in the room.
+- (D) The exit goes to `/?autostart=1` (signed out: `/?demo=1&autostart=1`) to skip the main room's
+  "Enter" button, arriving just inside your own daily door; phones follow the usual `/` rule and land
+  on `/m` (signed out: its sign-in screen), since forcing the 3D room would change their saved
+  view preference.
+- (D) Small shared edits: one route line in `src/router.tsx`, one `<DailyWelcome />` mount in
+  `src/App.tsx` (the "welcome home" toast), and a "Play in 3D" link in the door overlay and on `/daily`.
