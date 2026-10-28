@@ -112,6 +112,7 @@ describe('applyMessage', () => {
     apply({ type: 'left', home: 'robin', reason: 'kicked' })
     expect(useRealtime.getState().home).toBeNull()
     expect(toast()).toBe('Robin asked you to leave their room.')
+    expect(useRealtime.getState().joinError?.message).toBe('Robin asked you to leave their room.')
   })
 })
 
