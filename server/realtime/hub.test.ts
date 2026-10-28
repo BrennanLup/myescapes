@@ -327,6 +327,50 @@ describe('realtime hub: state, chat, emotes', () => {
     expect(a.peer.last('outfit')).toEqual({ type: 'outfit', sid: b.conn.sid, outfit: { hair: 'bob', hairColor: '#222222' } })
   })
 
+  it('with saved looks, shows only the saved look and treats outfit messages as "reload mine"', async () => {
+    const graph = new Graph()
+    const saved = new Map<string, Record<string, string>>([['alice', { hat: 'none' }], ['bob', { hat: 'hat-beanie' }]])
+    let failing = false
+    const access: HubAccess = {
+      homeOwner: (h) => graph.homeOwner(h),
+      visitAccess: (v, o) => graph.visitAccess(v, o),
+      friendIds: (u) => graph.friendIds(u),
+      outfitFor: async (id) => {
+        if (failing) throw new Error('db down')
+        return saved.get(id) ?? null
+      },
+    }
+    const t = 1_000_000
+    const hub = new RealtimeHub({ access, now: () => t, log: () => {} })
+    const open = async (u: PublicUser) => {
+      const peer = new FakePeer()
+      const conn = hub.connect(u, peer)
+      await conn.ready
+      return { peer, conn }
+    }
+    const send = (conn: Connection, msg: unknown) => hub.message(conn, JSON.stringify(msg))
+    const a = await open(U.alice)
+    await send(a.conn, { type: 'join', home: 'alice' })
+    const b = await open(U.bob)
+    // A modified client claims a priced hat it never bought.
+    await send(b.conn, { type: 'join', home: 'alice', outfit: { hat: 'hat-crown' } })
+    expect(a.peer.last('player_joined')!.player.outfit).toEqual({ hat: 'hat-beanie' })
+    expect(b.peer.last('joined')!.players[0].outfit).toEqual({ hat: 'none' })
+
+    await send(b.conn, { type: 'outfit', outfit: { hat: 'hat-crown' } })
+    expect(a.peer.last('outfit')).toEqual({ type: 'outfit', sid: b.conn.sid, outfit: { hat: 'hat-beanie' } })
+    // After a real save the reload shows the new look.
+    saved.set('bob', { hat: 'hat-cap' })
+    await send(b.conn, { type: 'outfit', outfit: { hat: 'hat-crown' } })
+    expect(a.peer.last('outfit')!.outfit).toEqual({ hat: 'hat-cap' })
+    // A failed reload keeps the current look and says nothing.
+    failing = true
+    a.peer.clear()
+    await send(b.conn, { type: 'outfit', outfit: { hat: 'hat-crown' } })
+    expect(a.peer.of('outfit')).toEqual([])
+    expect(b.peer.last('error')).toBeUndefined()
+  })
+
   it('answers ping with pong and the server time', async () => {
     const { b, send, now } = await room()
     await send(b.conn, { type: 'ping', n: 7 })

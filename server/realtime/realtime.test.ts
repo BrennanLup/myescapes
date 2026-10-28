@@ -10,6 +10,7 @@ import { ServerMessageSchema, type ServerMessage } from '../../src/contracts/rea
 import { friendships } from '../db/schema'
 import { pair } from '../db/fixtures'
 import { buildTestApp, TEST_USER_HEADER, type TestApp } from '../testing'
+import { starterOutfit } from '../../src/world/avatars/catalog'
 import { hubFor, originAllowed } from './index'
 
 class Client {
@@ -152,6 +153,23 @@ describe('homes over the socket', () => {
     bob.close()
     const left = await alice.next('player_left')
     expect(left).toMatchObject({ sid: joinedB.sid, reason: 'disconnected' })
+    alice.close()
+    await offline(t.fx.users.alice)
+  })
+
+  it('shows the look you saved, never one a client sends (no wearing items you do not own)', async () => {
+    const alice = await open(t.fx.users.alice)
+    alice.send({ type: 'join', home: 'alice' })
+    await alice.next('joined')
+    const bob = await open(t.fx.users.bob)
+    bob.send({ type: 'join', home: 'alice', outfit: { ...starterOutfit(t.fx.users.bob), hair: 'hair-mohawk' } })
+    await bob.next('joined')
+    const joined = await alice.next('player_joined')
+    expect(joined.player.outfit).toEqual(starterOutfit(t.fx.users.bob))
+    bob.send({ type: 'outfit', outfit: { ...starterOutfit(t.fx.users.bob), hair: 'hair-mohawk' } })
+    expect((await alice.next('outfit')).outfit).toEqual(starterOutfit(t.fx.users.bob))
+    bob.close()
+    await alice.next('player_left')
     alice.close()
     await offline(t.fx.users.alice)
   })

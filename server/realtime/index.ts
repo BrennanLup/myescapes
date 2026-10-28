@@ -11,9 +11,10 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteOptions } from 'fastify'
 import type { PublicUser } from '../../src/contracts/models'
-import { CLOSE_CODES, REALTIME_PATH } from '../../src/contracts/realtime'
+import { CLOSE_CODES, REALTIME_PATH, type RealtimeOutfit } from '../../src/contracts/realtime'
 import type { AppContext } from '../context'
 import { httpError } from '../http'
+import { outfitForUser } from '../routes/avatar.lib'
 import { acceptedFriendIds, homeOwnerByHandle, visitAccess } from './access'
 import { RealtimeHub, type HubAccess, type HubLimits } from './hub'
 
@@ -39,6 +40,8 @@ export function dbAccess(ctx: AppContext): HubAccess {
     homeOwner: (handle) => homeOwnerByHandle(ctx.db(), handle),
     visitAccess: (viewerId, ownerId) => visitAccess(ctx.db(), viewerId, ownerId),
     friendIds: (userId) => acceptedFriendIds(ctx.db(), userId),
+    // Others only ever see the look you saved (and so own), never one a client made up.
+    outfitFor: async (userId) => (await outfitForUser(ctx.db(), userId)).outfit as RealtimeOutfit,
   }
 }
 
