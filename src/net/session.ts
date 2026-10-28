@@ -115,8 +115,15 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       poses.clear()
       const home = rt.home
       set({ home: null, players: {}, bubbles: {}, emotes: {} })
-      if (msg.reason === 'kicked' && home) toast(`${firstName(home.owner)} asked you to leave their room.`)
-      else if (msg.reason === 'removed' && home) toast(`You left ${firstName(home.owner)}'s room.`)
+      if (msg.reason === 'kicked' && home) {
+        const message = `${firstName(home.owner)} asked you to leave their room.`
+        set({ joinError: { code: 'forbidden', message } })
+        toast(message)
+      } else if (msg.reason === 'removed' && home) {
+        const message = `You left ${firstName(home.owner)}'s room.`
+        set({ joinError: { code: 'not_friends', message } })
+        toast(message)
+      }
       else if (msg.reason === 'replaced') toast('You opened this room in another tab, so this one stepped out.')
       return
     }

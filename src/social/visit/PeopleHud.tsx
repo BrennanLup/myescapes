@@ -66,6 +66,8 @@ export function PeopleHud() {
   const visiting = useStore((s) => s.visiting)
   const isTouch = useStore((s) => s.isTouch)
   const [panel, setPanel] = useState<Panel>(null)
+  // Bumped by T / Enter so a chat box that lost focus (a click into the room) takes it back.
+  const [chatFocus, setChatFocus] = useState(0)
   const online = status !== 'off'
 
   useEffect(() => {
@@ -87,9 +89,12 @@ export function PeopleHud() {
         return
       }
       if (isTypingTarget(e.target)) return
-      if (e.code === 'KeyT' || e.key === 'Enter') {
+      // Enter on a focused button or link must still press it: only take it from the room itself.
+      const fromRoom = !(e.target instanceof Element) || e.target === document.body || e.target instanceof HTMLCanvasElement
+      if (e.code === 'KeyT' || (e.key === 'Enter' && fromRoom)) {
         e.preventDefault()
         setPanel('chat')
+        setChatFocus((n) => n + 1)
       } else if (e.code === 'KeyF') {
         e.preventDefault()
         toggle('people')
@@ -107,7 +112,7 @@ export function PeopleHud() {
         isTouch ? (
           <TouchControls panel={panel} toggle={toggle} close={() => setPanel(null)} />
         ) : (
-          <DesktopDock panel={panel} toggle={toggle} close={() => setPanel(null)} />
+          <DesktopDock panel={panel} toggle={toggle} close={() => setPanel(null)} chatFocus={chatFocus} />
         )
       ) : null}
     </>
@@ -183,14 +188,14 @@ function VisitBanner({ touch }: { touch: boolean }) {
 // Desktop
 // ---------------------------------------------------------------------------
 
-function DesktopDock({ panel, toggle, close }: { panel: Panel; toggle(p: Exclude<Panel, null>): void; close(): void }) {
+function DesktopDock({ panel, toggle, close, chatFocus }: { panel: Panel; toggle(p: Exclude<Panel, null>): void; close(): void; chatFocus: number }) {
   const players = useRealtime((s) => s.players)
   const unread = useRealtime((s) => s.unread)
   const count = Object.keys(players).length
   return (
     <div className="pointer-events-none fixed z-30 flex flex-col items-start gap-2 font-body text-ink" style={{ left: SAFE.left, bottom: SAFE.bottom }}>
       {panel === 'people' ? <PeoplePanel onClose={close} className="w-[340px]" /> : null}
-      <ChatArea open={panel === 'chat'} onClose={close} />
+      <ChatArea open={panel === 'chat'} onClose={close} focusKey={chatFocus} />
       <div data-testid="people-dock" className="flex items-center gap-2">
         <button
           type="button"
@@ -211,7 +216,9 @@ function DesktopDock({ panel, toggle, close }: { panel: Panel; toggle(p: Exclude
           </span>
           <AvatarStack players={players} />
           <span className="text-sm font-bold">{count ? `${count + 1} here` : 'Friends'}</span>
-          <Kbd on={panel === 'people'}>F</Kbd>
+          <span className="hidden xl:inline">
+            <Kbd on={panel === 'people'}>F</Kbd>
+          </span>
         </button>
         <button
           type="button"
@@ -230,8 +237,10 @@ function DesktopDock({ panel, toggle, close }: { panel: Panel; toggle(p: Exclude
           <span className={`flex h-8 w-8 items-center justify-center rounded-full ${panel === 'chat' ? 'bg-white/15' : 'bg-[rgba(224,123,57,.14)] text-accent'}`}>
             <IconChat width={20} height={20} />
           </span>
-          <span className="text-sm font-bold">Chat</span>
-          <Kbd on={panel === 'chat'}>T</Kbd>
+          <span className="hidden text-sm font-bold xl:inline">Chat</span>
+          <span className="hidden xl:inline">
+            <Kbd on={panel === 'chat'}>T</Kbd>
+          </span>
           {unread && panel !== 'chat' ? <Badge n={unread} /> : null}
         </button>
         <div role="group" aria-label="Emotes" className="pointer-events-auto flex items-center gap-1 rounded-full bg-panel/90 p-1 shadow-[0_6px_18px_rgba(40,20,20,.28)] ring-1 ring-panel-edge backdrop-blur">
@@ -315,7 +324,7 @@ function useNow(ms: number, active: boolean): number {
   return now
 }
 
-function ChatArea({ open, onClose }: { open: boolean; onClose(): void }) {
+function ChatArea({ open, onClose, focusKey }: { open: boolean; onClose(): void; focusKey: number }) {
   const chat = useRealtime((s) => s.chat)
   const recent = useNow(1000, !open && chat.length > 0)
   const lines = open ? chat.slice(-12) : chat.filter((l) => recent - l.at < LOG_LINGER_MS).slice(-5)
@@ -324,9 +333,9 @@ function ChatArea({ open, onClose }: { open: boolean; onClose(): void }) {
   }, [open, chat.length])
   if (!open && !lines.length) return null
   return (
-    <div data-testid="chat-area" className={`pointer-events-auto flex w-[min(380px,calc(100vw-24px))] flex-col gap-2 ${open ? 'rounded-[var(--radius-cozy)] bg-panel/95 p-3 shadow-cozy ring-1 ring-panel-edge backdrop-blur' : ''}`}>
+    <div data-testid="chat-area" className={`flex w-[min(380px,calc(100vw-24px))] flex-col gap-2 ${open ? 'pointer-events-auto rounded-[var(--radius-cozy)] bg-panel/95 p-3 shadow-cozy ring-1 ring-panel-edge backdrop-blur' : 'pointer-events-none'}`}>
       <ChatLog lines={lines} faded={!open} />
-      {open ? <ChatInput onClose={onClose} autoFocus /> : null}
+      {open ? <ChatInput onClose={onClose} focusKey={focusKey} /> : null}
     </div>
   )
 }
@@ -351,14 +360,14 @@ function ChatLog({ lines, faded }: { lines: ChatLine[]; faded: boolean }) {
   )
 }
 
-function ChatInput({ onClose, autoFocus }: { onClose(): void; autoFocus?: boolean }) {
+function ChatInput({ onClose, focusKey = 0 }: { onClose(): void; focusKey?: number }) {
   const [text, setText] = useState('')
   const [note, setNote] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const id = useId()
   useEffect(() => {
-    if (autoFocus) input.current?.focus({ preventScroll: true })
-  }, [autoFocus])
+    input.current?.focus({ preventScroll: true })
+  }, [focusKey])
   const left = REALTIME_LIMITS.CHAT_MAX_LENGTH - Array.from(text).length
   const submit = () => {
     if (!text.trim()) {
@@ -692,7 +701,7 @@ function TouchChat({ onClose }: { onClose(): void }) {
       <div className="max-h-[30vh] overflow-y-auto">
         <ChatLog lines={chat.slice(-20)} faded={false} />
       </div>
-      <ChatInput onClose={onClose} autoFocus />
+      <ChatInput onClose={onClose} />
     </div>
   )
 }
