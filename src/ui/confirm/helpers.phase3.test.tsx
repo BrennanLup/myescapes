@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -100,5 +102,14 @@ describe('directory link in the form', () => {
     expect(v.room).toMatchObject({ name: 'The Clockmaker', company: 'Lockbox Austin', city: 'Austin', address: '9 Lake St' })
     expect(newRoomNamed(v, '  Moon Base ').room.name).toBe('Moon Base')
     expect(newRoomNamed(v, 'x').link).toBeNull()
+  })
+})
+
+describe('privacy page: Near me', () => {
+  it('says the position is asked for, rounded and not stored', () => {
+    const html = readFileSync(resolve(__dirname, '../../../public/privacy.html'), 'utf8')
+    expect(html).toMatch(/Near me/)
+    expect(html).toMatch(/rounded to about 1 km/)
+    expect(html).toMatch(/don't store it/)
   })
 })
