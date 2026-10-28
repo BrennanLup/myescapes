@@ -249,7 +249,8 @@ function RoomScene({ play, onExit }: { play: DailyPlayApi; onExit(): void }) {
       <HintBell />
       <Plaque c={c} />
       <Furniture searchSymbol={c.kind === 'search' ? c.data.symbol : null} />
-      <PlayerController />
+      {/* No character is drawn in here, so a remembered third-person view would look at nothing. */}
+      <PlayerController firstPersonOnly />
       <InteractionSystem />
       <ExitWatcher onExit={onExit} />
     </>

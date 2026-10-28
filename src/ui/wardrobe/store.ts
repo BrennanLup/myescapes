@@ -132,7 +132,10 @@ export const useWardrobe = create<WardrobeState>()((set, get) => {
  */
 export function installWardrobeSync(notify: (earned: number) => void): () => void {
   const w = () => useWardrobe.getState()
+  // Loaded before (say, before a solved Escape of the Day on another page): refresh quietly so the
+  // key count isn't stale when the HUD comes back.
   if (w().status === 'idle') void w().load()
+  else if (w().signedIn) void w().load({ quiet: true })
   let timer: ReturnType<typeof setTimeout> | null = null
   const refresh = () => {
     if (!w().signedIn) return

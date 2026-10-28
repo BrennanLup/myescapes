@@ -34,7 +34,12 @@ function controlsEnabled() {
   return selectControlsEnabled(useStore.getState())
 }
 
-export function PlayerController() {
+export interface PlayerControllerProps {
+  /** Pin the camera to first person and ignore `V` (rooms that don't draw your character). */
+  firstPersonOnly?: boolean
+}
+
+export function PlayerController({ firstPersonOnly = false }: PlayerControllerProps = {}) {
   const gl = useThree((s) => s.gl)
   const held = useRef(new Set<string>())
   const look = useRef({ x: 0, y: 0 })
@@ -67,7 +72,7 @@ export function PlayerController() {
       if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
       const code = eventCode(e)
       if (code === 'KeyV') {
-        if (!e.repeat && controlsEnabled()) useCameraMode.getState().toggle()
+        if (!e.repeat && !firstPersonOnly && controlsEnabled()) useCameraMode.getState().toggle()
         return
       }
       if (!isMoveKey(code) || !controlsEnabled()) return
@@ -97,7 +102,7 @@ export function PlayerController() {
       document.removeEventListener('visibilitychange', onVisibility)
       unsub()
     }
-  }, [])
+  }, [firstPersonOnly])
 
   // Mouse: pointer lock with click-and-drag fallback.
   useEffect(() => {
@@ -243,7 +248,8 @@ export function PlayerController() {
 
     const speed = speedOf(s)
     const view = playerView
-    const mode = useCameraMode.getState().mode
+    // The remembered choice stays as is for rooms that do draw you.
+    const mode = firstPersonOnly ? 'first' : useCameraMode.getState().mode
     view.mode = mode
     const dt = Math.min(Math.max(delta, 0), 0.25)
     const blendStep = dt / THIRD_PERSON.blendSeconds
