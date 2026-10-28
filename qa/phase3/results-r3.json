@@ -1,0 +1,229 @@
+{
+  "review-desktop": {
+    "errors": [
+      "http POST /api/visits/vis_Ft8hIQLoC5O6ohsdCTsj/photos -> 500"
+    ],
+    "audit": [
+      "desktop room search: ArrowDown + Enter did not pick a result"
+    ],
+    "info": [
+      "desktop form visible fields before typing 51, while typing 51; sections 9->9: Check your review | 🗝Room | 📅Visit | 🏁Outcome & features | 🔦Tools | ⭐Ratings | 🧩Puzzles | 📷Photos | 🎙Transcript",
+      "desktop search first result after 36 ms",
+      "desktop search options: [\"roompicker-option-game:🗝️The Last Lighthouse KeeperFog City Escapes · San Francisc\",\"roompicker-option-venue:🏢Escape Room - The LighthouseOostduinkerke, BE · venue\",\"roompicker-option-venue:🏢Lighthouse QuestOdessa, UA · venue\",\"roompicker-option-venue:🏢Dark Light InvestigationParis, FR · venue\",\"roompicker-option-venue:🏢Green Light Escape RoomWilmington, US · venue\",\"roompicker-option-venue:🏢Lights Out Escape Rooms and Social LoungeLittleton, US · v\",\"roompicker-option-create:＋Add “Lighth” (not in the directory)\"]",
+      "desktop picker keyboard Enter -> linked: null",
+      "desktop queued photos: 2 photos will upload when you save.\n\n●\nx.txt isn't a photo, so it was skipped.",
+      "desktop: errors after pressing disabled Save: [\"error-review.ratings.setting.score:Set a setting score\",\"error-review.ratings.storyline.score:Set a storyline score\",\"error-review.ratings.difficulty.score:Set a difficulty score\"]",
+      "desktop: focused after Save: field-review.ratings.setting.score-slider",
+      "desktop save aria-disabled before save: null",
+      "after save (one upload forced to fail 1x): [{\"id\":\"vis_Ft8hIQLoC5O6ohsdCTsj\",\"room\":\"The Last Lighthouse Keeper\",\"photos\":1}]",
+      "toasts after save: []",
+      "retry clicked in review overlay",
+      "review attach status: ✓ ✓ Add more photos 3 of 30 · or drop them here Edit photos 2 photos added.",
+      "server photo counts per review: [3]",
+      "keys before {\"status\":200,\"keys\":20} after logging {\"status\":200,\"keys\":30}",
+      "desktop: Escape on an edited form -> overlay confirm, discard prompt 1"
+    ],
+    "ok": true,
+    "ms": 427299
+  },
+  "review-phone": {
+    "errors": [
+      "http POST /api/visits/vis_HmLnBcgkonlSLXt5qzGt/photos -> 503"
+    ],
+    "audit": [
+      "phone photos: 1 visible controls smaller than 32px: photo-input(1x1)",
+      "phone room detail: 1 visible controls smaller than 32px: review-transcript-toggle(197x20)",
+      "room detail: removing a photo shows no Undo"
+    ],
+    "info": [
+      "phone form headings: Scores | Puzzles | Features | Photos | Who played | Who can see your review",
+      "keyboard-sim: field {\"x\":16,\"y\":403,\"width\":358,\"height\":38} footer {\"x\":16,\"y\":1951,\"width\":358,\"height\":90}",
+      "phone remove-photo button size: {\"x\":88,\"y\":339,\"width\":40,\"height\":40}",
+      "done (2nd upload failed): Saved! Golden Gate Vault Job is pinned to your board. Your review shows on its public page. See the public page +10 keys · you have 30 Spend them on new looks in the wardrobe: it's in your 3D room, behind the hanger button. Open the wardrobe in my 3D room Photos ✓ × The server is having a moment. Try again shortly. Retry × ✓ × Add more photos 3 of 30 1 photo didn't upload. Back to my rooms",
+      "after retry: Saved! Golden Gate Vault Job is pinned to your board. Your review shows on its public page. See the public page +10 keys · you have 30 Spend them on new looks in the wardrobe: it's in your 3D room, behind the hanger button. Open the wardrobe in my 3D room Photos ✓ × ✓ × ✓ × Add more photos 3 of 30 3 photos added. Back to my rooms",
+      "room detail photos: ✓ Add more photos 4 of 30 Edit photos 1 photo added.",
+      "during undo window: × × ✓ × Add more photos 3 of 30 Done 1 photo added."
+    ],
+    "ok": true,
+    "ms": 418003
+  },
+  "character-desktop": {
+    "errors": [
+      "http PUT /api/me/avatar -> 403"
+    ],
+    "audit": [
+      "desk: wardrobe did not close after unlock"
+    ],
+    "info": [
+      "desk: camera toggle label \"Switch to third person (V)\" text \"First person\nV\"",
+      "desk: position after walking [0,1.6,7.51]",
+      "desk: camera distance near wall/corner 0 = 0.25",
+      "desk: camera distance near wall/corner 1 = 0.21",
+      "desk: camera distance near wall/corner 2 = 0.51",
+      "desk: after reload camera blend 1 (1 = third person kept)",
+      "desk: door hover took 5486 ms",
+      "desk: hovered in third person at the door: gate:door",
+      "desk key balance: 20 keys",
+      "desk earn info: Earn keys to unlock more 10 keys for every room you log and 5 for each Escape of the Day you solve. Keys are only for the wardrobe: no real money, ever. So far: 20 earned (20 welcome, 0 rooms, 0 puzzles), 0 spent.",
+      "desk priced items: [\"hair-afro:Big afro, locked, 15 keys\",\"hair-mohawk:Mohawk, locked, 25 keys\",\"top-jersey:Crew jersey, locked, 20 keys\",\"top-jacket:Bomber jacket, locked, 30 keys\",\"top-trench:Detective trench, locked, 50 keys\",\"bottom-cargo:Cargo pants, locked, 15 keys\",\"shoes-hightops:High-tops, locked, 15 keys\",\"shoes-slippers:Bunny slippers, locked, 35 keys\",\"hat-detective:Detective hat, locked, 30 keys\",\"hat-tophat:Top hat, locked, 45 keys\",\"hat-crown:Escape crown, locked, 120 keys\",\"acc-headphones:Headphones, locked, 10 keys\",\"acc-scarf:Scarf, locked, 15 keys\",\"acc-backpack:Backpack, locked, 20 keys\",\"acc",
+      "desk: most expensive top-trench (50) primary \"Unlock Detective trench · 50\" disabled=true",
+      "desk: PUT unowned item -> {\"status\":403,\"body\":\"{\\\"error\\\":\\\"Unlock Detective trench with keys before wearing it.\\\",\\\"code\\\":\\\"forbidden\\\"}\"}",
+      "desk primary: Unlock Headphones · 10",
+      "desk after unlock: {\"status\":200,\"keys\":10}"
+    ],
+    "ok": false,
+    "failure": "locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByTestId('wardrobe-button')\u001b[22m\n\n    at character (/home/user/myescapes/.claude/worktrees/wf_b00be21f-9c7-1/qa/phase3/p3-e2e-3.mjs:494:42)\n    at async character-desktop (/home/user/myescapes/.claude/worktrees/wf_b00be21f-9c7-1/qa/phase3/p3-e2e-3.mjs:361:38)\n    at async file:///home/user/myescapes/.claude/worktrees/wf_b00be21f-9c7-1/qa/phase3/p3-e2e-3.mjs:820:9",
+    "ms": 440507
+  },
+  "character-phone": {
+    "errors": [
+      "http PUT /api/me/avatar -> 403"
+    ],
+    "audit": [
+      "phone room first person: 1 visible controls smaller than 32px: mode-badge(117x24)",
+      "phone: wardrobe did not close after unlock"
+    ],
+    "info": [
+      "phone: camera toggle label \"Switch to third person (V)\" text \"\"",
+      "phone: position after walking [0,1.6,-7.51]",
+      "phone: camera distance near wall/corner 0 = 0.30",
+      "phone: camera distance near wall/corner 1 = 0.26",
+      "phone: camera distance near wall/corner 2 = 0.64",
+      "phone: after reload camera blend 1 (1 = third person kept)",
+      "phone: door hover took 888 ms",
+      "phone: hovered in third person at the door: gate:door",
+      "phone key balance: 20 keys",
+      "phone earn info: Earn keys to unlock more 10 keys for every room you log and 5 for each Escape of the Day you solve. Keys are only for the wardrobe: no real money, ever. So far: 20 earned (20 welcome, 0 rooms, 0 puzzles), 0 spent.",
+      "phone priced items: [\"hair-afro:Big afro, locked, 15 keys\",\"hair-mohawk:Mohawk, locked, 25 keys\",\"top-jersey:Crew jersey, locked, 20 keys\",\"top-jacket:Bomber jacket, locked, 30 keys\",\"top-trench:Detective trench, locked, 50 keys\",\"bottom-cargo:Cargo pants, locked, 15 keys\",\"shoes-hightops:High-tops, locked, 15 keys\",\"shoes-slippers:Bunny slippers, locked, 35 keys\",\"hat-detective:Detective hat, locked, 30 keys\",\"hat-tophat:Top hat, locked, 45 keys\",\"hat-crown:Escape crown, locked, 120 keys\",\"acc-headphones:Headphones, locked, 10 keys\",\"acc-scarf:Scarf, locked, 15 keys\",\"acc-backpack:Backpack, locked, 20 keys\",\"acc",
+      "phone: most expensive top-trench (50) primary \"Unlock · 50\" disabled=true",
+      "phone: PUT unowned item -> {\"status\":403,\"body\":\"{\\\"error\\\":\\\"Unlock Detective trench with keys before wearing it.\\\",\\\"code\\\":\\\"forbidden\\\"}\"}",
+      "phone primary: Unlock · 10",
+      "phone: after unlock message \"Unlocked Headphones. Unlock the rest to wear this look.\" overlay wardrobe",
+      "phone: saved outfit after closing: accessory=acc-none top=top-sweater",
+      "phone after unlock: {\"status\":200,\"keys\":10}",
+      "phone: Escape with unsaved change -> overlay wardrobe, discard prompt 1",
+      "phone demo wardrobe text: Wardrobe Drag to turn Skin Hair Top Bottom Shoes Hat Extras › SKIN TONE Earn keys to unlock more 10 keys for every room you log and 5 for each Escape of the Day you solve. Keys are only for the wardrobe: no real money, ever. Sign in to earn keys and "
+    ],
+    "ok": true,
+    "ms": 409480
+  },
+  "multiplayer": {
+    "errors": [],
+    "audit": [
+      "mp-desk: host got no visible \"Blake is in your room\" notice within 10 s of the guest arriving"
+    ],
+    "info": [
+      "mp-desk: host row online=true text=AH Avery Host Online. In their room · 1 in their room Visit",
+      "mp-desk: visit to room ready in 43913 ms",
+      "mp-desk: arrival notice wait 10007 ms",
+      "mp-desk: host arrival notice: []",
+      "mp-desk: guest overlay after pressing R: null",
+      "mp-desk: host board pins visible to guest: 0",
+      "mp-desk: host chat log tail: BlakeHello from the guest! Nice room Blake<img src=x onerror=alert(1)> 你好 👋🏽",
+      "mp-desk: guest unread badge: none",
+      "mp-desk: host sees guest move [0,0,0] -> [0,0,2.46]",
+      "mp-desk: host people panel: People HERE NOW · YOUR ROOM AH Avery Host You · host BG Blake Guest @r3mdb_e028m Visiting Ask to leave VISIT A FRIEND BG Blake Guest Online. In this room Here with you",
+      "mp-desk: back home -> http://localhost:3301/?autostart=1",
+      "mp-desk: host saw guest leave after 4 ms",
+      "mp-desk: settings row: BG Blake Guest (@r3mdb_e028m) In their room · 0 rooms together Visit room Always add Blake Guest's visits to my room Unfriend Block online=true",
+      "mp-desk: guest sees host arrive in their room: true",
+      "mp-desk: guest unfriends host -> 200",
+      "mp-desk: after unfriend, host-as-visitor removed: true after 15606 ms"
+    ],
+    "ok": true,
+    "ms": 455714
+  },
+  "multiplayer-phone": {
+    "errors": [],
+    "audit": [
+      "mp-phone /m friends online: 2 visible controls smaller than 32px: view-on-desktop(176x20), Sign out(52x20)",
+      "mp-phone /m friends online: button text clipped: notifications-badge",
+      "mp-phone phone visiting from /m: 1 visible controls smaller than 32px: mode-badge(117x24)",
+      "mp-phone phone visiting from /m: button text clipped: people-button",
+      "mp-phone guest own room: 1 visible controls smaller than 32px: mode-badge(117x24)",
+      "mp-phone people panel: 1 visible controls smaller than 32px: mode-badge(117x24)",
+      "mp-phone: host got no visible \"Blake is in your room\" notice within 10 s of the guest arriving",
+      "mp-phone guest visiting: 1 visible controls smaller than 32px: mode-badge(117x24)",
+      "mp-phone guest visiting: button text clipped: people-button"
+    ],
+    "info": [
+      "mp-phone: links to /home/r3mpa_eagen on /m: 1; card: Friends online 1 AH Avery Host In their room Visit",
+      "mp-phone: phone visit landing text: @r3mpa_eagen HOST My Escapes every room we ever broke out of The room is ready. 100%",
+      "mp-phone: host row online=true text=AH Avery Host Online. In their room · 1 in their room Visit",
+      "mp-phone: visit to room ready in 39547 ms",
+      "mp-phone: arrival notice wait 10002 ms",
+      "mp-phone: host toasts so far: [\"Blake is in your room @153646ms ago\",\"Blake left @110735ms ago\",\"Blake is in your room @46192ms ago\"]",
+      "mp-phone: host arrival notice: []",
+      "mp-phone: guest overlay after pressing R: null",
+      "mp-phone: host board pins visible to guest: 0",
+      "mp-phone: host chat log tail: BlakeHello from the guest! Nice room Blake<img src=x onerror=alert(1)> 你好 👋🏽",
+      "mp-phone: guest unread badge: none",
+      "mp-phone: host sees guest move [0,0,0] -> [0,0,6.19]",
+      "mp-phone: host people panel: People HERE NOW · YOUR ROOM AH Avery Host You · host BG Blake Guest @r3mpb_eagen Visiting Ask to leave VISIT A FRIEND BG Blake Guest Online. In this room Here with you",
+      "mp-phone: back home -> http://localhost:3301/?autostart=1",
+      "mp-phone: host saw guest leave after 5 ms",
+      "mp-phone: settings row: BG Blake Guest (@r3mpb_eagen) In their room · 0 rooms together Visit room Always add Blake Guest's visits to my room Unfriend Block online=true"
+    ],
+    "ok": true,
+    "ms": 384075
+  },
+  "daily-desktop": {
+    "errors": [],
+    "audit": [
+      "daily-desk: aiming at the lock in third person (hovered=null) and pressing E did not open it"
+    ],
+    "info": [
+      "daily-desk: room ready 796 ms after Enter",
+      "daily-desk: puzzle kind cipher/null",
+      "daily-desk: hints ",
+      "daily-desk: hovered at lock (third person): null",
+      "daily-desk: result text You escaped! × 🔓 Escaped in 1/6 2:23 P L A N T Share result My Escapes · Escape #3 🔓 1/6 · 2:23 🟩🟩🟩🟩🟩 http://localhost:3301/daily 1 STREAK 1 BEST 1 PLAYED 100% SOLVED 2:23 BEST TIME Friends today None of your friends have played yet. Invite someone from your profile to compare scores. 1 D Dan",
+      "daily-desk: left the room after 7927 ms -> http://localhost:3301/?autostart=1",
+      "daily-desk: welcome none",
+      "daily-desk: arrived room state {\"src\":\"postgres\",\"pos\":[0,1.6,4.680000000000001]}",
+      "daily-desk: keys before {\"status\":200,\"keys\":20} after daily {\"status\":200,\"keys\":25}",
+      "daily-desk: /daily after: ← My Escapes My rooms 🚪 Play in 3D Walk around today's room, then out through the door. Enter ESCAPE OF THE DAY Escape #3 Inspired by Subject Zero, The Puzzle Foundry, Toronto Symbol cipher · 6 guesses 🔓 Escaped in 1/6 2:23 P L A N T Share result M",
+      "daily-desk: /daily/room after solving: 🔐 ESCAPE OF THE DAY Escape #3 Inspired by Subject Zero, The Puzzle Foundry, Toronto Symbol cipher · 6 guesses You already escaped today. The door is open: walk through it to go home. Look around Your progress is saved. Play in 2D instead WASD to wal"
+    ],
+    "ok": true,
+    "ms": 282469
+  },
+  "daily-phone": {
+    "errors": [],
+    "audit": [
+      "daily-phone: aiming at the lock in third person (hovered=null) and pressing the tap button did not open it"
+    ],
+    "info": [
+      "daily-phone: room ready 275 ms after Enter",
+      "daily-phone: puzzle kind cipher/null",
+      "daily-phone: hints ",
+      "daily-phone: hovered at lock (third person): null",
+      "daily-phone: result text You escaped! × 🔓 Escaped in 1/6 2:46 P L A N T Share result My Escapes · Escape #3 🔓 1/6 · 2:46 🟩🟩🟩🟩🟩 http://localhost:3301/daily 1 STREAK 1 BEST 1 PLAYED 100% SOLVED 2:46 BEST TIME Friends today None of your friends have played yet. Invite someone from your profile to compare scores. 1 D Dan",
+      "daily-phone: left the room after 4060 ms -> http://localhost:3301/m?from=daily",
+      "daily-phone: welcome 🔓 Welcome home! You escaped #3 in 1/6 · 2:46 ×",
+      "daily-phone: keys before {\"status\":200,\"keys\":20} after daily {\"status\":200,\"keys\":25}",
+      "daily-phone: /daily after: ← My Escapes My rooms 🚪 Play in 3D Walk around today's room, then out through the door. Enter ESCAPE OF THE DAY Escape #3 Inspired by Subject Zero, The Puzzle Foundry, Toronto Symbol cipher · 6 guesses 🔓 Escaped in 1/6 2:46 P L A N T Share result M",
+      "daily-phone: /daily/room after solving: 🔐 ESCAPE OF THE DAY Escape #3 Inspired by Subject Zero, The Puzzle Foundry, Toronto Symbol cipher · 6 guesses You already escaped today. The door is open: walk through it to go home. Look around Your progress is saved. Play in 2D instead Left stick "
+    ],
+    "ok": true,
+    "ms": 210161
+  },
+  "daily-signedout": {
+    "errors": [],
+    "audit": [
+      "daily-out: aiming at the lock in third person (hovered=null) and pressing E did not open it"
+    ],
+    "info": [
+      "daily-out: room ready 564 ms after Enter",
+      "daily-out: puzzle kind cipher/null",
+      "daily-out: hints ",
+      "daily-out: hovered at lock (third person): null",
+      "daily-out: result text You escaped! × 🔓 Escaped in 1/6 2:23 P L A N T Share result My Escapes · Escape #3 🔓 1/6 · 2:23 🟩🟩🟩🟩🟩 http://localhost:3301/daily Sign in to keep a streak and see how your friends did. Next escape in 5h 51m Walk out through the door Go to the demo room",
+      "daily-out: left the room after 2849 ms -> http://localhost:3301/?demo=1&autostart=1",
+      "daily-out: welcome 🔓 Welcome home! You escaped #3 in 1/6 · 2:23 Sign in to keep a streak and your own room. Continue with Google ×",
+      "daily-out: arrived room state {\"src\":\"seed\",\"pos\":[0,1.6,4.487319061242011]}"
+    ],
+    "ok": true,
+    "ms": 178420
+  }
+}
