@@ -13,7 +13,8 @@ presence. One websocket per browser tab at `/api/realtime`, served by the same F
 
 The HTTP side lives in `server/routes/homes.ts` (+ `homes.lib.ts`): `GET /api/homes/:handle` and
 `GET /api/presence`. The protocol (every message, limit and close code) is
-`src/contracts/realtime.ts`, shared with the client in `src/net/`.
+`src/contracts/realtime.ts`, shared with the client in `src/net/` (socket, interpolation) and
+`src/social/visit/` (the `/home/:handle` page and the people UI in the room).
 
 ## Protocol in short
 
@@ -56,4 +57,5 @@ different instances can share a home, plus sticky sessions or a shared presence 
 ```sh
 npx vitest run server/realtime server/routes/homes.test.ts
 E2E_PORT=3203 npx playwright test e2e/realtime-server.spec.ts   # two browser contexts, real cookies
+E2E_PORT=3205 npx playwright test e2e/multiplayer.spec.ts       # the 3D client: two friends see each other
 ```

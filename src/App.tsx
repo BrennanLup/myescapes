@@ -19,6 +19,7 @@ import { Reticle } from './interaction'
 import { MobileControls } from './player'
 import { AudioSystem } from './audio'
 import { CharacterHud, WardrobeOverlay } from './ui/wardrobe'
+import { PeopleHud } from './social/visit/PeopleHud'
 
 const DPR: Record<string, [number, number]> = { low: [0.75, 1], medium: [1, 1.5], high: [1, 2] }
 
@@ -67,6 +68,7 @@ export function App() {
       <Reticle />
       <MobileControls />
       <CharacterHud />
+      <PeopleHud />
       <Overlays />
       <LoadingScreen />
       <DailyWelcome />

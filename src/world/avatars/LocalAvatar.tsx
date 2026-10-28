@@ -9,6 +9,7 @@ import type * as THREE from 'three'
 import { THIRD_PERSON } from '@/player/camera'
 import { playerView } from '@/player/view'
 import { useWardrobe } from '@/ui/wardrobe/store'
+import { activeLocalEmote } from '@/net/session'
 import { Character, type CharacterMotion } from './Character'
 
 export function LocalAvatar() {
@@ -27,6 +28,9 @@ export function LocalAvatar() {
     g.rotation.y = v.bodyYaw
     motion.speed = v.speed
     motion.lookPitch = v.lookPitch
+    // An emote you sent to the room (workstream C) plays while you stand still.
+    const emote = v.speed < 0.6 ? activeLocalEmote() : null
+    motion.action = emote ?? 'idle'
   })
 
   return (
