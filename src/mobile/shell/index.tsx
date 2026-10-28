@@ -14,6 +14,7 @@ import { signInErrorMessage } from '../../auth/errors'
 import type { Me } from '../../contracts/models'
 import { callApi, ROUTES } from '../../contracts/routes'
 import { DailyCard } from '../../daily/ui'
+import { MobileDailyWelcome } from '../../daily/ui/MobileWelcome'
 import { matchPath, navigate, type RouteProps } from '../../router'
 import { Inbox, NotificationsBadge, visitsToConfirm } from '../../social'
 import { ReviewDetail, RoomsTable } from '../list'
@@ -123,7 +124,11 @@ export function MobileApp({ rest = '/', fetch: fetchImpl }: MobileAppProps) {
           </div>
         )}
       </header>
-      <main className="mx-auto max-w-xl px-4 py-5">{body}</main>
+      <main className="mx-auto max-w-xl px-4 py-5">
+        {/* Arrived from the Escape of the Day room's exit door (/m?from=daily): a short celebration. */}
+        {session.status !== 'loading' && <MobileDailyWelcome signedIn={!!user} />}
+        {body}
+      </main>
       <MobileFooter signedIn={!!user} />
     </div>
   )

@@ -12,7 +12,7 @@ Today's Escape of the Day as a small room you walk around in, at **`/daily/room`
   - *sequence*: a lit panel with the terms so far and three "?" slots (numbers or coloured shapes); set the next three on the lock.
   - *search*: little brass keys, stars or hearts hidden under real objects (cushion, books, jar, plant pot, crate, hat box, chest, rug corner, picture, vase, basket, lamp). Each round you get one look per target still missing; found ones stay out; a round is sent as one guess, exactly like the 2D taps (`search.ts`), so the share grid means the same.
 - **Panels** (DOM, keyboard/touch/screen-reader friendly, Esc or × closes, focus is trapped): the lock (prompt, the clues again in a collapsible section, guess history, the same inputs as 2D), clues, hints (−150 each, give up), the result (the 2D `Finished` view: share, streak, friends leaderboard, countdown) and a menu (Play in 2D, back to my room, controls).
-- **Finishing** opens the door: a solve plays the unlock sound, confetti and the result panel; a fail (out of guesses or giving up) shows the answer and opens the door anyway so nobody is stuck. Walking down the corridor past `EXIT_Z` fades to "Welcome home…" and navigates to `/?autostart=1` (signed in) or `/?demo=1&autostart=1` (signed out). You arrive a step inside your room's own daily door facing the board, and `DailyWelcome` (src/daily/ui/welcome.tsx, mounted in App) shows a toast, plus "Continue with Google" for signed-out players. Phones follow the usual rule for `/` and land on `/m`.
+- **Finishing** opens the door: a solve plays the unlock sound, confetti and the result panel; a fail (out of guesses or giving up) shows the answer and opens the door anyway so nobody is stuck. Walking down the corridor past `EXIT_Z` fades to "Welcome home…" and navigates to `/?autostart=1` (signed in) or `/?demo=1&autostart=1` (signed out). You arrive a step inside your room's own daily door facing the board, and `DailyWelcome` (src/daily/ui/welcome.tsx, mounted in App) shows a toast, plus "Continue with Google" for signed-out players. Phones (the same rule that sends `/` to `/m`) go straight to `/m?from=daily` after a finished day, where `MobileDailyWelcome` (src/daily/ui/MobileWelcome.tsx, mounted by the phone shell) shows the same card and confetti, with "Sign in to keep your streak" above the sign-in button when signed out; the flag is then dropped from the address bar. Leaving early on a phone just goes to `/m`.
 
 ## Shared with the 2D game
 
@@ -32,16 +32,18 @@ Today's Escape of the Day as a small room you walk around in, at **`/daily/room`
 | `textures.ts` | Canvas drawings (redrawn once the web fonts load) |
 | `RoomUi.tsx` | Entry card, HUD, panels, toast, confetti, leaving fade |
 | `playStore.ts`, `uiStore.ts` | Small zustand stores: what the 3D props draw; which panel is open |
-| `exit.ts` | Where the exit leads and the hand-over to the main room |
+| `exit.ts` | Where the exit leads (main room, demo room or `/m?from=daily` on phones) and the hand-over |
 
-Reuses as-is: `PlayerController`, `MobileControls` (src/player), `InteractionSystem`, `Reticle` (src/interaction), `AudioSystem`, shared materials via `getMaterial` (no edits). An open panel sets the shared store's overlay to `{ kind: 'gate' }`, which freezes the controls, hides the reticle and touch controls and releases pointer lock.
+Reuses as-is: `PlayerController`, `MobileControls` (src/player), `LocalAvatar` (src/world/avatars), `PerfMonitor` (src/ui/shell), `InteractionSystem`, `Reticle` (src/interaction), `AudioSystem`, shared materials via `getMaterial` (no edits). An open panel sets the shared store's overlay to `{ kind: 'gate' }`, which freezes the controls, hides the reticle and touch controls and releases pointer lock.
 
 ## Test hooks
 
-`window.__ESCAPE_DAILY_ROOM__`: `spots()` (spot id -> target id), `round()`, `leave()`. Test ids: `daily-room`, `daily-room-entry`, `daily-room-enter`, `daily-room-lock`, `daily-room-clues`, `daily-room-hints`, `daily-room-result-panel`, `daily-room-walk`, `daily-room-home`, `daily-room-menu`, `daily-room-looks`, `daily-room-toast`, `daily-room-leaving`; in the main room `daily-welcome`, `daily-welcome-signin`; on /daily and the door overlay `daily-play-3d`.
+`window.__ESCAPE_DAILY_ROOM__`: `spots()` (spot id -> target id), `round()`, `leave()`. Test ids: `daily-room`, `daily-room-entry`, `daily-room-enter`, `daily-room-lock`, `daily-room-clues`, `daily-room-hints`, `daily-room-result-panel`, `daily-room-walk`, `daily-room-home`, `daily-room-menu`, `daily-room-looks`, `daily-room-toast`, `daily-room-leaving`, `camera-toggle`; in the main room and on `/m?from=daily` `daily-welcome`, `daily-welcome-line`, `daily-welcome-signin`; on /daily and the door overlay `daily-play-3d`.
 
-Tests: `layout.test.ts` (walks the real movement code from the spawn through the door), `search.test.ts`, `exit.test.ts`, `DailyRoom.test.tsx` (DOM layer with the Canvas stubbed), `src/daily/ui/welcome.test.tsx`, and `e2e/daily-room.spec.ts` (desktop and phone, signed out; desktop signed in).
+Tests: `layout.test.ts` (walks the real movement code from the spawn through the door), `search.test.ts`, `exit.test.ts`, `DailyRoom.test.tsx` (DOM layer with the Canvas stubbed), `src/daily/ui/welcome.test.tsx`, `src/daily/ui/MobileWelcome.test.tsx`, and `e2e/daily-room.spec.ts` (desktop and phone, signed out; desktop signed in).
 
-## Camera modes
+## Camera modes, character and performance
 
-Workstream B's third-person camera was not on the integration branch when this was built; the room mounts the standard `PlayerController`, so it picks up the camera modes once they land there.
+The room mounts the standard `PlayerController` (no `firstPersonOnly`) and your `LocalAvatar`, so `V` or the bottom-right **camera toggle** (`CameraToggle` in `RoomUi.tsx`, test id `camera-toggle`, the camera half of the main room's character HUD) switches between first person and the over-the-shoulder third person; the choice is shared with your own room (per device). The room loads your look from the wardrobe store (`GET /api/me/avatar`, or this device when signed out); the wardrobe itself stays in your own room. The 8 x 8 m room's walls are colliders, so the third-person camera pulls in rather than clipping through them.
+
+`PerfMonitor` (src/ui/shell) runs in the room's Canvas too: the automatic one-step quality drop on slow phones (said in the room's toast, since this page has no shell toast) and the `?debug=1` frame-rate readout.

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { bus } from '@/contracts/events'
 import type { DailyToday } from '@/contracts/models'
 import { runtime } from '@/contracts/runtime'
+import { useCameraMode } from '@/player/view'
 import { useStore } from '@/state/store'
+import { useShell } from '@/ui/shell/shellStore'
 import { generateDaily, type DailyChallenge } from '../engine'
 import { readWelcomeNote, clearWelcomeNote } from '../ui/welcome'
 import { SPAWN } from './layout'
@@ -15,6 +17,8 @@ vi.mock('@react-three/fiber', () => ({ Canvas: () => <div data-testid="canvas" /
 vi.mock('@/audio', () => ({ AudioSystem: () => null }))
 vi.mock('@/interaction', () => ({ InteractionSystem: () => null, Reticle: () => null }))
 vi.mock('@/player', () => ({ PlayerController: () => null, MobileControls: () => null }))
+vi.mock('@/world/avatars/LocalAvatar', () => ({ LocalAvatar: () => null }))
+vi.mock('@/ui/shell/PerfMonitor', () => ({ PerfMonitor: () => null }))
 
 const { DailyRoomPage } = await import('./index')
 
@@ -149,6 +153,24 @@ describe('the 3D Escape of the Day room (DOM layer)', () => {
     interact('daily:lock')
     expect(screen.getByTestId('daily-room-result-panel')).toBeTruthy()
     expect(c.kind).toBe('sequence')
+  })
+
+  it('has the first / third person toggle (hidden behind panels) and says quality step-downs', async () => {
+    body = today('combination')
+    useCameraMode.getState().setMode('first')
+    await enter()
+    const toggle = screen.getByTestId('camera-toggle')
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    expect(toggle.getAttribute('aria-label')).toBe('Switch to third person (V)')
+    fireEvent.click(toggle)
+    expect(useCameraMode.getState().mode).toBe('third')
+    expect(screen.getByTestId('camera-toggle').getAttribute('aria-pressed')).toBe('true')
+    interact('daily:lock')
+    expect(screen.queryByTestId('camera-toggle')).toBeNull()
+    act(() => useRoomUi.getState().close())
+    act(() => useShell.getState().showToast('Switched to Low quality for smoother play'))
+    expect(screen.getByTestId('daily-room-toast').textContent).toMatch(/Low quality/)
+    useCameraMode.getState().setMode('first')
   })
 
   it('offers the 2D game when today cannot load', async () => {
