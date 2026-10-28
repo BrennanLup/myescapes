@@ -7,7 +7,7 @@ import type { GameSummary } from '@/contracts/models'
 import { isTypingField, keyboardInset, layoutShrunk, needsReveal, noteViewport, resetViewportMemory } from './keyboard'
 import { roundCoord } from './near'
 import { exactGameMatch, RoomSearch } from './RoomSearch'
-import { draftToForm, draftToEntry, linkGame, linkMatches, linkVenue, newRoomNamed } from './form'
+import { draftToForm, draftToEntry, linkGame, linkMatches, linkVenue, newRoomNamed, venueMatches } from './form'
 import { sampleDraft } from './sampleDraft'
 
 afterEach(() => {
@@ -137,6 +137,22 @@ describe('directory link in the form', () => {
     expect(v.room).toMatchObject({ name: 'The Clockmaker', company: 'Lockbox Austin', city: 'Austin', address: '9 Lake St' })
     expect(newRoomNamed(v, '  Moon Base ').room.name).toBe('Moon Base')
     expect(newRoomNamed(v, 'x').link).toBeNull()
+  })
+  it('a picked venue is saved by id until its company or city is edited', () => {
+    const { form } = draftToForm(sampleDraft(), '2026-10-25')
+    const v = linkVenue(form, { id: 'ven_lh', name: 'Escape Room - The Lighthouse', brand: null, address: '', city: 'Oostduinkerke', country: 'BE' })
+    expect(v.venue).toEqual({ venueId: 'ven_lh', company: 'Escape Room - The Lighthouse', city: 'Oostduinkerke', country: 'BE' })
+    expect(venueMatches(v)).toBe(true)
+    const complete = { ...v, review: { ...v.review, escaped: true } }
+    complete.review.ratings = { ...complete.review.ratings, storyline: { score: 70, comment: '' } }
+    complete.review.puzzles = complete.review.puzzles.map((p) => ({ ...p, type: p.type || 'logic' }))
+    const entry = draftToEntry(complete)
+    expect(entry.room.venueId).toBe('ven_lh')
+    expect(entry.room.id).toMatch(/^room_/)
+    // A new room name keeps the venue; a game pick or a different city drops it.
+    expect(draftToEntry(newRoomNamed(complete, 'Moon Base')).room.venueId).toBe('ven_lh')
+    expect(draftToEntry({ ...complete, room: { ...complete.room, city: 'Ostend' } }).room.venueId).toBeUndefined()
+    expect(linkGame(complete, game).venue).toBeNull()
   })
 })
 

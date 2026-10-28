@@ -26,6 +26,7 @@ import {
   puzzleKey,
   shiftPuzzleFlags,
   validateForm,
+  venueMatches,
   type FormState,
 } from './form'
 import { showToast } from './toast'
@@ -98,6 +99,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
       mut(n)
       // Renaming the room (or its company or city) means it is no longer the directory game.
       if (n.link && !linkMatches(n)) n.link = null
+      if (n.venue && !venueMatches(n)) n.venue = null
       return n
     })
     clearFlag(path)
@@ -325,6 +327,15 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                     city={form.room.city || initial.form.room.city}
                     inputProps={{ id: 'cf-room-search', className: INPUT }}
                   />
+                )}
+                {!form.link && form.venue && venueMatches(form) && (
+                  <p data-testid="confirm-venue-linked" className="flex items-start gap-2 rounded-xl bg-teal/10 px-3 py-2 text-sm text-ink">
+                    <span aria-hidden>🏢</span>
+                    <span className="min-w-0">
+                      At <b>{form.venue.company}</b> in {form.venue.city}, from the room directory. Check the room name below; a room that isn't
+                      listed there yet is added to this venue.
+                    </span>
+                  </p>
                 )}
                 {revisit && (
                   <p data-testid="confirm-revisit" className="rounded-xl bg-teal/10 px-3 py-2 text-sm text-teal">

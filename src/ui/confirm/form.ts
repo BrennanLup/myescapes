@@ -57,10 +57,21 @@ export interface DirectoryLink {
   country: string
 }
 
+/** The directory venue picked in the room search (a venue row, no specific room). */
+export interface VenueLink {
+  venueId: string
+  /** What the company and city fields were set to: editing either one unlinks the venue. */
+  company: string
+  city: string
+  country: string
+}
+
 export interface FormState {
   room: { name: string; company: string; city: string; genre: Genre | ''; address: string; website: string }
   /** Set while the room fields still describe a directory game; saving then reuses that game. */
   link: DirectoryLink | null
+  /** Set while the company and city still describe a picked directory venue; saving adds the room there. */
+  venue: VenueLink | null
   review: {
     date: string
     crew: string[]
@@ -137,6 +148,7 @@ export function draftToForm(
       website: draft.room.website ?? '',
     },
     link: null,
+    venue: null,
     review: {
       date,
       crew: uniq(d.crew ?? []),
@@ -238,6 +250,7 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
   if (keys.length) throw new Error(`Form is not complete: ${keys.map(labelFor).join(', ')}`)
   const f = form.room
   const linked = form.link && linkMatches(form) ? form.link : null
+  const atVenue = !linked && form.venue && venueMatches(form) ? form.venue : null
   const existing = (linked && existingRooms.find((r) => r.id === linked.gameId)) || findExistingRoom(f, existingRooms)
   const room: Room = existing
     ? {
@@ -256,6 +269,8 @@ export function draftToEntry(form: FormState, existingRooms: Room[] = []): Entry
         address: f.address.trim(),
         website: f.website.trim(),
         photos: [],
+        // A picked directory venue: the server adds the room there instead of matching by name.
+        ...(atVenue ? { venueId: atVenue.venueId } : {}),
       }
   const r = form.review
   const reviewId = makeId('rev')
@@ -321,17 +336,31 @@ export function linkGame(form: FormState, game: GameSummary, venue?: Pick<VenueS
       address: venue?.address?.trim() || form.room.address,
     },
     link: { gameId: game.id, name: game.name, venueName: company, city: game.city, country: game.country },
+    venue: null,
   }
 }
 
 /** A venue without a specific room: fill the company, city and address, keep the room name. */
-export function linkVenue(form: FormState, venue: Pick<VenueSummary, 'name' | 'brand' | 'address' | 'city'>): FormState {
-  return { ...form, room: { ...form.room, company: (venue.brand || venue.name).trim(), city: venue.city, address: venue.address || form.room.address }, link: null }
+export function linkVenue(form: FormState, venue: Pick<VenueSummary, 'name' | 'brand' | 'address' | 'city'> & Partial<Pick<VenueSummary, 'id' | 'country'>>): FormState {
+  const company = (venue.brand || venue.name).trim()
+  return {
+    ...form,
+    room: { ...form.room, company, city: venue.city, address: venue.address || form.room.address },
+    link: null,
+    venue: venue.id ? { venueId: venue.id, company, city: venue.city, country: venue.country ?? '' } : null,
+  }
 }
 
-/** "Add a new room": the typed text becomes the room name, nothing is linked. */
+/** "Add a new room": the typed text becomes the room name; a picked venue stays (the new room is there). */
 export function newRoomNamed(form: FormState, name: string): FormState {
   return { ...form, room: { ...form.room, name: name.trim() }, link: null }
+}
+
+/** Whether the company and city still describe the picked venue (editing either one unlinks it). */
+export function venueMatches(form: FormState): boolean {
+  const v = form.venue
+  if (!v) return false
+  return norm(form.room.company) === norm(v.company) && norm(form.room.city) === norm(v.city)
 }
 
 /** Whether the room fields still describe the linked game (editing the name, company or city unlinks it). */

@@ -44,4 +44,27 @@ describe('saveEntryForUser with a directory game id', () => {
     expect(saved.room.id).not.toBe('gam_doesnotexist')
     expect(saved.room.name).toBe('Brand New Room')
   })
+
+  it('adds the room at a picked venue instead of making a duplicate venue', async () => {
+    const [{ n: venuesBefore }] = await t.db.select({ n: count() }).from(venues)
+    const e = base()
+    // A typed city ("Toronto") never equals the imported slug ("toronto-on-ca").
+    const room = { ...e.room, id: 'room_venuepick', venueId: FX.venues.maple, name: 'The Last Lighthouse Keeper', company: 'Maple & Key', city: 'Toronto' }
+    const saved = await saveEntryForUser(t.db, FX.users.carol, { ...e, room, review: { ...e.review, id: 'rev_picked_3' } })
+    const [{ n: venuesAfter }] = await t.db.select({ n: count() }).from(venues)
+    expect(venuesAfter).toBe(venuesBefore)
+    const [g] = await t.db.select().from(games).where(eq(games.id, saved.room.id))
+    expect(g.venueId).toBe(FX.venues.maple)
+    expect(g.name).toBe('The Last Lighthouse Keeper')
+  })
+
+  it('matches an imported venue by name or brand and city name, ignoring the slug suffix', async () => {
+    const [{ n: venuesBefore }] = await t.db.select({ n: count() }).from(venues)
+    const e = base()
+    const room = { ...e.room, id: 'room_typed', name: 'The Vault', company: 'starlight escapes', city: 'san francisco' }
+    const saved = await saveEntryForUser(t.db, FX.users.carol, { ...e, room, review: { ...e.review, id: 'rev_picked_4' } })
+    const [{ n: venuesAfter }] = await t.db.select({ n: count() }).from(venues)
+    expect(venuesAfter).toBe(venuesBefore)
+    expect(saved.room.id).toBe(FX.games.vault)
+  })
 })
