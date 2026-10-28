@@ -23,8 +23,10 @@ import { BUBBLE_MS, CHAT_LOG_MAX, EMOTE_MS, firstName, outfitFor, poseBuffer, po
 
 /** How often the local pose is checked for changes (the client throttles to the server's rate). */
 const PUBLISH_MS = 100
-/** People whose old tab just stepped out for a new one: their next arrival is not news. */
-const justReplaced = new Set<string>()
+/** People whose old tab just stepped out for a new one, and when: their arrival right after is not news. */
+const justReplaced = new Map<string, number>()
+/** The hub sends the new tab's join straight after the replace; anything later is a real arrival. */
+const REPLACE_WINDOW_MS = 5_000
 /** Presence list refresh (the socket keeps it live in between). */
 const PRESENCE_REFRESH_MS = 60_000
 
@@ -137,7 +139,8 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       // A second tab of the same person replaces the first: no new toast for them.
       // The hub sends `player_left` (replaced) before the new tab's `player_joined`, so also
       // remember who was just replaced.
-      const already = Object.values(rt.players).some((x) => x.user.id === p.user.id) || justReplaced.delete(p.user.id)
+      const already = Object.values(rt.players).some((x) => x.user.id === p.user.id) || now - (justReplaced.get(p.user.id) ?? -Infinity) < REPLACE_WINDOW_MS
+      justReplaced.delete(p.user.id)
       set({ players: { ...rt.players, [p.sid]: p } })
       if (!already && p.user.id !== rt.me?.id) {
         const name = firstName(p.user)
@@ -154,7 +157,7 @@ export function applyMessage(msg: ServerMessage, c: Pick<RealtimeClient, 'clock'
       const { [msg.sid]: _b, ...bubbles } = rt.bubbles
       const { [msg.sid]: _e, ...emotes } = rt.emotes
       set({ players, bubbles, emotes })
-      if (msg.reason === 'replaced') justReplaced.add(gone.user.id)
+      if (msg.reason === 'replaced') justReplaced.set(gone.user.id, now)
       if (msg.reason !== 'replaced' && !Object.values(players).some((x) => x.user.id === gone.user.id)) toast(`${firstName(gone.user)} left`)
       return
     }

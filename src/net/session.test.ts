@@ -67,6 +67,10 @@ describe('applyMessage', () => {
     apply({ type: 'player_left', sid: 's-guest3', userId: guest.id, reason: 'replaced' })
     apply({ type: 'player_joined', player: { sid: 's-guest4', user: guest, isOwner: false, state: null, outfit: null, joinedAt: 4 } })
     expect(toast()).toBeNull()
+    // A replace with no join after it (oldest tab closed over the cap) doesn't hide a later visit.
+    apply({ type: 'player_left', sid: 's-guest4', userId: guest.id, reason: 'replaced' }, 10_000)
+    apply({ type: 'player_joined', player: { sid: 's-guest5', user: guest, isOwner: false, state: null, outfit: null, joinedAt: 5 } }, 60_000)
+    expect(toast()).toBe('Sam is in your room')
   })
 
   it('a visitor hears the host is home', () => {
