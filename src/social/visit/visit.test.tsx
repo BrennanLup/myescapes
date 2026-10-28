@@ -294,6 +294,45 @@ describe('PeopleHud', () => {
     expect(screen.queryByLabelText("Visit Sam Guest's room")).toBeNull()
   })
 
+  it('asks the host to confirm "Ask to leave" before the guest is sent away', async () => {
+    const session = await import('@/net/session')
+    const kick = vi.spyOn(session, 'kickPlayer').mockImplementation(() => {})
+    useRealtime.setState({
+      status: 'open',
+      me: host,
+      sid: 's-host',
+      home: { handle: 'robin', owner: host, isOwner: true },
+      players: { 's-guest': { sid: 's-guest', user: guest, isOwner: false, outfit: {} as never, joinedAt: 1 } },
+      friends: {},
+      friendsLoaded: true,
+    })
+    render(<PeopleHud />)
+    fireEvent.click(screen.getByTestId('people-button'))
+    const ask = screen.getByTestId('kick-player')
+    fireEvent.click(ask)
+    expect(kick).not.toHaveBeenCalled()
+    expect(ask.getAttribute('aria-expanded')).toBe('true')
+    const box = screen.getByTestId('kick-confirm')
+    expect(box.textContent).toContain("Ask Sam to leave? They can't come back for 10 minutes.")
+    // Focus lands on the safe choice.
+    expect(document.activeElement).toBe(screen.getByTestId('kick-confirm-cancel'))
+
+    // Esc cancels the question only; the panel stays open and focus goes back.
+    fireEvent.keyDown(screen.getByTestId('kick-confirm-cancel'), { key: 'Escape' })
+    expect(screen.queryByTestId('kick-confirm')).toBeNull()
+    expect(screen.getByTestId('people-panel')).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByTestId('kick-player'))
+
+    fireEvent.click(screen.getByTestId('kick-player'))
+    fireEvent.click(screen.getByTestId('kick-confirm-cancel'))
+    expect(kick).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTestId('kick-player'))
+    fireEvent.click(screen.getByTestId('kick-confirm-yes'))
+    expect(kick).toHaveBeenCalledWith('s-guest')
+    expect(screen.queryByTestId('kick-confirm')).toBeNull()
+  })
+
   it('says "Here with you" for a friend on their way into your room (not listed yet)', () => {
     useRealtime.setState({
       status: 'open',

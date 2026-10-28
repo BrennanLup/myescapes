@@ -59,11 +59,15 @@ export function revealFirstError(root: ParentNode = document): HTMLElement | nul
 
 const input = 'w-full rounded-xl border border-panel-edge bg-white px-3 py-2 text-base text-ink outline-none focus:border-accent'
 
-function Field({ label, flag, error, children }: { label: string; flag?: boolean; error?: string; children: ReactNode }) {
+/**
+ * One question. `htmlFor` ties the caption to a single input (a real <label>); without it the
+ * caption gets `labelId` so a group of buttons can point at it with aria-labelledby.
+ */
+function Field({ label, flag, error, htmlFor, labelId, children }: { label: string; flag?: boolean; error?: string; htmlFor?: string; labelId?: string; children: ReactNode }) {
   return (
     <div className="block">
       <div className="mb-1 flex items-center gap-2 text-sm font-semibold">
-        <span>{label}</span>
+        {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : <span id={labelId}>{label}</span>}
         {flag && <span className="rounded-full bg-warn/20 px-2 py-0.5 text-xs font-bold text-ink">Check this</span>}
       </div>
       {children}
@@ -72,20 +76,20 @@ function Field({ label, flag, error, children }: { label: string; flag?: boolean
   )
 }
 
-function YesNo({ value, onChange, testId }: { value: boolean | null; onChange(v: boolean | null): void; testId: string }) {
+function YesNo({ value, onChange, testId, labelledBy }: { value: boolean | null; onChange(v: boolean | null): void; testId: string; labelledBy?: string }) {
   const opt = (v: boolean | null, label: string) => (
     <button
       type="button"
       aria-pressed={value === v}
       data-testid={`${testId}-${v === null ? 'unknown' : v ? 'yes' : 'no'}`}
       onClick={() => onChange(v)}
-      className={`flex-1 rounded-xl border px-2 py-2 text-sm font-semibold ${value === v ? 'border-teal bg-teal text-white' : 'border-panel-edge bg-white'}`}
+      className={`min-h-11 flex-1 rounded-xl border px-2 py-2 text-sm font-semibold ${value === v ? 'border-teal bg-teal text-white' : 'border-panel-edge bg-white'}`}
     >
       {label}
     </button>
   )
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2" role="group" aria-labelledby={labelledBy}>
       {opt(true, 'Yes')}
       {opt(false, 'No')}
       {opt(null, 'Not sure')}
@@ -138,16 +142,16 @@ export function ConfirmStep(p: ConfirmProps) {
               }}
             />
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-              <button type="button" className="min-h-10 text-ink-soft underline" onClick={() => setChangingRoom(false)}>
+              <button type="button" className="min-h-11 text-ink-soft underline" onClick={() => setChangingRoom(false)}>
                 Keep {p.game.name}
               </button>
-              <button type="button" data-testid="confirm-browse-directory" className="min-h-10 text-teal underline" onClick={p.onChangeGame}>
+              <button type="button" data-testid="confirm-browse-directory" className="min-h-11 text-teal underline" onClick={p.onChangeGame}>
                 Browse venues instead
               </button>
             </div>
           </div>
         ) : (
-          <button type="button" data-testid="confirm-change-game" className="mt-1 min-h-10 text-sm text-teal underline" onClick={() => (p.onChangeRoom ? setChangingRoom(true) : p.onChangeGame())}>
+          <button type="button" data-testid="confirm-change-game" className="mt-1 inline-flex min-h-11 items-center text-sm text-teal underline" onClick={() => (p.onChangeRoom ? setChangingRoom(true) : p.onChangeGame())}>
             Not right? Change it
           </button>
         )}
@@ -160,16 +164,17 @@ export function ConfirmStep(p: ConfirmProps) {
       )}
       {flagCount > 0 && <p className="text-sm text-ink-soft">{flagCount === 1 ? 'One field needs' : `${flagCount} fields need`} a quick check.</p>}
 
-      <Field label="Date played" flag={flagged('date')} error={errors.date}>
-        <input type="date" data-testid="confirm-date" className={input} value={form.date} max={todayISO()} onChange={(e) => set('date', e.target.value)} />
+      <Field label="Date played" flag={flagged('date')} error={errors.date} htmlFor="m-confirm-date">
+        <input id="m-confirm-date" type="date" data-testid="confirm-date" className={input} value={form.date} max={todayISO()} onChange={(e) => set('date', e.target.value)} />
       </Field>
 
-      <Field label="Did you escape?" flag={flagged('escaped')}>
-        <YesNo testId="confirm-escaped" value={form.escaped} onChange={(v) => set('escaped', v)} />
+      <Field label="Did you escape?" flag={flagged('escaped')} labelId="m-confirm-escaped-label">
+        <YesNo testId="confirm-escaped" labelledBy="m-confirm-escaped-label" value={form.escaped} onChange={(v) => set('escaped', v)} />
       </Field>
 
-      <Field label="Escape time (minutes)" flag={flagged('escapeTimeMinutes')} error={errors.escapeTimeMinutes}>
+      <Field label="Escape time (minutes)" flag={flagged('escapeTimeMinutes')} error={errors.escapeTimeMinutes} htmlFor="m-confirm-time">
         <input
+          id="m-confirm-time"
           type="number"
           inputMode="numeric"
           min={0}
@@ -187,7 +192,7 @@ export function ConfirmStep(p: ConfirmProps) {
           const r = form.ratings[k]
           const path = `ratings.${k}.score`
           return (
-            <Field key={k} label={`${RATING_LABELS[k]} (1-100)`} flag={flagged(path)} error={errors[path]}>
+            <Field key={k} label={`${RATING_LABELS[k]} (1-100)`} flag={flagged(path)} error={errors[path]} htmlFor={`m-confirm-score-${k}`}>
               <div className="flex items-center gap-3">
                 <ScoreSlider
                   label={`${RATING_LABELS[k]} slider`}
@@ -196,6 +201,7 @@ export function ConfirmStep(p: ConfirmProps) {
                   onChange={(v) => set('ratings', { ...form.ratings, [k]: { ...r, score: v } })}
                 />
                 <input
+                  id={`m-confirm-score-${k}`}
                   type="number"
                   inputMode="numeric"
                   min={1}
@@ -210,6 +216,7 @@ export function ConfirmStep(p: ConfirmProps) {
               <input
                 className={`${input} mt-2 text-sm`}
                 placeholder="A few words (optional)"
+                aria-label={`${RATING_LABELS[k]} comment (optional)`}
                 data-testid={`confirm-comment-${k}`}
                 value={r.comment}
                 onChange={(e) => set('ratings', { ...form.ratings, [k]: { ...r, comment: e.target.value } })}
@@ -266,11 +273,11 @@ export function ConfirmStep(p: ConfirmProps) {
       <section className="space-y-3">
         <h3 className="font-display text-lg">Features</h3>
         {BOOL_FACTS.map((f) => (
-          <Field key={f} label={FACT_LABELS[f]} flag={flagged(f)}>
-            <YesNo testId={`confirm-${f}`} value={form[f]} onChange={(v) => set(f, v)} />
+          <Field key={f} label={FACT_LABELS[f]} flag={flagged(f)} labelId={`m-confirm-${f}-label`}>
+            <YesNo testId={`confirm-${f}`} labelledBy={`m-confirm-${f}-label`} value={form[f]} onChange={(v) => set(f, v)} />
           </Field>
         ))}
-        <Field label="Tools used" flag={flagged('toolsUsed')}>
+        <Field label="Tools used" flag={flagged('toolsUsed')} htmlFor="m-confirm-tool">
           <div className="flex flex-wrap gap-2">
             {form.toolsUsed.map((t) => (
               <button key={t} type="button" className="rounded-full border border-panel-edge bg-white px-3 py-1 text-sm" onClick={() => set('toolsUsed', form.toolsUsed.filter((x) => x !== t))}>
@@ -280,6 +287,7 @@ export function ConfirmStep(p: ConfirmProps) {
           </div>
           <div className="mt-2 flex gap-2">
             <input
+              id="m-confirm-tool"
               className={input}
               placeholder="Add a tool (UV light, magnets...)"
               value={tool}

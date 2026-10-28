@@ -89,6 +89,10 @@ export function PlayerController({ firstPersonOnly = false, rigs }: PlayerContro
     /** 0..1: how far the camera has risen over your head because a wall behind squeezed it. */
     crane: 0,
     craneAt: [0, 0, 0] as Vec3,
+    /** The crane spot's offset from the pivot as followed by the camera (eased, so a shoulder switch never pops). */
+    craneSmooth: [0, 0, 0] as Vec3,
+    cranePitch: 0,
+    craning: false,
     full: [0, 0, 0] as Vec3,
   })
 
@@ -325,6 +329,9 @@ export function PlayerController({ firstPersonOnly = false, rigs }: PlayerContro
       c.distance = 0
       c.clear = 1
       c.crane = 0
+      c.craning = false
+      view.crane = 0
+      view.cameraPitch = camPitch
       view.cameraDistance = 0
       view.rayStart = 0
       camera.position.set(pos[0], pos[1], pos[2])
@@ -343,6 +350,7 @@ export function PlayerController({ firstPersonOnly = false, rigs }: PlayerContro
       pivot[1] = head[1]
       pivot[2] = head[2]
       c.init = true
+      c.craning = false
     } else {
       for (let i = 0; i < 3; i++) pivot[i] = damp(pivot[i], head[i], THIRD_PERSON.followRate, dt)
     }
@@ -365,18 +373,34 @@ export function PlayerController({ firstPersonOnly = false, rigs }: PlayerContro
     const fullClear = clearDistance(pivot, full, boxes.current)
     c.crane = damp(c.crane, craneAmount(fullClear) * third, CRANE.rate, dt)
     if (c.crane > 1e-3) {
-      const spot = craneSpot(pivot, s.yaw, boxes.current, c.craneAt)
+      // Slide along the wall towards the rig's shoulder (none for the centred phone rig).
+      const spot = craneSpot(pivot, s.yaw, boxes.current, c.craneAt, undefined, undefined, undefined, Math.sign(rig.side) * CRANE.side)
+      // The spot can jump (it switches shoulders in a corner): ease its offset from the head once
+      // craning (the offset, so walking along the wall never makes the camera trail).
+      const sm = c.craneSmooth
+      if (!c.craning) {
+        for (let i = 0; i < 3; i++) sm[i] = c.craneAt[i] - pivot[i]
+        c.cranePitch = spot.pitch
+        c.craning = true
+      } else {
+        for (let i = 0; i < 3; i++) sm[i] = damp(sm[i], c.craneAt[i] - pivot[i], CRANE.rate * 1.5, dt)
+        c.cranePitch = damp(c.cranePitch, spot.pitch, CRANE.rate * 1.5, dt)
+      }
+      const smDist = Math.hypot(sm[0], sm[1], sm[2])
       // Only when it actually shows more of you than the pulled-in spot.
-      if (spot.distance > c.distance) {
+      if (smDist > c.distance) {
         const w = c.crane
-        for (let i = 0; i < 3; i++) camPos[i] += (c.craneAt[i] - camPos[i]) * w
-        camPitch += (Math.min(camPitch, spot.pitch) - camPitch) * w
+        for (let i = 0; i < 3; i++) camPos[i] += (pivot[i] + sm[i] - camPos[i]) * w
+        // Keep your look pitch, tilting down at most CRANE.maxTilt (never towards a top-down view).
+        camPitch += (Math.max(-CRANE.maxTilt, Math.min(camPitch, c.cranePitch)) - camPitch) * w
         c.distance = Math.hypot(camPos[0] - pivot[0], camPos[1] - pivot[1], camPos[2] - pivot[2])
       }
-    }
+    } else c.craning = false
     camera.rotation.set(camPitch, s.yaw, 0, 'YXZ')
     camera.position.set(camPos[0], camPos[1], camPos[2])
     view.cameraDistance = c.distance
+    view.crane = c.crane
+    view.cameraPitch = camPitch
     view.rayStart = rayStartDistance(camPos, lookVector(s.yaw, camPitch, c.forward), pos)
   })
 

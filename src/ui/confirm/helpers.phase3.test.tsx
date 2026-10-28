@@ -15,6 +15,11 @@ afterEach(() => {
   localStorage.clear()
 })
 
+/** Let the picker's close-on-blur timer (150 ms) run before the test ends, not after the page is gone. */
+const settleBlur = () => act(async () => {
+  await new Promise((r) => setTimeout(r, 200))
+})
+
 const g = (id: string, name: string, city: string): GameSummary => ({ id, slug: id, name, genre: 'heist', status: 'active', venueId: 'ven', venueName: 'Lockbox', venueSlug: 'lockbox', city, country: 'US', reviewCount: 0, avgOverall: null })
 
 describe('keyboard helpers', () => {
@@ -86,6 +91,7 @@ describe('room search', () => {
     expect(localStorage.getItem('myescapes.nearMe')).toBe('1')
     await user.click(screen.getByTestId('room-search-near'))
     expect(localStorage.getItem('myescapes.nearMe')).toBeNull()
+    await settleBlur()
   })
 
   it('ranks the draft city first while Near me is off, and drops the city once it is on', async () => {
@@ -105,6 +111,7 @@ describe('room search', () => {
     const last = search.mock.calls.at(-1) as unknown as [Record<string, unknown>]
     expect(last[0]).toMatchObject({ q: 'escape', lat: 37.77, lng: -122.42 })
     expect(last[0].city).toBeUndefined()
+    await settleBlur()
   })
 
   it('says so when location is blocked', async () => {

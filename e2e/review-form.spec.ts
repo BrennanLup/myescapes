@@ -217,13 +217,24 @@ test('review form: room search, photos while reviewing, on the phone and in the 
     await expect(lp.getByRole('heading', { name: 'Check your review' })).toBeFocused()
     // Nothing is red before the user has touched anything; the footer says what's still needed.
     await expect(lp.locator('[data-testid^="error-"]')).toHaveCount(0)
+    // Same name and city as a directory game: it is linked without a click, so Company is filled in.
+    await expect(lp.getByTestId('confirm-room-linked')).toContainText('Matched in the room directory', { timeout: SLOW })
+    await expect(lp.getByTestId('confirm-room-linked')).toContainText('Fog City Escapes · San Francisco')
+    await expect(lp.getByTestId('field-room.company')).toHaveValue('Fog City Escapes')
+    await expect(lp.getByRole('heading', { name: 'Check your review' })).toBeFocused()
     // The features have "Not sure", and it isn't required.
     await lp.getByTestId('field-review.flashlights-unsure').click()
     await expect(lp.getByTestId('field-review.flashlights')).toHaveAttribute('data-value', 'unset')
-    // Genre is optional, as on the phone; an unset score would show "Tap to rate" (all are set here).
-    await expect(lp.getByTestId('field-room.genre')).toHaveValue('')
+    // Genre is optional, as on the phone (here the directory filled it in); an unset score would show
+    // "Tap to rate" (all are set here).
+    await expect(lp.getByTestId('field-room.genre')).toHaveValue('mystery')
+    await expect(lp.getByTestId('field-room.genre').locator('option:checked')).toHaveText('Mystery')
     await expect(lp.getByTestId('error-room.genre')).toHaveCount(0)
     await expect(lp.getByTestId('field-review.ratings.overall.score-slider-hint')).toHaveCount(0)
+    await expect(lp.getByTestId('field-room.genre').locator('option').first()).toHaveText('Not sure')
+    // "Change" brings the search back (and does not link again by itself).
+    await lp.getByTestId('confirm-room-unlink').click()
+    await expect(lp.getByTestId('confirm-room-linked')).toHaveCount(0)
     // Keyboard search: nothing is highlighted until ArrowDown, which lands on the first result.
     const search = lp.getByTestId('confirm-room-search')
     await search.fill('Lighth')

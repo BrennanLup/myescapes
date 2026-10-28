@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { bus } from '@/contracts/events'
+import type { GameSummary } from '@/contracts/models'
 import { callApi, ROUTES } from '@/contracts/routes'
 import { COMMON_TOOLS, GENRES, PUZZLE_TYPES, RATING_KEYS, type ReviewDraft } from '@/contracts/types'
 import { PUZZLE_TYPE_COLORS } from '@/contracts/style'
@@ -13,11 +14,13 @@ import { RoomSearch } from './RoomSearch'
 import { ScoreSlider } from './ScoreSlider'
 import {
   BOOL_FEATURES,
+  canAutoLink,
   FEATURE_LABELS,
   RATING_LABELS,
   draftToEntry,
   draftToForm,
   findExistingRoom,
+  genreLabel,
   labelFor,
   linkGame,
   linkMatches,
@@ -92,7 +95,27 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
     }
   }, [photoTarget])
 
-  const errors = useMemo(() => validateForm(form), [form])
+  // The directory's "Is it …?" match for the drafted room (null when there is none, or once linked).
+  const [suggested, setSuggested] = useState<GameSummary | null>(null)
+  // Set when that match was linked without a click (same name and city), to say so on the chip.
+  const [autoLinked, setAutoLinked] = useState(false)
+  const autoTried = useRef(false)
+  const formRef = useRef(form)
+  useEffect(() => {
+    formRef.current = form
+  })
+  const linked = !!form.link && linkMatches(form)
+  const suggestionShown = !!suggested && !linked
+
+  const validation = useMemo(() => validateForm(form), [form])
+  // With the "Is it …?" suggestion on screen, a missing company or city points at it: one click fills both.
+  const errors = useMemo(() => {
+    if (!suggestionShown) return validation
+    const e = { ...validation }
+    if (e['room.company']) e['room.company'] = 'Company is required: press “Use it” above to fill it in, or type it.'
+    if (e['room.city']) e['room.city'] = 'City is required: press “Use it” above to fill it in, or type it.'
+    return e
+  }, [validation, suggestionShown])
   const errorKeys = Object.keys(errors)
   const valid = errorKeys.length === 0
   const revisit = useMemo(() => findExistingRoom(form.room, rooms), [form.room, rooms])
@@ -124,8 +147,11 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
 
   const clearFlags = (paths: string[]) => setFlags((fl) => fl.filter((x) => !paths.includes(x)))
 
-  const pickRoom = (pick: RoomPick) => {
+  const pickRoom = (pick: RoomPick, auto = false) => {
+    // Once the person has chosen for themselves, never auto-link over it (even after Change).
+    if (!auto) autoTried.current = true
     setSaveError(null)
+    setAutoLinked(auto)
     if (pick.kind === 'game') {
       const game = pick.game
       setForm((f) => linkGame(f, game))
@@ -134,7 +160,8 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
       callApi(ROUTES.venuePage, { params: { slug: game.venueSlug } })
         .then((page) => setForm((f) => (f.link?.gameId === game.id && linkMatches(f) ? linkGame(f, game, { ...page.venue, address: f.room.address || page.venue.address }) : f)))
         .catch(() => {})
-      if (!game.genre) focusField('room.genre')
+      // A link made on its own leaves focus where it is (the dialog title on open).
+      if (!game.genre && !auto) focusField('room.genre')
     } else {
       setForm((f) => linkVenue(f, pick.venue))
       clearFlags(['room.company', 'room.city'])
@@ -142,7 +169,40 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
     }
   }
 
+  const onSuggestion = (game: GameSummary | null) => {
+    setSuggested(game)
+    if (!game || autoTried.current) return
+    // Not while someone is typing in the search box: it would vanish under them. Try again on the
+    // next suggestion instead of giving up.
+    if (document.activeElement?.id === 'cf-room-search') return
+    autoTried.current = true
+    if (canAutoLink(formRef.current, game)) pickRoom({ kind: 'game', game }, true)
+  }
+
+  // The match skipped above (search box focused) gets its one try when focus leaves the box, as
+  // the suggestion itself won't change again.
+  const pickRoomRef = useRef(pickRoom)
+  useEffect(() => {
+    pickRoomRef.current = pickRoom
+  })
+  useEffect(() => {
+    if (!suggested) return
+    const onOut = (e: FocusEvent) => {
+      if ((e.target as HTMLElement | null)?.id !== 'cf-room-search' || autoTried.current) return
+      // Wait for the render after whatever moved focus (a pick from the list unmounts the box), so
+      // the draft and autoTried are current.
+      setTimeout(() => {
+        if (autoTried.current) return
+        autoTried.current = true
+        if (canAutoLink(formRef.current, suggested)) pickRoomRef.current({ kind: 'game', game: suggested }, true)
+      }, 0)
+    }
+    document.addEventListener('focusout', onOut)
+    return () => document.removeEventListener('focusout', onOut)
+  }, [suggested])
+
   const newRoom = (text: string) => {
+    autoTried.current = true
     setForm((f) => newRoomNamed(f, text))
     clearFlags(['room.name'])
     focusField(form.room.company.trim() ? 'room.city' : 'room.company')
@@ -165,6 +225,16 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
   }, [saving])
 
   const jumpTo = (path: string) => {
+    // A missing company or city is one click away on the "Is it …?" suggestion: go there instead.
+    // (Looked up in the page, not in state: the button is only there while the suggestion shows.)
+    if (path === 'room.company' || path === 'room.city') {
+      const use = scrollRef.current?.querySelector<HTMLElement>('[data-testid="room-search-suggestion"]')
+      if (use) {
+        use.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+        use.focus({ preventScroll: true })
+        return
+      }
+    }
     let el: HTMLElement | null = null
     const parts = path.split('.')
     for (let i = parts.length; i > 0 && !el; i--) el = document.getElementById(anchorId(parts.slice(0, i).join('.')))
@@ -343,20 +413,29 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
           <div className="grid gap-5 lg:grid-cols-2">
             <div className="flex flex-col gap-5">
               <Section title="Room" icon="🗝">
-                {form.link && linkMatches(form) ? (
+                {form.link && linked ? (
                   <div data-testid="confirm-room-linked" className="flex flex-wrap items-center gap-3 rounded-2xl border-2 border-teal/40 bg-teal/10 px-3 py-2">
                     <span aria-hidden className="text-xl">🗝️</span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-bold tracking-wide text-teal uppercase">From the room directory</span>
+                      <span className="block text-xs font-bold tracking-wide text-teal uppercase">
+                        {autoLinked ? 'Matched in the room directory' : 'From the room directory'}
+                      </span>
                       <span className="block truncate font-bold">{form.link.name}</span>
                       <span className="block truncate text-sm text-ink-soft">
                         {[form.link.venueName, form.link.city].filter(Boolean).join(' · ')}
                       </span>
+                      {autoLinked && (
+                        <span data-testid="confirm-room-auto" className="block text-xs text-ink-soft">
+                          Same name and city as your notes, so it’s linked. Not it? Press Change.
+                        </span>
+                      )}
                     </span>
                     <button
                       type="button"
                       data-testid="confirm-room-unlink"
+                      aria-label={`Change the room (now ${form.link.name})`}
                       onClick={() => {
+                        setAutoLinked(false)
                         setForm((f) => ({ ...f, link: null }))
                         setTimeout(() => document.getElementById('cf-room-search')?.focus(), 0)
                       }}
@@ -374,6 +453,7 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                     onCreate={newRoom}
                     inputTestId="confirm-room-search"
                     suggestFor={{ name: initial.form.room.name, city: initial.form.room.city }}
+                    onSuggestion={onSuggestion}
                     city={form.room.city || initial.form.room.city}
                     inputProps={{ id: 'cf-room-search', className: INPUT }}
                   />
@@ -406,11 +486,11 @@ function ConfirmForm({ draft }: { draft: ReviewDraft }) {
                       onChange={(e) => edit('room.city', (n) => void (n.room.city = e.target.value))} />
                   </Field>
                   <Field label="Genre (optional)" {...fieldProps('room.genre')}>
-                    <select id={inputId('room.genre')} {...aria('room.genre')} data-testid="field-room.genre" className={INPUT + ' capitalize'} value={f.room.genre}
+                    <select id={inputId('room.genre')} {...aria('room.genre')} data-testid="field-room.genre" className={INPUT} value={f.room.genre}
                       onChange={(e) => edit('room.genre', (n) => void (n.room.genre = e.target.value as FormState['room']['genre']))}>
                       <option value="">Not sure</option>
                       {GENRES.map((g) => (
-                        <option key={g} value={g}>{g}</option>
+                        <option key={g} value={g}>{genreLabel(g)}</option>
                       ))}
                     </select>
                   </Field>

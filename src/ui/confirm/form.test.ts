@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import { EntrySchema } from '@/contracts/types'
 import { FIXTURE_DATASET } from '@/contracts/fixtures'
-import { draftToEntry, draftToForm, findExistingRoom, shiftPuzzleFlags, validateForm, type FormState } from './form'
+import { canAutoLink, draftToEntry, draftToForm, findExistingRoom, genreLabel, shiftPuzzleFlags, validateForm, type FormState } from './form'
 import { sampleDraft } from './sampleDraft'
+
+describe('canAutoLink / genreLabel (QA r4)', () => {
+  const base = () => draftToForm(sampleDraft()).form
+  it('needs the same name, the same non-empty city, and no link yet', () => {
+    const f = base()
+    f.room.city = ' San Francisco '
+    expect(canAutoLink(f, { name: 'the clockmaker', city: 'San Francisco' })).toBe(true)
+    expect(canAutoLink(f, { name: 'The Clockmaker', city: 'Oakland' })).toBe(false)
+    expect(canAutoLink({ ...f, room: { ...f.room, city: '' } }, { name: 'The Clockmaker', city: '' })).toBe(false)
+    expect(canAutoLink({ ...f, link: { gameId: 'g', name: 'x', venueName: 'y', city: 'z', country: 'US' } }, { name: 'The Clockmaker', city: 'San Francisco' })).toBe(false)
+    expect(canAutoLink({ ...f, venue: { venueId: 'v', company: 'y', city: 'San Francisco', country: 'US' } }, { name: 'The Clockmaker', city: 'San Francisco' })).toBe(false)
+  })
+  it('sentence-cases genres', () => {
+    expect(genreLabel('sci-fi')).toBe('Sci-fi')
+    expect(genreLabel('')).toBe('')
+  })
+})
 
 function completeForm(): FormState {
   const { form } = draftToForm(sampleDraft(), '2026-10-25')
