@@ -3,6 +3,7 @@ import type { AABB } from '@/contracts/colliders'
 import { ANCHORS, HALF_D, HALF_W, LAMPS, PLAYER, ROOM } from '@/contracts/scene'
 import { LIVING_COLLIDERS } from './layout'
 import { buildLivingSet } from './set'
+import { bookCoverGeometry, bookPagesGeometry } from './shelf'
 
 type P = [number, number]
 
@@ -133,9 +134,36 @@ describe('living set geometry', () => {
   })
 
   it('stays under the draw-call budget', () => {
-    // One mesh per merged bucket + one instanced mesh for books.
-    expect(set.parts.length + 1).toBeLessThan(60)
+    // One mesh per merged (material, shadow) bucket + three instanced meshes (book covers, page blocks, records).
+    expect(set.parts.length + 3).toBeLessThan(60)
     expect(set.books.length).toBeGreaterThan(60)
+    expect(set.books.filter((b) => b.kind === 'record').length).toBeGreaterThan(0)
+  })
+
+  it('stays within the triangle budget for phones', () => {
+    const merged = set.parts.reduce((n, p) => n + p.geometry.attributes.position.count / 3, 0)
+    const cover = bookCoverGeometry()
+    const pages = bookPagesGeometry()
+    const books = set.books.filter((b) => b.kind !== 'record').length
+    const bookTris = books * (cover.attributes.position.count / 3 + (pages.index?.count ?? 0) / 3)
+    expect(merged + bookTris).toBeLessThan(200_000)
+  })
+
+  it('geometry is finite with unit normals and UVs (merge-safe)', () => {
+    for (const p of set.parts) {
+      expect(p.geometry.attributes.uv, p.key).toBeDefined()
+      const pos = p.geometry.attributes.position.array
+      const nrm = p.geometry.attributes.normal.array
+      let bad = 0
+      for (let i = 0; i < pos.length; i++) if (!Number.isFinite(pos[i])) bad++
+      for (let i = 0; i < nrm.length; i += 3) if (!(Math.abs(Math.hypot(nrm[i], nrm[i + 1], nrm[i + 2]) - 1) < 0.02)) bad++
+      expect(bad, p.key).toBe(0)
+    }
+  })
+
+  it('main furniture casts shadows', () => {
+    for (const m of ['fabricPlum', 'woodLight', 'woodDark', 'fabricOrange', 'fabricTeal'] as const)
+      expect(set.parts.some((p) => p.mat === m && p.castShadow), m).toBe(true)
   })
 
   it('emissive lamp parts never cast shadows', () => {

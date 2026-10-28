@@ -8,6 +8,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { MaterialId } from '@/contracts/materials'
 import type { Vec3 } from '@/contracts/scene'
+import { lathe, slab, softBox, tube, type SoftBoxOpts, type V2 } from './geo'
 
 /** Shared material ids plus a few local tints (cloned from shared materials). */
 export type LivingMat = MaterialId | 'leafDark' | 'vinyl'
@@ -20,9 +21,9 @@ export interface PartOpts {
   shadow?: boolean
 }
 
-export interface BuiltPart {
+export interface BuiltPart<M extends string = LivingMat> {
   key: string
-  mat: LivingMat
+  mat: M
   castShadow: boolean
   geometry: THREE.BufferGeometry
 }
@@ -34,12 +35,26 @@ function normalise(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   if (g !== geo) geo.dispose()
   for (const name of Object.keys(g.attributes)) if (!KEEP.has(name)) g.deleteAttribute(name)
   g.clearGroups()
+  // Unit normals everywhere (degenerate leaf tips / lathe end points can leave zero or unnormalised ones).
+  const n = g.attributes.normal as THREE.BufferAttribute | undefined
+  if (n)
+    for (let i = 0; i < n.count; i++) {
+      const x = n.getX(i)
+      const y = n.getY(i)
+      const z = n.getZ(i)
+      const l = Math.hypot(x, y, z)
+      if (!(l > 1e-8)) n.setXYZ(i, 0, 1, 0)
+      else if (Math.abs(l - 1) > 1e-4) n.setXYZ(i, x / l, y / l, z / l)
+    }
   return g
 }
 
-export class PartsBuilder {
+/** Generic over the material key type so the desk can reuse it with its own local materials. */
+export class PartsBuilder<M extends string = LivingMat> {
   private stack: THREE.Matrix4[] = [new THREE.Matrix4()]
-  private buckets = new Map<string, { mat: LivingMat; castShadow: boolean; geos: THREE.BufferGeometry[] }>()
+  private buckets = new Map<string, { mat: M; castShadow: boolean; geos: THREE.BufferGeometry[] }>()
+  /** Triangles added so far (for budgets and the README). */
+  triangles = 0
   /** Named world-space points (e.g. lamp shade centres) for tests and wiring. */
   readonly marks = new Map<string, Vec3>()
 
@@ -72,13 +87,14 @@ export class PartsBuilder {
     this.marks.set(name, [v.x, v.y, v.z])
   }
 
-  add(mat: LivingMat, geo: THREE.BufferGeometry, pos: Vec3, opts: PartOpts = {}) {
+  add(mat: M, geo: THREE.BufferGeometry, pos: Vec3, opts: PartOpts = {}) {
     const local = new THREE.Matrix4().compose(
       new THREE.Vector3(...pos),
       new THREE.Quaternion().setFromEuler(new THREE.Euler(...(opts.rot ?? [0, 0, 0]))),
       new THREE.Vector3(...(opts.scale ?? [1, 1, 1])),
     )
     const g = normalise(geo)
+    this.triangles += g.attributes.position.count / 3
     g.applyMatrix4(this.top.clone().multiply(local))
     const castShadow = opts.shadow ?? true
     const key = `${mat}|${castShadow ? 's' : 'n'}`
@@ -88,33 +104,33 @@ export class PartsBuilder {
   }
 
   /** Box of full `size`, centred at `pos`. `radius` > 0 makes a chunky rounded box. */
-  box(mat: LivingMat, size: Vec3, pos: Vec3, opts: PartOpts & { radius?: number } = {}) {
+  box(mat: M, size: Vec3, pos: Vec3, opts: PartOpts & { radius?: number; seg?: number } = {}) {
     const r = Math.min(opts.radius ?? 0, Math.min(...size) / 2 - 0.001)
-    const geo = r > 0.002 ? new RoundedBoxGeometry(size[0], size[1], size[2], 2, r) : new THREE.BoxGeometry(...size)
+    const geo = r > 0.002 ? new RoundedBoxGeometry(size[0], size[1], size[2], opts.seg ?? 2, r) : new THREE.BoxGeometry(...size)
     this.add(mat, geo, pos, opts)
   }
 
   /** Cylinder (or cone when rTop = 0) of height `h`, centred at `pos`. */
-  cyl(mat: LivingMat, rTop: number, rBot: number, h: number, pos: Vec3, opts: PartOpts & { seg?: number } = {}) {
-    this.add(mat, new THREE.CylinderGeometry(rTop, rBot, h, opts.seg ?? 10, 1), pos, opts)
+  cyl(mat: M, rTop: number, rBot: number, h: number, pos: Vec3, opts: PartOpts & { seg?: number } = {}) {
+    this.add(mat, new THREE.CylinderGeometry(rTop, rBot, h, opts.seg ?? 16, 1), pos, opts)
   }
 
   /** Low-poly sphere (use `scale` to squash). */
-  sphere(mat: LivingMat, r: number, pos: Vec3, opts: PartOpts & { w?: number; h?: number } = {}) {
-    this.add(mat, new THREE.SphereGeometry(r, opts.w ?? 10, opts.h ?? 7), pos, opts)
+  sphere(mat: M, r: number, pos: Vec3, opts: PartOpts & { w?: number; h?: number } = {}) {
+    this.add(mat, new THREE.SphereGeometry(r, opts.w ?? 16, opts.h ?? 12), pos, opts)
   }
 
   /** Faceted blob (icosahedron), nice for foliage. */
-  blob(mat: LivingMat, r: number, pos: Vec3, opts: PartOpts & { detail?: number } = {}) {
+  blob(mat: M, r: number, pos: Vec3, opts: PartOpts & { detail?: number } = {}) {
     this.add(mat, new THREE.IcosahedronGeometry(r, opts.detail ?? 1), pos, opts)
   }
 
-  torus(mat: LivingMat, r: number, tube: number, pos: Vec3, opts: PartOpts & { arc?: number } = {}) {
-    this.add(mat, new THREE.TorusGeometry(r, tube, 6, 14, opts.arc ?? Math.PI * 2), pos, opts)
+  torus(mat: M, r: number, tube: number, pos: Vec3, opts: PartOpts & { arc?: number; seg?: number; radial?: number } = {}) {
+    this.add(mat, new THREE.TorusGeometry(r, tube, opts.radial ?? 8, opts.seg ?? 24, opts.arc ?? Math.PI * 2), pos, opts)
   }
 
   /** Thin cylinder between two local points. */
-  rod(mat: LivingMat, from: Vec3, to: Vec3, radius: number, opts: { shadow?: boolean; seg?: number } = {}) {
+  rod(mat: M, from: Vec3, to: Vec3, radius: number, opts: { shadow?: boolean; seg?: number } = {}) {
     const a = new THREE.Vector3(...from)
     const b = new THREE.Vector3(...to)
     const dir = b.clone().sub(a)
@@ -122,11 +138,31 @@ export class PartsBuilder {
     const mid = a.clone().add(b).multiplyScalar(0.5)
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize())
     const e = new THREE.Euler().setFromQuaternion(q)
-    this.cyl(mat, radius, radius, len, [mid.x, mid.y, mid.z], { rot: [e.x, e.y, e.z], seg: opts.seg ?? 6, shadow: opts.shadow })
+    this.cyl(mat, radius, radius, len, [mid.x, mid.y, mid.z], { rot: [e.x, e.y, e.z], seg: opts.seg ?? 8, shadow: opts.shadow })
   }
 
-  build(): BuiltPart[] {
-    const out: BuiltPart[] = []
+  /** Soft rounded (optionally deformed) box of full `size`, centred at `pos`. */
+  soft(mat: M, size: Vec3, pos: Vec3, opts: PartOpts & SoftBoxOpts) {
+    this.add(mat, softBox(size, opts), pos, opts)
+  }
+
+  /** Lathe-turned part; profile is [radius, y] from bottom to top, `pos` is the axis base. */
+  lathe(mat: M, profile: V2[], pos: Vec3, opts: PartOpts & { seg?: number } = {}) {
+    this.add(mat, lathe(profile, opts.seg ?? 24), pos, opts)
+  }
+
+  /** Smooth tube through local points (cords, piping, bent metal). */
+  tube(mat: M, points: Vec3[], radius: number, opts: PartOpts & { seg?: number; radial?: number; closed?: boolean } = {}) {
+    this.add(mat, tube(points, radius, opts.seg ?? 24, opts.radial ?? 6, opts.closed ?? false), [0, 0, 0], opts)
+  }
+
+  /** Chamfered horizontal board (w x t x d), rounded plan corners, centred at `pos`. */
+  slab(mat: M, size: Vec3, pos: Vec3, opts: PartOpts & { r?: number; bevel?: number } = {}) {
+    this.add(mat, slab(size[0], size[1], size[2], opts.r ?? 0.01, opts.bevel ?? 0.006), pos, opts)
+  }
+
+  build(): BuiltPart<M>[] {
+    const out: BuiltPart<M>[] = []
     for (const [key, b] of this.buckets) {
       const geometry = mergeGeometries(b.geos, false)
       b.geos.forEach((g) => g.dispose())

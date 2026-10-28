@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HALF_D, HALF_W, LAMPS, PLAYER, ROOM } from '@/contracts/scene'
 import { deskColliders, deskLocalToWorld, deskWorldToLocal, LAMP_BULB_LOCAL } from './layout'
+import { buildDeskParts, buildLedGeometry } from './parts'
 import { terminalFrame, TERMINAL_FPS } from './terminal'
 
 describe('terminalFrame', () => {
@@ -67,5 +68,31 @@ describe('desk layout', () => {
 
   it('leaves the screenshot spot in front of the desk walkable', () => {
     for (const b of deskColliders()) expect(-6.5 - PLAYER.radius).toBeGreaterThan(b.max[0])
+  })
+})
+
+describe('desk geometry', () => {
+  const parts = buildDeskParts()
+
+  it('stays under the draw-call budget', () => {
+    // Merged buckets + LED mesh + 2 screens + 2 hover rims + bulb.
+    expect(parts.length + 6).toBeLessThanOrEqual(30)
+  })
+
+  it('stays within the triangle budget', () => {
+    const tris = parts.reduce((n, p) => n + p.geometry.attributes.position.count / 3, 0) + buildLedGeometry().attributes.position.count / 3
+    expect(tris).toBeLessThan(80_000)
+  })
+
+  it('the lamp shade never casts shadows, the furniture does', () => {
+    for (const p of parts) if (p.mat === 'shade' || p.mat === 'led') expect(p.castShadow).toBe(false)
+    for (const m of ['woodLight', 'fabricTeal', 'metalDark'] as const) expect(parts.some((p) => p.mat === m && p.castShadow), m).toBe(true)
+  })
+
+  it('geometry is finite', () => {
+    for (const p of parts) {
+      const bad = [...p.geometry.attributes.position.array, ...p.geometry.attributes.normal.array].filter((v) => !Number.isFinite(v)).length
+      expect(bad, p.key).toBe(0)
+    }
   })
 })
