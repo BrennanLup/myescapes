@@ -264,7 +264,7 @@ describe('crane over the head when a wall squeezes the camera (QA r3)', () => {
     const below = headBelowCentre(out, pivot, spot.pitch)
     expect(below).toBeGreaterThan(0.15)
     expect(below).toBeLessThanOrEqual(CRANE.headLowest + 1e-6)
-    expect(screenY(below)).toBeLessThan(0.9)
+    expect(screenY(below)).toBeLessThan(0.93)
     expect(spot.distance).toBeGreaterThan(hideDistance(1))
     // A level look puts the reticle on the floor over 4 m ahead at the most (r3: under 2 m, at your feet).
     expect(out[1] / Math.tan(-spot.pitch)).toBeGreaterThan(4)
@@ -284,11 +284,15 @@ describe('crane over the head when a wall squeezes the camera (QA r3)', () => {
     // As close as the collision radius allows.
     const pivot: Vec3 = [0, 1.55, HALF_D - 0.35]
     const out: Vec3 = [0, 0, 0]
-    const spot = craneSpot(pivot, 0, [], out, undefined, undefined, undefined, CRANE.side)
+    // Phone rig (centred): too close to show yourself, so the character hides and the room fills the view.
+    let spot = craneSpot(pivot, 0, [], out)
     expect(out[1] - pivot[1]).toBeCloseTo(CRANE.minRise)
     expect(spot.pitch).toBeGreaterThanOrEqual(-CRANE.maxTilt - 1e-9)
-    // Too close to show yourself: the character hides and the room ahead fills the view.
     expect(spot.distance).toBeLessThan(hideDistance(1))
+    // Desktop rig: over the right shoulder, your head well off to the left of the view.
+    spot = craneSpot(pivot, 0, [], out, undefined, undefined, undefined, CRANE.side)
+    expect(spot.pitch).toBeGreaterThanOrEqual(-CRANE.maxTilt - 1e-9)
+    expect(Math.atan2(out[0] - pivot[0], out[2] - pivot[2])).toBeGreaterThan((60 * Math.PI) / 180)
   })
 
   it('a corner: backs off diagonally as far as both walls allow and keeps the look pitch', () => {

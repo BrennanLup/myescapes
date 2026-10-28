@@ -77,7 +77,8 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
     return { pitch: v.cameraPitch, distance: v.cameraDistance }
   })
   expect(craned.pitch).toBeGreaterThan(-0.45)
-  expect(craned.distance).toBeGreaterThan(0.6)
+  // The gate door's frame leaves 0.3 m behind you here: the top of your head shows at the bottom.
+  expect(craned.distance).toBeGreaterThan(0.45)
 
   // Too far away is still too far (reach is not measured from the camera).
   await aimAt(page, [0, 1.6, 1.5], GATE_DOOR)
@@ -95,14 +96,14 @@ test('third person keeps reach, is remembered, and the wardrobe saves and unlock
   const dialog = page.getByTestId('wardrobe-overlay')
   await expect(dialog).toBeVisible()
   // The room stops drawing behind the wardrobe (QA r4), and starts again once it closes.
-  await expect(page.locator('#world-canvas')).toHaveAttribute('data-render', 'paused')
+  await expect(page.locator('#world-canvas canvas')).toHaveAttribute('data-render', 'paused')
   await expect(page.getByTestId('key-balance')).toContainText('20')
   await page.getByTestId('wardrobe-tab-hair').click()
   await page.getByTestId('item-hair-bob').click()
   await page.getByTestId('swatch-teal').click()
   await page.getByTestId('wardrobe-primary').click()
   await waitOverlay(page, null)
-  await expect(page.locator('#world-canvas')).toHaveAttribute('data-render', 'live')
+  await expect(page.locator('#world-canvas canvas')).toHaveAttribute('data-render', 'live')
 
   // QA r3: try on the trench (50, too dear) and the headphones (10). Unlocking the headphones
   // wears them at once; the trench stays a try-on and the button names it, on a phone too.

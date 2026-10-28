@@ -239,8 +239,8 @@ export const CRANE = {
   headBelow: 0.26,
   /** The camera looks at most this far below the horizontal while craned (radians, 25 degrees). */
   maxTilt: (25 * Math.PI) / 180,
-  /** The head may sit at most this far below the view centre (radians, 27 degrees: still on screen). */
-  headLowest: (27 * Math.PI) / 180,
+  /** The head may sit at most this far below the view centre (radians, 30 degrees: the bottom of the screen). */
+  headLowest: (30 * Math.PI) / 180,
   /** Easing rate (1/s) in and out of the crane, so backing into a wall never pops. */
   rate: 6,
   /**
@@ -248,7 +248,7 @@ export const CRANE = {
    * `THIRD_PERSON.hideBelow`: the camera is above and behind the head, not in it, so the top of
    * your head can sit at the bottom of the view.
    */
-  hideBelow: 0.6,
+  hideBelow: 0.45,
 } as const
 
 /** Camera distance under which your character is hidden, for a crane amount from 0 to 1. */
