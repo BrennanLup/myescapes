@@ -1,6 +1,6 @@
 /** Game, venue and city pages (workstreams 16, 17) against a stubbed API. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { CITY_PAGE, GAME_PAGE, VENUE_PAGE, fetchStub } from './shared/fixtures'
 import { GamePage } from './game'
 import { VenuePage, sortGames } from './venue'
@@ -22,7 +22,8 @@ describe('GamePage', () => {
     render(<GamePage {...props('the-lost-observatory')} />)
     expect(screen.getByTestId('public-loading')).toBeTruthy()
     expect(await screen.findByRole('heading', { level: 1, name: 'The Lost Observatory' })).toBeTruthy()
-    expect(document.title).toBe('The Lost Observatory at Starlight Escapes · My Escapes')
+    // The title is set in an effect, which can land just after the heading paints.
+    await waitFor(() => expect(document.title).toBe('The Lost Observatory at Starlight Escapes · My Escapes'))
     const page = screen.getByTestId('game-page')
     expect(page.textContent).toContain('Sci-fi · 2-6 players · 60 min')
     expect(screen.getByRole('link', { name: 'Starlight Escapes' }).getAttribute('href')).toBe('/venues/starlight-escapes-san-francisco')
