@@ -2,10 +2,11 @@
  * DOM overlay for editing the wish list: add, reorder (buttons or drag), remove
  * with undo, mark done. Every change goes through `useStore.getState().setWishlist`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent, type InputHTMLAttributes } from 'react'
 import { bus } from '@/contracts/events'
 import type { WishlistItem } from '@/contracts/types'
 import { useStore } from '@/state/store'
+import { RoomPicker, type RoomPick } from '@/ui/roompicker'
 import { addItem, insertAt, moveDown, moveToIndex, moveUp, removeItem, safeHref, sortByPriority, toggleDone } from './listOps'
 
 const ADDED_BY_KEY = 'myescapes.wishlist.addedBy'
@@ -42,6 +43,8 @@ export function WishlistOverlay() {
   const [city, setCity] = useState('')
   const [link, setLink] = useState('')
   const [addedBy, setAddedBy] = useState(readAddedBy)
+  /** The directory room picked for the name, until the name is typed over. */
+  const [picked, setPicked] = useState<{ gameId: string | null; label: string } | null>(null)
   const [nameError, setNameError] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -92,14 +95,32 @@ export function WishlistOverlay() {
       nameRef.current?.focus()
       return
     }
-    commit(addItem(current(), { name, city, link, addedBy }))
+    commit(addItem(current(), { name, city, link, addedBy, gameId: picked?.gameId ?? null }))
     bus.emit('sfx', { name: 'chalk' })
     if (addedBy.trim()) saveAddedBy(addedBy.trim())
     setName('')
     setCity('')
     setLink('')
+    setPicked(null)
     setNameError(false)
     nameRef.current?.focus()
+  }
+
+  const onPick = (pick: RoomPick) => {
+    if (pick.kind === 'game') {
+      const g = pick.game
+      setName(g.name)
+      setCity(g.city)
+      setLink(`/games/${g.slug}`)
+      setPicked({ gameId: g.id, label: `${g.venueName}, ${g.city}` })
+    } else {
+      const v = pick.venue
+      setName(v.name)
+      setCity(v.city)
+      setLink(`/venues/${v.slug}`)
+      setPicked({ gameId: null, label: `Venue in ${v.city}` })
+    }
+    setNameError(false)
   }
 
   const onToggleDone = (item: WishlistItem) => {
@@ -230,7 +251,7 @@ export function WishlistOverlay() {
                     {item.addedBy && <span>added by {item.addedBy}</span>}
                     {href && (
                       <a href={href} target="_blank" rel="noopener noreferrer" className="font-semibold text-teal underline-offset-2 hover:underline">
-                        Visit site ↗
+                        {href.startsWith('/') ? 'Room page ↗' : 'Visit site ↗'}
                       </a>
                     )}
                   </div>
@@ -287,23 +308,38 @@ export function WishlistOverlay() {
           hidden={!formOpen} onSubmit={onAdd} className="border-t border-panel-edge bg-paper px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6" noValidate>
           <h3 className="mb-2 font-display text-base font-semibold">Add a room</h3>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <label className="col-span-2">
-              <span className="sr-only">Room name (required)</span>
-              <input
+            <div className="col-span-2">
+              <label htmlFor="wishlist-add-name" className="sr-only">
+                Room name (required). Type to search the room directory.
+              </label>
+              <RoomPicker
                 ref={nameRef}
-                data-testid="wishlist-add-name"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value)
-                  if (nameError && e.target.value.trim()) setNameError(false)
+                query={name}
+                onQueryChange={(q) => {
+                  setName(q)
+                  if (picked) {
+                    setPicked(null)
+                    setLink('')
+                  }
+                  if (nameError && q.trim()) setNameError(false)
                 }}
-                placeholder="Room name *"
-                required
-                aria-invalid={nameError}
-                maxLength={120}
-                className={`h-12 w-full rounded-xl border bg-white px-3 text-base outline-none focus:border-teal ${nameError ? 'border-bad' : 'border-panel-edge'}`}
+                onPick={onPick}
+                allowCreate
+                onCreate={(text) => {
+                  setName(text)
+                  setPicked(null)
+                }}
+                inputProps={{
+                  id: 'wishlist-add-name',
+                  'data-testid': 'wishlist-add-name',
+                  placeholder: 'Search rooms or venues *',
+                  required: true,
+                  'aria-invalid': nameError,
+                  maxLength: 120,
+                  className: `h-12 w-full rounded-xl border bg-white px-3 text-base outline-none focus:border-teal ${nameError ? 'border-bad' : 'border-panel-edge'}`,
+                } as InputHTMLAttributes<HTMLInputElement>}
               />
-            </label>
+            </div>
             <label>
               <span className="sr-only">City</span>
               <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" maxLength={80} className="h-12 w-full rounded-xl border border-panel-edge bg-white px-3 text-base outline-none focus:border-teal" />
@@ -344,6 +380,13 @@ export function WishlistOverlay() {
             </button>
           </div>
           {nameError && <p className="mt-1 text-sm text-bad">Give the room a name first.</p>}
+          {picked ? (
+            <p className="mt-1 text-sm text-good" data-testid="wishlist-linked">
+              ✓ Linked to the room directory: {picked.label}
+            </p>
+          ) : (
+            name.trim() && <p className="mt-1 text-sm text-ink-soft">Pick a match from the list to link it, or add it as typed.</p>
+          )}
           {crewNames.length > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
               <span className="text-ink-soft">Added by:</span>
