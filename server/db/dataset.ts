@@ -132,9 +132,9 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
         : undefined
     // Otherwise match by name (or brand) and city. Imported venues keep a country-suffixed city
     // slug ("oostduinkerke-be") while the form only knows the city, so the city name counts too.
-    // Directory venues (a real country) win over ones a user typed in before ("ZZ").
-    // A bare city name is ambiguous (Paris, London, Portland): when matches by name span more
-    // than one country and none has this exact city slug, link none rather than guess.
+    // Directory venues (a real country) win over ones a user typed in before ("ZZ"). A bare city
+    // name is ambiguous (Paris, London, Portland), so when the directory matches span more than
+    // one country, link none of them rather than guess.
     const byName = picked || pickedVenue
       ? []
       : await tx
@@ -147,11 +147,12 @@ export async function saveEntryForUser(db: Db, userId: string, entry: Entry): Pr
               ne(venues.status, 'hidden'),
             ),
           )
-          .orderBy(sql`case when ${venues.citySlug} = ${cslug} then 0 else 1 end`, sql`case when ${venues.country} = 'ZZ' then 1 else 0 end`, venues.createdAt)
+          .orderBy(venues.createdAt)
           .limit(10)
-    const exact = byName.find((v) => v.citySlug === cslug)
-    const countries = new Set(byName.filter((v) => v.country !== 'ZZ').map((v) => v.country))
-    let venue = picked?.venue ?? pickedVenue ?? exact ?? (countries.size <= 1 ? byName[0] : undefined)
+    const directory = byName.filter((v) => v.country !== 'ZZ')
+    const typed = byName.filter((v) => v.country === 'ZZ')
+    const countries = new Set(directory.map((v) => v.country))
+    let venue = picked?.venue ?? pickedVenue ?? (countries.size === 1 ? directory[0] : typed.find((v) => v.citySlug === cslug) ?? typed[0])
     if (!venue) {
       const slug = await uniqueSlug(tx, venues, venues.slug, slugify(`${venueName} ${room.city}`))
       venue = (

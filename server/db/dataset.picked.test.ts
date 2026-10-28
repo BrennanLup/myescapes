@@ -90,3 +90,15 @@ describe('saveEntryForUser matching a typed venue by city name', () => {
     expect(g.venueId).toBe(be.id)
   })
 })
+
+describe('saveEntryForUser prefers the directory over an earlier typed duplicate', () => {
+  it('links the directory venue even when a typed venue with the plain city slug exists', async () => {
+    const [dir] = await t.db.insert(venues).values({ slug: 'dup-escape-ghent-be', name: 'Dup Escape', address: '', city: 'Ghent', citySlug: 'ghent-be', region: '', country: 'BE' }).returning()
+    await t.db.insert(venues).values({ slug: 'dup-escape-ghent', name: 'Dup Escape', address: '', city: 'Ghent', citySlug: 'ghent', region: '', country: 'ZZ' })
+    const e = base()
+    const room = { ...e.room, id: 'room_dup', name: 'The Belfry', company: 'Dup Escape', city: 'Ghent' }
+    const saved = await saveEntryForUser(t.db, FX.users.carol, { ...e, room, review: { ...e.review, id: 'rev_dup_1' } })
+    const [g] = await t.db.select().from(games).where(eq(games.id, saved.room.id))
+    expect(g.venueId).toBe(dir.id)
+  })
+})
